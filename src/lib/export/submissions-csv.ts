@@ -91,10 +91,12 @@ export async function loadSubmissionExportForSlug(
 }
 
 function csvEscape(value: string): string {
-	if (/[",\n\r]/.test(value)) {
-		return `"${value.replaceAll('"', '""')}"`;
+	// Neutralize spreadsheet formula injection from CFP-sourced text.
+	const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+	if (/[",\n\r]/.test(safe)) {
+		return `"${safe.replaceAll('"', '""')}"`;
 	}
-	return value;
+	return safe;
 }
 
 export function submissionsToCsv(rows: SubmissionExportRow[]): string {

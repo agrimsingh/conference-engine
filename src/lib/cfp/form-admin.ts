@@ -204,16 +204,19 @@ export async function updateFormField(
 		.bind(fieldId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
+	// Keys are the answers_json contract; renaming would orphan stored answers.
+	if (input.key !== existing.key) {
+		throw new Error("Field key is immutable after create");
+	}
 
 	await db
 		.prepare(
 			`UPDATE form_fields
-       SET key = ?, label = ?, field_type = ?, required = ?, position = ?,
+       SET label = ?, field_type = ?, required = ?, position = ?,
            visibility_rule = ?, config = ?
        WHERE id = ?`,
 		)
 		.bind(
-			input.key,
 			input.label,
 			input.fieldType,
 			input.required ? 1 : 0,
@@ -245,9 +248,13 @@ export async function softDeleteFormField(
 		.bind(fieldId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
+	// Free the UNIQUE(form_id, key) slot so the key can be re-added later.
+	const tombstoneKey = `${existing.key}__deleted__${existing.id}`;
 	await db
-		.prepare("UPDATE form_fields SET soft_deleted = 1 WHERE id = ?")
-		.bind(fieldId)
+		.prepare(
+			`UPDATE form_fields SET soft_deleted = 1, key = ? WHERE id = ?`,
+		)
+		.bind(tombstoneKey, fieldId)
 		.run();
 	await db
 		.prepare("UPDATE cfp_forms SET updated_at = ? WHERE id = ?")

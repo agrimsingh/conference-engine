@@ -44,43 +44,54 @@ export async function pushSubmissionsToAirtable(
 
 	for (let i = 0; i < rows.length; i += BATCH_SIZE) {
 		const batch = rows.slice(i, i + BATCH_SIZE);
-		const response = await fetch(url, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${config.apiKey}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				typecast: true,
-				records: batch.map((row) => ({
-					fields: {
-						id: row.id,
-						title: row.title,
-						status: row.status,
-						category: row.category,
-						speakers: row.speakers,
-						submitted_at: row.submitted_at,
-						labels: row.labels,
-					},
-				})),
-			}),
-		});
+		let attempt = 0;
+		for (;;) {
+			attempt += 1;
+			const response = await fetch(url, {
+				method: "PATCH",
+				headers: {
+					Authorization: `Bearer ${config.apiKey}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					typecast: true,
+					performUpsert: { fieldsToMergeOn: ["id"] },
+					records: batch.map((row) => ({
+						fields: {
+							id: row.id,
+							title: row.title,
+							status: row.status,
+							category: row.category,
+							speakers: row.speakers,
+							submitted_at: row.submitted_at,
+							labels: row.labels,
+						},
+					})),
+				}),
+			});
 
-		let body: AirtableCreateResponse = {};
-		try {
-			body = (await response.json()) as AirtableCreateResponse;
-		} catch {
-			body = {};
+			let body: AirtableCreateResponse = {};
+			try {
+				body = (await response.json()) as AirtableCreateResponse;
+			} catch {
+				body = {};
+			}
+
+			if (response.status === 429 && attempt < 4) {
+				await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+				continue;
+			}
+
+			if (!response.ok) {
+				const message =
+					body.error?.message ??
+					`Airtable API error (${response.status})`;
+				return { ok: false, error: message, status: 502 };
+			}
+
+			created += body.records?.length ?? batch.length;
+			break;
 		}
-
-		if (!response.ok) {
-			const message =
-				body.error?.message ??
-				`Airtable API error (${response.status})`;
-			return { ok: false, error: message, status: 502 };
-		}
-
-		created += body.records?.length ?? batch.length;
 	}
 
 	return { ok: true, created };

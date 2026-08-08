@@ -86,7 +86,7 @@ One-way export from D1. Airtable is never read back into the database.
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Always available with admin session. CSV columns: `id,title,status,category,speakers,submitted_at,labels` |
-| `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Pushes the same rows via Airtable REST when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` with a clear JSON error (use CSV instead) |
+| `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Upserts the same rows via Airtable REST (`performUpsert` on field `id`) when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` (use CSV instead). Table needs a unique text field named `id`. |
 
 Admin UI: submissions page → **Download CSV** / **Push to Airtable**.
 

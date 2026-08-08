@@ -2,6 +2,7 @@ import {
 	getEvaluationPlanByToken,
 	getReviewerByToken,
 	getSubmissionById,
+	listAssignmentsForReviewer,
 } from "@/lib/db/queries";
 import type { EvaluationPlanRow, EvaluationScoreRow, ReviewerRow } from "@/lib/db/types";
 import {
@@ -11,6 +12,7 @@ import {
 	isValidScore,
 	transitionSubmission,
 } from "@/lib/domain";
+import { filterBoardSubmissions } from "@/lib/evaluation/assignments";
 
 export type ReviewIdentity =
 	| { mode: "reviewer"; plan: EvaluationPlanRow; reviewer: ReviewerRow }
@@ -61,6 +63,25 @@ export async function upsertEvaluationScore(
 	const submission = await getSubmissionById(db, args.submissionId);
 	if (!submission || submission.event_id !== plan.event_id) {
 		return { ok: false, error: "Submission not found", status: 404 };
+	}
+
+	if (identity.mode === "reviewer") {
+		const assignments = await listAssignmentsForReviewer(
+			db,
+			plan.id,
+			identity.reviewer.id,
+		);
+		const allowed = filterBoardSubmissions([submission], {
+			mode: "reviewer",
+			assignments,
+		});
+		if (allowed.length === 0) {
+			return {
+				ok: false,
+				error: "Submission is not assigned to this reviewer",
+				status: 403,
+			};
+		}
 	}
 
 	if (
