@@ -6,9 +6,12 @@ import { Chip, EmptyState, StatusPill, submissionStatusTone } from "@/components
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
+	getActiveEvaluationPlan,
 	getEventBySlug,
 	getPersonById,
+	listAssignmentsForPlan,
 	listLabelsForEvent,
+	listReviewersForPlan,
 	listSpeakersForSubmission,
 	listSubmissionsForEvent,
 	listTasksForSubmission,
@@ -21,6 +24,7 @@ import {
 } from "@/lib/domain";
 import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
+import { AssignmentControls } from "./assignment-controls";
 import { ExportButtons } from "./export-buttons";
 import { SubmissionLabels } from "./submission-labels";
 import { SubmissionSpeakers, type SpeakerSummary } from "./submission-speakers";
@@ -45,6 +49,20 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	const submissions = await listSubmissionsForEvent(db, event.id);
 	const categoryFilter = categoryParam?.trim() || "all";
 	const labelFilter = labelParam?.trim() || "all";
+
+	const activePlan = await getActiveEvaluationPlan(db, event.id);
+	const planReviewers = activePlan
+		? await listReviewersForPlan(db, activePlan.id)
+		: [];
+	const planAssignments = activePlan
+		? await listAssignmentsForPlan(db, activePlan.id)
+		: [];
+	const assignedBySubmission = new Map<string, string[]>();
+	for (const row of planAssignments) {
+		const list = assignedBySubmission.get(row.submission_id) ?? [];
+		list.push(row.reviewer_id);
+		assignedBySubmission.set(row.submission_id, list);
+	}
 
 	const labelRows = await listLabelsForEvent(db, event.id);
 	const labelsBySubmission = new Map<string, string[]>();
@@ -250,6 +268,22 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 											labels={labelsBySubmission.get(row.id) ?? []}
 										/>
 									</div>
+									{activePlan ? (
+										<div className="mt-2">
+											<AssignmentControls
+												key={`${row.id}:${(assignedBySubmission.get(row.id) ?? []).join(",")}`}
+												eventSlug={event.slug}
+												submissionId={row.id}
+												reviewers={planReviewers.map((reviewer) => ({
+													id: reviewer.id,
+													name: reviewer.name,
+												}))}
+												assignedReviewerIds={
+													assignedBySubmission.get(row.id) ?? []
+												}
+											/>
+										</div>
+									) : null}
 									<div className="mt-3">
 										<DecisionButtons
 											eventSlug={event.slug}

@@ -192,3 +192,11 @@ export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
 	submitter_name: string | null;
 	submitter_email: string | null;
 };
+
+export type ReviewAssignmentRow = {
+	id: string;
+	plan_id: string;
+	reviewer_id: string;
+	submission_id: string;
+	created_at: number;
+};

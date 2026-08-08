@@ -11,6 +11,10 @@ import {
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
 import { renderDecisionPreviews } from "@/lib/domain";
+import {
+	filterBoardSubmissions,
+	listReviewerAssignments,
+} from "@/lib/evaluation/assignments";
 import { resolveReviewIdentity } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
 
@@ -81,7 +85,18 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const event = await getEventById(db, plan.event_id);
 	if (!event) notFound();
 
-	const submissions = await listReviewableSubmissions(db, event.id);
+	const reviewable = await listReviewableSubmissions(db, event.id);
+	const reviewerAssignments =
+		identity.mode === "reviewer"
+			? await listReviewerAssignments(db, {
+					planId: plan.id,
+					reviewerId: identity.reviewer.id,
+				})
+			: [];
+	const submissions = filterBoardSubmissions(reviewable, {
+		mode: identity.mode,
+		assignments: reviewerAssignments,
+	});
 	const scores = await listEvaluationScoresForPlan(db, plan.id);
 	const scoresBySubmission = new Map<string, typeof scores>();
 	for (const score of scores) {

@@ -10,6 +10,7 @@ import type {
 	FormFieldRow,
 	OutboundMessageRow,
 	PersonRow,
+	ReviewAssignmentRow,
 	ReviewerRow,
 	SpeakerProfileRow,
 	SpeakerTaskRow,
@@ -503,4 +504,79 @@ export async function listOutboundForSubmission(
 		.bind(submissionId)
 		.all<OutboundMessageRow>();
 	return result.results;
+}
+
+export async function listAssignmentsForReviewer(
+	db: D1Database,
+	planId: string,
+	reviewerId: string,
+): Promise<ReviewAssignmentRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM review_assignments
+       WHERE plan_id = ? AND reviewer_id = ?
+       ORDER BY created_at ASC`,
+		)
+		.bind(planId, reviewerId)
+		.all<ReviewAssignmentRow>();
+	return result.results;
+}
+
+export async function listAssignmentsForSubmission(
+	db: D1Database,
+	planId: string,
+	submissionId: string,
+): Promise<ReviewAssignmentRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM review_assignments
+       WHERE plan_id = ? AND submission_id = ?
+       ORDER BY created_at ASC`,
+		)
+		.bind(planId, submissionId)
+		.all<ReviewAssignmentRow>();
+	return result.results;
+}
+
+export async function listAssignmentsForPlan(
+	db: D1Database,
+	planId: string,
+): Promise<ReviewAssignmentRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM review_assignments
+       WHERE plan_id = ?
+       ORDER BY created_at ASC`,
+		)
+		.bind(planId)
+		.all<ReviewAssignmentRow>();
+	return result.results;
+}
+
+export async function clearAssignmentsForSubmission(
+	db: D1Database,
+	planId: string,
+	submissionId: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`DELETE FROM review_assignments
+       WHERE plan_id = ? AND submission_id = ?`,
+		)
+		.bind(planId, submissionId)
+		.run();
+}
+
+export async function insertReviewAssignment(
+	db: D1Database,
+	row: ReviewAssignmentRow,
+): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO review_assignments
+         (id, plan_id, reviewer_id, submission_id, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+		)
+		.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at)
+		.run();
 }

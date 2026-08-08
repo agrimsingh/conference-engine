@@ -1,5 +1,6 @@
 -- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
 DELETE FROM evaluation_scores;
+DELETE FROM review_assignments;
 DELETE FROM reviewers;
 DELETE FROM evaluation_plans;
 DELETE FROM outbound_messages;
