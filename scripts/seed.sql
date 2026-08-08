@@ -7,6 +7,7 @@ DELETE FROM agenda_slots;
 DELETE FROM event_rooms;
 DELETE FROM speaker_tasks;
 DELETE FROM task_templates;
+DELETE FROM submission_labels;
 DELETE FROM submission_speakers;
 DELETE FROM submissions;
 DELETE FROM form_fields;
