@@ -3,3 +3,7 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=team@65labs.org
 AUTH_SECRET=
 PUBLIC_API_KEY=
+# Optional one-way Airtable export (D1 remains SoR; never read Airtable into D1)
+AIRTABLE_API_KEY=
+AIRTABLE_BASE_ID=
+AIRTABLE_TABLE_NAME=

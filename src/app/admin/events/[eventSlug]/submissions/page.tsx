@@ -21,6 +21,7 @@ import {
 } from "@/lib/domain";
 import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
+import { ExportButtons } from "./export-buttons";
 import { SubmissionLabels } from "./submission-labels";
 import { SubmissionSpeakers, type SpeakerSummary } from "./submission-speakers";
 
@@ -180,8 +181,9 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 							))}
 						</div>
 					) : null}
-					<div className="pt-3">
+					<div className="flex flex-wrap items-start gap-x-6 gap-y-3 pt-3">
 						<ActivatePlanButton eventSlug={event.slug} />
+						<ExportButtons eventSlug={event.slug} />
 					</div>
 				</PageHeader>
 
