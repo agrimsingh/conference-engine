@@ -9,6 +9,7 @@ import {
 	listTasksForSubmission,
 } from "@/lib/db/queries";
 import { AcceptButton } from "./accept-button";
+import { ActivatePlanButton } from "./activate-plan-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -71,10 +72,17 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 						Speaker tasks
 					</Link>
 					{" · "}
+					<Link className="underline" href={`/review?event=${event.slug}`}>
+						Review board
+					</Link>
+					{" · "}
 					<Link className="underline" href="/portal">
 						Speaker portal
 					</Link>
 				</p>
+				<div className="pt-1">
+					<ActivatePlanButton eventSlug={event.slug} />
+				</div>
 			</header>
 
 			{submissions.length === 0 ? (

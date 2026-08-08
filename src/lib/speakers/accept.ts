@@ -10,6 +10,8 @@ import {
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
 import type { PersonRow, SubmissionSpeakerRow } from "@/lib/db/types";
+import { notifySubmissionLifecycle } from "@/lib/email/notify";
+import type { OutboundSendResult } from "@/lib/email/resend";
 
 export type AcceptResult =
 	| {
@@ -18,6 +20,7 @@ export type AcceptResult =
 			status: "accepted";
 			spawnedTaskKeys: string[];
 			speakerPersonIds: string[];
+			email: OutboundSendResult | null;
 	  }
 	| { ok: false; error: string; status?: number };
 
@@ -99,12 +102,19 @@ export async function acceptSubmission(
 		for (const key of keys) spawnedTaskKeys.add(key);
 	}
 
+	const email = await notifySubmissionLifecycle(db, {
+		submissionId,
+		templateKey: "acceptance",
+		portalHint: "Sign in at /portal with your speaker email to complete bio, headshot, and slides.",
+	});
+
 	return {
 		ok: true,
 		submissionId,
 		status: "accepted",
 		spawnedTaskKeys: [...spawnedTaskKeys],
 		speakerPersonIds,
+		email,
 	};
 }
 

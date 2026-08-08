@@ -1,8 +1,12 @@
 import type {
+	AgendaSlotRow,
 	AssetRow,
 	CfpFormRow,
+	EvaluationPlanRow,
+	EvaluationScoreRow,
 	EventRow,
 	FormFieldRow,
+	OutboundMessageRow,
 	PersonRow,
 	SpeakerProfileRow,
 	SpeakerTaskRow,
@@ -227,5 +231,86 @@ export async function listAcceptedSubmissionsForPerson(
 		)
 		.bind(personId)
 		.all<SubmissionRow>();
+	return result.results;
+}
+
+export async function getActiveEvaluationPlan(
+	db: D1Database,
+	eventId: string,
+): Promise<EvaluationPlanRow | null> {
+	return db
+		.prepare(
+			`SELECT * FROM evaluation_plans
+       WHERE event_id = ? AND status = 'active'
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+		)
+		.bind(eventId)
+		.first<EvaluationPlanRow>();
+}
+
+export async function getEvaluationPlanByToken(
+	db: D1Database,
+	token: string,
+): Promise<EvaluationPlanRow | null> {
+	return db
+		.prepare("SELECT * FROM evaluation_plans WHERE reviewer_token = ?")
+		.bind(token)
+		.first<EvaluationPlanRow>();
+}
+
+export async function listEvaluationScoresForPlan(
+	db: D1Database,
+	planId: string,
+): Promise<EvaluationScoreRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM evaluation_scores
+       WHERE plan_id = ?
+       ORDER BY updated_at DESC`,
+		)
+		.bind(planId)
+		.all<EvaluationScoreRow>();
+	return result.results;
+}
+
+export async function listReviewableSubmissions(
+	db: D1Database,
+	eventId: string,
+): Promise<SubmissionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM submissions
+       WHERE event_id = ?
+         AND status IN ('submitted', 'under_review', 'accepted', 'rejected')
+       ORDER BY created_at DESC`,
+		)
+		.bind(eventId)
+		.all<SubmissionRow>();
+	return result.results;
+}
+
+export async function getAgendaSlotBySubmission(
+	db: D1Database,
+	submissionId: string,
+): Promise<AgendaSlotRow | null> {
+	return db
+		.prepare("SELECT * FROM agenda_slots WHERE submission_id = ?")
+		.bind(submissionId)
+		.first<AgendaSlotRow>();
+}
+
+export async function listOutboundForSubmission(
+	db: D1Database,
+	submissionId: string,
+): Promise<OutboundMessageRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM outbound_messages
+       WHERE submission_id = ?
+       ORDER BY created_at DESC`,
+		)
+		.bind(submissionId)
+		.all<OutboundMessageRow>();
 	return result.results;
 }

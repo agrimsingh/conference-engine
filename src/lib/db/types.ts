@@ -107,3 +107,49 @@ export type SpeakerProfileRow = {
 	created_at: number;
 	updated_at: number;
 };
+
+export type EvaluationPlanRow = {
+	id: string;
+	event_id: string;
+	name: string;
+	status: "draft" | "active" | "closed";
+	reviewer_token: string;
+	created_at: number;
+	updated_at: number;
+};
+
+export type EvaluationScoreRow = {
+	id: string;
+	plan_id: string;
+	submission_id: string;
+	score: number;
+	comment: string | null;
+	scored_by: string;
+	created_at: number;
+	updated_at: number;
+};
+
+export type OutboundMessageRow = {
+	id: string;
+	event_id: string;
+	submission_id: string | null;
+	template_key: string;
+	to_email: string;
+	subject: string;
+	status: "sent" | "failed" | "skipped";
+	provider_id: string | null;
+	error: string | null;
+	created_at: number;
+};
+
+export type AgendaSlotRow = {
+	id: string;
+	event_id: string;
+	submission_id: string;
+	room_name: string;
+	starts_at: number;
+	ends_at: number;
+	ics_uid: string;
+	created_at: number;
+	updated_at: number;
+};

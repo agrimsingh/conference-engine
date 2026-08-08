@@ -1,4 +1,8 @@
 -- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
+DELETE FROM evaluation_scores;
+DELETE FROM evaluation_plans;
+DELETE FROM outbound_messages;
+DELETE FROM agenda_slots;
 DELETE FROM speaker_tasks;
 DELETE FROM task_templates;
 DELETE FROM submission_speakers;

@@ -19,4 +19,6 @@ All true with runtime evidence:
 |---|---|---|
 | start | Goal armed; repo + Sat baseline next | 1 already true locally |
 | Sat commit | Public repo + CFP baseline pushed | 1 ✅; 8 partial (repo exists) |
+| Sun commit | Portal + accept→tasks + R2 (`3471e05`) | 2 ✅ |
 | Sun slice | Accept → speaker_tasks + /portal + R2 uploads | 2 ✅ locally (pending parent commit) |
+| Mon slice | Eval scores + Resend templates + ICS schedule | 3–4 ✅ locally (pending parent commit) |

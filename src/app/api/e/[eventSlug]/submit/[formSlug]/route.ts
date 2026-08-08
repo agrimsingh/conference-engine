@@ -3,6 +3,7 @@ import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import type { AnswerMap } from "@/lib/domain";
+import { notifySubmissionLifecycle } from "@/lib/email/notify";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -64,5 +65,10 @@ export async function POST(request: Request, context: RouteContext) {
 		speakers: validated.speakers,
 	});
 
-	return NextResponse.json({ ok: true, submissionId });
+	const email = await notifySubmissionLifecycle(db, {
+		submissionId,
+		templateKey: "submission_received",
+	});
+
+	return NextResponse.json({ ok: true, submissionId, email });
 }

@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server";
+import { isAdminBypass } from "@/lib/auth/admin";
+import { getDb } from "@/lib/db/cloudflare";
+import {
+	getActiveEvaluationPlan,
+	getEventBySlug,
+	getEvaluationPlanByToken,
+} from "@/lib/db/queries";
+import { upsertEvaluationScore } from "@/lib/evaluation/score";
+
+type Body = {
+	token?: unknown;
+	eventSlug?: unknown;
+	submissionId?: unknown;
+	score?: unknown;
+	comment?: unknown;
+	scoredBy?: unknown;
+};
+
+export async function POST(request: Request) {
+	let body: Body;
+	try {
+		body = (await request.json()) as Body;
+	} catch {
+		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+	}
+
+	const submissionId =
+		typeof body.submissionId === "string" ? body.submissionId : "";
+	const score = typeof body.score === "number" ? body.score : Number(body.score);
+	const comment = typeof body.comment === "string" ? body.comment : undefined;
+	const scoredBy =
+		typeof body.scoredBy === "string" && body.scoredBy.trim()
+			? body.scoredBy.trim()
+			: "reviewer";
+
+	if (!submissionId || !Number.isFinite(score)) {
+		return NextResponse.json(
+			{ ok: false, error: "submissionId and score required" },
+			{ status: 400 },
+		);
+	}
+
+	const db = await getDb();
+	let token = typeof body.token === "string" ? body.token.trim() : "";
+
+	if (!token && (await isAdminBypass())) {
+		const eventSlug =
+			typeof body.eventSlug === "string" ? body.eventSlug.trim() : "";
+		if (!eventSlug) {
+			return NextResponse.json(
+				{ ok: false, error: "token or eventSlug required for admin scoring" },
+				{ status: 400 },
+			);
+		}
+		const event = await getEventBySlug(db, eventSlug);
+		if (!event) {
+			return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
+		}
+		const plan = await getActiveEvaluationPlan(db, event.id);
+		if (!plan) {
+			return NextResponse.json(
+				{ ok: false, error: "No active evaluation plan; activate one first" },
+				{ status: 409 },
+			);
+		}
+		token = plan.reviewer_token;
+	}
+
+	if (!token) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+	}
+
+	const plan = await getEvaluationPlanByToken(db, token);
+	if (!plan) {
+		return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
+	}
+
+	const result = await upsertEvaluationScore(db, {
+		token,
+		submissionId,
+		score,
+		comment,
+		scoredBy: (await isAdminBypass()) ? `admin:${scoredBy}` : scoredBy,
+	});
+
+	if (!result.ok) {
+		return NextResponse.json(
+			{ ok: false, error: result.error },
+			{ status: result.status },
+		);
+	}
+
+	return NextResponse.json({ ok: true, score: result.score });
+}
