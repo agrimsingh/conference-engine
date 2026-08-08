@@ -1,18 +1,15 @@
 ---
 name: conference-engine
-description: Self-hosted conference program pipeline — dev-tool canon, played straight.
+description: Self-hosted conference program pipeline — dev-tool canon, played straight, one dark world.
 colors:
   ink-ground: "#0a0a0b"
   ink-foreground: "#ededed"
   graphite: "#171717"
   carbon-line: "#262626"
+  input-line: "#404040"
   smoke: "#a3a3a3"
   steel: "#737373"
   char: "#525252"
-  paper-ground: "#fafafa"
-  paper-card: "#ffffff"
-  paper-line: "#e5e5e5"
-  input-line: "#d4d4d4"
   emerald-signal: "#10b981"
   emerald-bright: "#34d399"
   conflict-red: "#dc2626"
@@ -75,31 +72,36 @@ components:
     padding: "6px 14px"
   button-primary-hover:
     backgroundColor: "{colors.emerald-bright}"
-  button-solid:
+  button-secondary:
     backgroundColor: "{colors.graphite}"
-    textColor: "{colors.paper-card}"
+    borderColor: "{colors.carbon-line}"
+    textColor: "#e5e5e5"
     rounded: "{rounded.md}"
     padding: "6px 12px"
-  button-solid-hover:
+  button-secondary-hover:
     backgroundColor: "{colors.carbon-line}"
   input-field:
-    backgroundColor: "{colors.paper-card}"
-    textColor: "{colors.graphite}"
+    backgroundColor: "{colors.graphite}"
+    borderColor: "{colors.input-line}"
+    textColor: "#f5f5f5"
     rounded: "{rounded.md}"
     padding: "8px 12px"
   nav-pill-active:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.paper-card}"
+    backgroundColor: "{colors.carbon-line}"
+    textColor: "#f5f5f5"
     rounded: "{rounded.md}"
     padding: "4px 10px"
-  card-dark:
+  card:
     backgroundColor: "{colors.graphite}"
-    rounded: "{rounded.md}"
-    padding: "6px 10px"
-  card-light:
-    backgroundColor: "{colors.paper-card}"
+    borderColor: "{colors.carbon-line}"
     rounded: "{rounded.lg}"
     padding: "12px 16px"
+  chip:
+    backgroundColor: "{colors.graphite}"
+    borderColor: "{colors.input-line}"
+    textColor: "#d4d4d4"
+    rounded: "{rounded.md}"
+    padding: "2px 8px"
 ---
 
 # Design System: conference-engine
@@ -110,12 +112,12 @@ components:
 
 conference-engine's visual world is the developer-tool category standard played completely straight — the Linear/Vercel/Resend/Stripe/PostHog register with no irony and no smuggled quirk. This is a recorded brand commitment (PRODUCT.md, 2026-08-08): convention is the choice, and future visual work refines within this canon rather than re-litigating the direction. The landing page proves the thesis literally — instead of a tall centered hero with a screenshot in a browser frame (explicitly refused), the page opens with a compact left-aligned headline band and then hands ~70% of the viewport to a live-looking schedule builder catching a real speaker conflict. The product demonstrates itself; the marketing copy stands aside.
 
-The system is two-toned by design. The Persuade surface (landing) lives in a near-black world (#0a0a0b) with off-white text, a single emerald accent, and hairline neutral borders doing all the structural work. The Operate and Read surfaces (admin, review board, speaker portal, CFP, public schedule) are deliberately light workhorse rooms — pale neutral ground, white cards, graphite text — sharing the same Geist typeface and the same neutral scale. This is the Stripe-style marketing/app split, and it is intentional, not drift.
+**The system is one dark world (decision recorded 2026-08-08, superseding the earlier marketing/app split).** Every surface — landing, admin (submissions, schedule, dashboard, tasks), review board, speaker portal, CFP form, and public schedule — lives on the same near-black ground (#0a0a0b) with off-white text, graphite raised cards, hairline carbon borders, and a single emerald accent. The earlier Stripe-style split (dark marketing, light workhorse app) was deliberate at the time; the product owner has since decided consistency wins: the app is the landing page's promise kept, in the same room. The old "never darken the app surfaces" rule is retired.
 
 Density is dev-tool density: 13px and 11px micro-type is normal inside functional components, tables and grids are tight, and whitespace is spent on marketing sections (80–96px vertical) rather than inside working UI. Motion is nearly absent; one authored moment exists (the mid-drag card's hover) and it is gated behind `prefers-reduced-motion`.
 
 **Key Characteristics:**
-- Dark canon marketing surface, light workhorse app surfaces — one type system, one neutral scale, two grounds.
+- One dark canon everywhere: Ink Ground page, Graphite cards, Carbon Line borders, one type system, one neutral scale.
 - One accent (emerald), spent on actions and liveness; red exists for exactly one job per surface.
 - Structure from 1px borders (solid, dotted, dashed each carry distinct meaning), not from shadows or background contrast.
 - Semibold (600) is the heaviest weight anywhere; hierarchy comes from size and neutral value.
@@ -126,31 +128,30 @@ Density is dev-tool density: 13px and 11px micro-type is normal inside functiona
 A neutral-dominated palette where the entire Tailwind neutral scale is the shared spine and emerald is the only voice with an opinion.
 
 ### Primary
-- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per dark viewport (the "Open demo" nav button, dark text on it); the logo mark's stroke and dot; the drag-card's active border at 60% opacity.
-- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("Nothing stalls."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`).
+- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per viewport — the primary action (the landing "Open demo" button; the one filled button per app view), with near-black text. Also the logo mark's stroke and dot, and the drag-card's active border at 60% opacity. In practice Tailwind `emerald-500` is its working twin on buttons.
+- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("Nothing stalls."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`). `emerald-400` is the text register for positive status on dark chips.
 
 ### Secondary
-- **Conflict Red** (`{colors.conflict-red}`, #dc2626): on the dark canon surface, this appears exactly once — the speaker-conflict banner (solid red-600 fill, red-400/60 border, white semibold text). On light app surfaces, red is error semantics only (red-50 panel, red-200 border, red-800/900 text for expired magic links).
+- **Conflict Red** (`{colors.conflict-red}`, #dc2626): red means "the system caught something" and nothing else. The schedule conflict banner is its loudest form (solid red-600 fill, red-400/60 border, white semibold text). Everywhere else red is error/negative semantics only, rendered for dark surfaces as red-400 text on red-500/10 fill with red-500/30 border. Never decorative, never a second accent.
 
 ### Neutral
-- **Ink Ground** (`{colors.ink-ground}`, #0a0a0b): the near-black page ground of the dark world, set as `--background` in `globals.css`. Tailwind's `neutral-950` (#0a0a0a) is its working twin on the landing wrapper and bottom fade.
-- **Ink Foreground** (`{colors.ink-foreground}`, #ededed): base text on dark, set as `--foreground`; in practice the landing steps through neutral-100/200 for primary text.
-- **Graphite** (`{colors.graphite}`, #171717): dual-duty. On dark surfaces it is the raised card fill (slot cards, code block, rail items). On light surfaces it is primary text and the solid button/active-pill fill.
-- **Carbon Line** (`{colors.carbon-line}`, #262626): the 1px border that draws the entire dark world — nav bottom edge, section dividers, card outlines, dotted hour lines. Also the hover fill of the light solid button.
-- **Smoke** (`{colors.smoke}`, #a3a3a3): secondary text on dark (descriptions, metadata, idle nav links).
-- **Steel** (`{colors.steel}`, #737373): tertiary text in both worlds — eyebrows, time-ruler labels, counts.
-- **Char** (`{colors.char}`, #525252): secondary text on light surfaces.
-- **Paper Ground** (`{colors.paper-ground}`, #fafafa): the app-surface ground (`bg-neutral-50`), applied by route-group layouts (`/review`, `/portal`, `/e`) and admin pages.
-- **Paper Card** (`{colors.paper-card}`, #ffffff): white card and input fill on light surfaces.
-- **Paper Line** (`{colors.paper-line}`, #e5e5e5): 1px border and divider on light surfaces.
-- **Input Line** (`{colors.input-line}`, #d4d4d4): input and segmented-control border on light surfaces; its dashed form marks empty states and upload targets.
+- **Ink Ground** (`{colors.ink-ground}`, #0a0a0b): the near-black page ground of every surface, set as `--background` in `globals.css`. Tailwind's `neutral-950` (#0a0a0a) is its working twin on page wrappers.
+- **Ink Foreground** (`{colors.ink-foreground}`, #ededed): base text, set as `--foreground`; in practice surfaces step through neutral-100/200 for primary text.
+- **Graphite** (`{colors.graphite}`, #171717, `neutral-900`): the raised card fill — slot cards, list cards, inputs, code blocks, rail items, secondary buttons.
+- **Carbon Line** (`{colors.carbon-line}`, #262626, `neutral-800`): the 1px border that draws the world — nav bottom edges, section dividers, card outlines, dotted hour lines, row dividers (`divide-neutral-800`).
+- **Input Line** (`{colors.input-line}`, #404040, `neutral-700`): input and chip borders, and (dashed) the empty-state / upload-target border.
+- **Smoke** (`{colors.smoke}`, #a3a3a3, `neutral-400`): secondary text — descriptions, metadata, idle nav links.
+- **Steel** (`{colors.steel}`, #737373, `neutral-500`): tertiary text — eyebrows, time-ruler labels, counts, placeholders.
+- **Char** (`{colors.char}`, #525252, `neutral-600`): the quietest text register, used sparingly for de-emphasized meta on dense rows.
 
 ### Named Rules
-**The Marketing/App Split Rule.** The dark canon world (near-black + emerald) governs the Persuade surface — the landing page. Operate/Read surfaces (admin, review, portal, CFP, public schedule) are deliberately light workhorse surfaces on Paper Ground with Graphite text, sharing Geist and the neutral scale. Never darken the app surfaces to match the landing, and never lighten the landing to match the app.
+**The One Dark World Rule.** Every surface — Persuade (landing), Operate (admin, review), and Read (portal, CFP, public schedule) — shares the same ground (Ink Ground), the same raised-card fill (Graphite), the same border (Carbon Line), and the same text ramp (neutral-100/200 → Smoke → Steel). No surface is lightened; no parallel light palette exists. Supersedes the retired Marketing/App Split Rule.
 
-**The One Red Rule.** On the dark surface, red renders exactly one element: the conflict banner. Its singularity is the message — the system caught something. On light surfaces red means error state, nothing else. Red is never decorative, never a second accent.
+**The One Red Rule.** Red renders "the system caught something": the schedule conflict banner in its solid form, and error/negative status in its quiet form (red-400 on red-500/10). Red is never decorative, never a second accent.
 
-**The Emerald Budget Rule.** Emerald marks actions and liveness only — one solid CTA per viewport, arrow links, the live dot, focus rings, the active drag border. It never fills large areas, never tints backgrounds, and never appears on the light app surfaces' controls (those are graphite).
+**The Emerald Budget Rule.** Emerald marks actions and liveness only — one solid emerald CTA per viewport (the view's primary action), arrow links, the live dot, focus rings, the active drag border, and the positive register of status chips (emerald-400 text on emerald-500/10). It never fills large areas, never tints whole panels, and is never chrome (never a card or container border).
+
+**Status chip tones (dark).** Status/meta chips share one recipe — `{color}-400` text on `{color}-500/10` fill with `{color}-500/30` border: emerald for positive/complete, amber for pending/attention, red for negative/error. Neutral chips are Graphite fill, Input Line border, neutral-300 text.
 
 ## Typography
 
@@ -163,10 +164,10 @@ A neutral-dominated palette where the entire Tailwind neutral scale is the share
 ### Hierarchy
 - **Display** (600, 2.25rem stepping to 3.75rem at `lg`, tight leading, −0.02em): the landing headline only. Left-aligned, `text-balance`, with one phrase colored Emerald Bright.
 - **Headline** (600, 1.5rem stepping to 1.875rem, −0.025em): landing section headings ("The whole program pipeline, one system").
-- **Title** (600, 1.875rem, −0.025em): app page titles via the shared `PageHeader` component; item-level titles drop to 1.125rem/500.
-- **Body** (400, 0.875rem base, 1rem for landing lede, relaxed leading on long descriptions): Smoke on dark, Char on light. Long text capped near `max-w-xl`/`max-w-2xl` (~65ch).
+- **Title** (600, 1.875rem, −0.025em): app page titles via the shared `PageHeader` component, in neutral-100; item-level titles drop to 1.125rem/500.
+- **Body** (400, 0.875rem base, 1rem for landing lede, relaxed leading on long descriptions): Smoke. Long text capped near `max-w-xl`/`max-w-2xl` (~65ch).
 - **Label** (500, 0.75rem, +0.025em, UPPERCASE): the eyebrow above every app page title ("Organizer · Dashboard", "Speaker portal") in Steel. Inside dense components the ramp continues down: 13px medium for card titles, 11px for metadata, 10px for tag chips.
-- **Mono** (400, 0.8125rem): the deploy code block; mono at 0.75rem for clock times on the public schedule.
+- **Mono** (400, 0.8125rem): the deploy code block; mono at 0.75rem for clock times on schedules.
 
 ### Named Rules
 **The Semibold Ceiling Rule.** Nothing in the system is heavier than 600. Emphasis comes from size, color value, and spacing — never from bold or black weights.
@@ -183,7 +184,7 @@ The schedule grid is the one measured artifact: 64px per hour (`HOUR_PX = 64`), 
 
 ## Elevation & Depth
 
-Flat by conviction. Surfaces at rest are separated by 1px borders and small background steps (Ink Ground → Graphite on dark; Paper Ground → Paper Card on light) — never by shadow. The only shadows in the build belong to elements physically lifted out of the plane mid-interaction: the mid-drag schedule card (`shadow-xl` in black at 60%) and the conflict banner (`shadow-lg` in black at 40%). The sticky landing nav gets depth from translucency instead: 80% Ink Ground with `backdrop-blur` over the scrolling grid.
+Flat by conviction. Surfaces at rest are separated by 1px Carbon Line borders and the one background step (Ink Ground → Graphite) — never by shadow. The only shadows in the build belong to elements physically lifted out of the plane mid-interaction: the mid-drag schedule card (`shadow-xl` in black at 60%) and the conflict banner (`shadow-lg` in black at 40%). Sticky navs get depth from translucency instead: 80% Ink Ground with `backdrop-blur` over the scrolling content.
 
 ### Shadow Vocabulary
 - **Lifted card** (`box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.6)`): the dragged schedule card, tilted 1.5° and floating above its dashed ghost target.
@@ -194,7 +195,7 @@ Flat by conviction. Surfaces at rest are separated by 1px borders and small back
 
 ## Shapes
 
-Small radii throughout, scaled to element size: 4px on tag chips and legacy inputs, 6px (`rounded-md`) as the workhorse for buttons, slot cards, pills, and inputs, 8px (`rounded-lg`) for light-surface cards and segmented controls, 12px (`rounded-xl`) reserved for the largest framed panels (dashboard mock, code block), and full-round only for status pills and the live dot. No sharp corners, no large radii, no clipping tricks.
+Small radii throughout, scaled to element size: 4px on tag chips, 6px (`rounded-md`) as the workhorse for buttons, slot cards, pills, and inputs, 8px (`rounded-lg`) for cards and segmented controls, 12px (`rounded-xl`) reserved for the largest framed panels (dashboard mock, code block), and full-round only for status pills and the live dot. No sharp corners, no large radii, no clipping tricks. Legacy `rounded` (4px) on inputs and buttons is retired in favor of `rounded-md`.
 
 Border style is a grammar of its own: **solid** 1px = structure (cards, dividers, nav edges); **dotted** = the passage of time (hour lines on the grid); **dashed** = potential space (the drop-target ghost, empty states, upload zones). The one expressive silhouette is the mid-drag card's 1.5° rotation — the only non-rectilinear geometry in the system.
 
@@ -202,32 +203,31 @@ Motion follows the same restraint: hover states are color swaps; the single auth
 
 ## Components
 
+Shared primitives live in `src/components/ui.tsx` (Button, Chip, StatusPill, SegmentedControl, EmptyState, input classes), `src/components/page-header.tsx`, `src/components/app-nav.tsx`, and `src/components/logo.tsx`. Surfaces compose these instead of re-deriving classes.
+
 ### Buttons
-- **Shape:** workhorse radius (6px), text at 0.875rem/500.
-- **Primary (dark surface):** Emerald Signal fill with near-black text (`button-primary`), compact 6px × 14px padding — one per viewport.
-- **Solid (light surface):** Graphite fill, white text (`button-solid`); hover shifts to Carbon Line; disabled drops to 40–50% opacity. This is the app's only filled button.
-- **Secondary (light surface):** white fill, Input Line border, graphite text at 0.75rem/500.
+- **Shape:** workhorse radius (6px), text at 0.875rem/500 (0.75rem in dense rows).
+- **Primary:** Emerald Signal fill (`emerald-500`) with near-black text, hover Emerald Bright (`emerald-400`) — the ONE primary action per view.
+- **Secondary:** Graphite fill, Carbon Line border, neutral-200 text; hover lifts the fill one step to Carbon Line. Disabled drops to 40–50% opacity.
 - **Hover / Focus:** color-only transitions; focus is the global 2px Emerald Bright outline with 2px offset.
-- **Arrow link (dark surface):** the marketing CTA of record — Emerald Bright text with an inline 14px stroked arrow, hover lightening one emerald step. Neutral variant in neutral-300 → neutral-100 for the secondary path.
+- **Arrow link (landing):** the marketing CTA of record — Emerald Bright text with an inline 14px stroked arrow, hover lightening one emerald step. Neutral variant in neutral-300 → neutral-100 for the secondary path.
 
 ### Chips
-- **Dark (tag chips):** 10px text in Smoke, 1px neutral-700/80% border, 4px radius, hairline padding — metadata tags on rail cards.
-- **Light (status/meta):** white fill, Input Line border, 0.75rem neutral-700 text, 6px radius.
+- **Tag chips:** 10–11px text in Smoke, 1px neutral-700/80% border, 4px radius, hairline padding — metadata tags on rail cards and label chips.
+- **Status pills:** full-round, 11px uppercase medium, tone recipe per the Status chip rule (emerald/amber/red on `{color}-500/10`), neutral tone Graphite + Input Line border + neutral-300 text.
 
 ### Cards / Containers
-- **Dark:** Graphite fill, Carbon Line 1px border, 6px radius, compact 10px × 6px internal padding (slot cards) up to 16px (framed panels at 12px radius). No shadow at rest.
-- **Light:** Paper Card fill, Paper Line 1px border, 8px radius, rows divided by `divide-neutral-200`, 12–16px padding.
-- **Empty state (light):** dashed Input Line border, Paper Ground or white fill, centered two-line message (medium title + Char body), generous 32–40px vertical padding.
+- Graphite fill, Carbon Line 1px border, 8px radius (6px for slot cards), rows divided by `divide-neutral-800`, 12–16px padding; compact 10px × 6px internal padding on slot cards up to 16px on framed panels at 12px radius. No shadow at rest.
+- **Empty state:** dashed Input Line border, transparent or Graphite fill, centered two-line message (neutral-100 medium title + Smoke body), generous 32–40px vertical padding.
 
 ### Inputs / Fields
-- **Style:** white fill, 1px Input Line border, 6px radius, 8px × 12px padding, 0.875rem text (light surfaces only — the dark surface has no forms).
+- **Style:** Graphite fill, 1px Input Line border, 6px radius, 8px × 12px padding, 0.875rem neutral-100 text, Steel placeholders.
 - **Focus:** the global Emerald Bright outline; no border-color shift.
-- **Upload target:** dashed-border label block that darkens its border on hover.
-- **Segmented control:** white pillbox (Input Line border, 8px radius, 2px inner padding) holding pills; the active pill takes the Graphite solid treatment.
+- **Upload target:** dashed-border label block that lightens its border on hover.
+- **Segmented control:** Graphite pillbox (Carbon Line border, 8px radius, 2px inner padding) holding pills; the active pill takes a Carbon Line fill with neutral-100 text.
 
 ### Navigation
-- **Landing:** sticky 56px translucent bar (80% Ink Ground + blur, Carbon Line bottom edge); logo mark + semibold tracking-tight wordmark left, Smoke links that lighten on hover, single emerald CTA right.
-- **Admin:** white band with Paper Line bottom edge, `max-w-6xl`, 0.75rem/500 pill links — active pill Graphite-on-white inverted, idle pills Char text with neutral-100 hover; sections separated by a 1px vertical rule.
+- **App band (`AppNav`):** slim translucent bar (80% Ink Ground + `backdrop-blur`, Carbon Line bottom edge) carrying the logo mark + semibold tracking-tight wordmark linking home. The landing extends the same treatment with marketing links and the single emerald CTA; app surfaces (admin, review, portal, CFP, public schedule) carry their section links as 0.75rem/500 pills — active pill Carbon Line fill with neutral-100 text, idle pills Smoke text with Graphite hover; sections separated by a 1px vertical Carbon Line rule.
 
 ### The Schedule Grid (signature)
 The product-as-hero artifact and the system's densest expression: 44px time ruler with tabular 24h labels, dotted Carbon Line hour rules every 64px, room lanes split by 70%-opacity solid borders, positioned slot cards (13px medium title, 11px Smoke meta), a dashed ghost drop-target, the tilted floating drag card with emerald border, and the lone red conflict banner. On the landing it renders borderless — no browser chrome, no container — and dissolves into the page through a bottom gradient fade to neutral-950.
@@ -235,15 +235,16 @@ The product-as-hero artifact and the system's densest expression: 44px time rule
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the marketing/app split: Ink Ground + emerald for Persuade, Paper Ground + Graphite for Operate/Read, Geist and the neutral scale shared across both.
+- **Do** keep every surface in the one dark world: Ink Ground page, Graphite cards, Carbon Line borders, the shared Geist ramp and neutral scale.
 - **Do** draw structure with 1px borders and use the border grammar — solid for structure, dotted for time, dashed for potential/empty.
-- **Do** spend emerald only on actions and liveness (one solid CTA per viewport, arrow links, live dot, focus ring), and keep the 2px Emerald Bright `:focus-visible` outline global.
+- **Do** spend emerald only on actions and liveness (one solid CTA per viewport, arrow links, live dot, focus ring, positive status text), and keep the 2px Emerald Bright `:focus-visible` outline global.
 - **Do** use dev-tool density in working UI: 13px/11px micro-type, tabular numerals for anything time- or index-shaped, tight paddings; save the whitespace for marketing sections.
 - **Do** gate every animation behind `prefers-reduced-motion` / `motion-safe` — the build has exactly two moving things and both are gated.
+- **Do** compose the shared primitives (`Button`, `Chip`, `StatusPill`, `SegmentedControl`, `EmptyState`, `PageHeader`, `AppNav`) instead of hand-rolling classes per surface.
 
 ### Don't:
 - **Don't** build a tall centered hero with a screenshot in a browser frame — the direction contract explicitly refuses it; the product renders live, borderless, and fades into the page.
-- **Don't** darken the app surfaces to match the landing, or introduce emerald fills into light-surface controls (the app's filled button is Graphite).
-- **Don't** use red anywhere except the single conflict banner (dark) or error states (light) — no second accent, no decorative red.
+- **Don't** lighten any surface back to the retired paper palette, and don't let emerald become chrome (no emerald card or container borders — emerald is action/liveness/positive-status only).
+- **Don't** use red anywhere except conflict/error semantics — no second accent, no decorative red.
 - **Don't** put shadows on resting elements; a shadow means mid-drag or alert, nothing else.
 - **Don't** exceed weight 600 or reach for a second typeface — hierarchy is size, neutral value, and spacing in Geist alone.
