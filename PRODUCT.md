@@ -1,0 +1,61 @@
+# Product
+
+<!-- impeccable:product-schema 1 -->
+
+## Platform
+
+web
+
+## Users
+
+Primary: conference program organizers (the archetype is the AI Engineer conference team). They run the full program lifecycle — CFP intake, review, acceptance, speaker onboarding, scheduling, publishing — under time pressure, often mid-event-cycle with hundreds of submissions. When design trade-offs conflict, the organizer wins: admin speed and information density outrank other concerns.
+
+Secondary audiences (confirmed roles in the product):
+- Speakers: submit talks via public CFP, complete onboarding tasks (bio, headshot, slides, supporting docs) through a magic-link portal.
+- Reviewers: score submissions 1–5 with comments via tokenized links, identified by name.
+- Attendees/public: read the published schedule (list/day/week/track/room views).
+
+## Product Purpose
+
+An open-source alternative to Sessionboard's "Program" module: CFP → review → accept → speaker onboarding → schedule → publish. Built originally for the AI Engineer hackathon (judged by the AIE team), but the confirmed intent is real adoption — win or lose, this should become software AIE or similar conference teams actually run. Success means an organizer team chooses it over Sessionboard/Sessionize for a real event.
+
+## Positioning
+
+Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Marketing + CMS at $40k+/yr and is demo-gated and slow; this product does only the program side, fast. Speed is the wedge — the reference product's slowness is the customer's stated pain. Closest competitor in shape is Sessionize (~$499/event); the differentiators are the AIE-shaped conditional CFP preset, the realtime "who's blocking the program" outstanding-tasks board, and self-hosting on the organizer's own Cloudflare account.
+
+## Operating Context
+
+- The full lifecycle is: public CFP submission (conditional fields by session format) → category routing → evaluation plan with named reviewers → accept/reject with templated email → auto-spawned speaker tasks → magic-link speaker portal with file uploads → drag-and-drop scheduling with hard room/speaker conflict detection → calendar invites (.ics) → public schedule.
+- Organizers work in an admin area (cookie-gated demo sign-in today); a realtime dashboard shows outstanding speaker tasks via WebSocket with poll fallback.
+- Daily cron sends task reminder emails; an admin endpoint triggers them on demand.
+- A keyed public API (`/api/v1/...`) exposes submissions and schedule for downstream tooling; Sessionboard parity feature.
+- Reference public-schedule structure: wf2025.ai.engineer/schedule (structure inspiration only, own style).
+
+## Capabilities and Constraints
+
+- Stack (fixed): Next.js App Router via OpenNext on Cloudflare Workers; D1 as system of record; R2 for uploads; KV for sessions; `EventRoom` Durable Object for realtime; Resend for email (from team@65labs.org). Deployed at conference-engine.65labs.org; public repo github.com/agrimsingh/conference-engine.
+- Domain spine: `Event → CFPForm → Submission → Evaluation → Acceptance → SpeakerTask → AgendaSlot`. A submission becomes the session on acceptance. Category (routed from the format answer) doubles as the schedule track.
+- Forms render generically from DB rows; there is no admin form-builder UI yet (forms are defined by seed/preset). Explicitly wanted by the customer ("this is just a very fancy form builder").
+- English-only; no payments; no CRM/marketing/CMS scope. AI-assisted review explicitly optional/struck.
+- Airtable: at most a one-way export (their team uses Airtable); never the system of record.
+- Undecided product facts: product name (see Brand Commitments), pricing/licensing model, multi-event/multi-tenant story, committee assignment of specific submissions to reviewers.
+
+## Brand Commitments
+
+None binding. "conference-engine" is an explicit placeholder — the product is open to renaming, and the visual identity is open. Do not treat the current neutral utilitarian look as a commitment. The only volunteered constraint: the public schedule took structural (not stylistic) inspiration from wf2025.ai.engineer/schedule.
+
+## Evidence on Hand
+
+- Live production deployment: https://conference-engine.65labs.org with seeded demo event `aie-sandbox` (CFP, schedule, portal, review board, admin dashboard all runnable end-to-end).
+- Real transactional email delivery via Resend (provider IDs logged for submission confirmations, acceptance, magic links, reminders).
+- Public repository with per-slice commit history: https://github.com/agrimsingh/conference-engine.
+- Customer's own requirements doc and video walkthrough (local `research/`, not in repo): six firm requirements, the "$40,000 for this software" quote, and the "very fancy form builder" framing.
+- No real-event usage data, testimonials, or customers yet — do not fabricate any.
+
+## Product Principles
+
+1. **Organizer velocity is the product.** Every admin interaction should feel instant; the customer left Sessionboard over slowness. Density and keyboard-speed beat whitespace and ceremony in admin surfaces.
+2. **The job, not the org chart.** Ship the program lifecycle completely; refuse adjacent scope (CRM, marketing, CMS, payments) even when it looks easy.
+3. **The pipeline must never stall silently.** Outstanding work — unreviewed submissions, incomplete speaker tasks, unscheduled acceptances — is surfaced loudly and in real time.
+4. **Speakers get consumer-grade, organizers get pro-grade.** Public and portal surfaces earn trust with clarity and polish; admin surfaces optimize for throughput.
+5. **Data stays legible and exportable.** D1 is the single source of record; public API and one-way exports over integrations that fork the truth.
