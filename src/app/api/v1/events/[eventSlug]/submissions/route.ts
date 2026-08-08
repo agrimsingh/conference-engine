@@ -58,11 +58,17 @@ export async function GET(request: Request, context: RouteContext) {
 			submittedAt: submission.submitted_at,
 			updatedAt: submission.updated_at,
 			labels: labelsBySubmission.get(submission.id) ?? [],
-			speakers: speakers.map((speaker) => ({
-				name: speaker.name,
-				email: speaker.email,
-				position: speaker.position,
-			})),
+			// Downstream ticketing gates comps on status === "confirmed";
+			// addedAfterAcceptance flags the free-ticket abuse pattern.
+			speakers: speakers
+				.filter((speaker) => speaker.status !== "removed")
+				.map((speaker) => ({
+					name: speaker.name,
+					email: speaker.email,
+					position: speaker.position,
+					status: speaker.status,
+					addedAfterAcceptance: speaker.added_after_acceptance === 1,
+				})),
 		});
 	}
 

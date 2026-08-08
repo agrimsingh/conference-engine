@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
@@ -8,8 +9,10 @@ import {
 	getEventBySlug,
 	getPersonById,
 	getSubmissionById,
+	listPendingCoSpeakersForEvent,
 	listTasksForEvent,
 } from "@/lib/db/queries";
+import { titleFromAnswers } from "@/lib/domain";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -47,6 +50,7 @@ export default async function AdminTasksPage({ params }: Props) {
 	}
 
 	const completed = tasks.filter((t) => t.status === "completed").length;
+	const pendingCoSpeakers = await listPendingCoSpeakersForEvent(db, event.id);
 
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -61,6 +65,48 @@ export default async function AdminTasksPage({ params }: Props) {
 							: `${completed}/${tasks.length} tasks complete.`
 					}
 				/>
+
+				{pendingCoSpeakers.length > 0 ? (
+					<div className="mb-6 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm">
+						<div className="flex flex-wrap items-baseline justify-between gap-2">
+							<p className="font-medium text-neutral-100">
+								Co-speakers awaiting confirmation
+							</p>
+							<Link
+								className="text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-200"
+								href={`/admin/events/${event.slug}/submissions`}
+							>
+								Manage on submissions
+							</Link>
+						</div>
+						<ul className="mt-2 divide-y divide-neutral-800">
+							{pendingCoSpeakers.map((row) => (
+								<li
+									key={row.id}
+									className="flex flex-wrap items-center justify-between gap-2 py-2"
+								>
+									<span>
+										<span className="font-medium text-neutral-200">
+											{row.name || row.email}
+										</span>
+										<span className="text-neutral-500">
+											{" "}
+											· {titleFromAnswers(parseAnswers(row.answers_json))}
+										</span>
+										{row.added_after_acceptance === 1 ? (
+											<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-400">
+												added late
+											</span>
+										) : null}
+									</span>
+									<StatusPill tone="warning">
+										{row.invited_at ? "invite sent" : "not invited"}
+									</StatusPill>
+								</li>
+							))}
+						</ul>
+					</div>
+				) : null}
 
 				{tasks.length === 0 ? (
 					<EmptyState

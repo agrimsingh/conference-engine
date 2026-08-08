@@ -69,6 +69,12 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	for (const row of submissions) {
 		const answers = parseAnswers(row.answers_json);
 		const speakers = await listSpeakersForSubmission(db, row.id);
+		// Pending co-speakers stay visible to organizers (flagged), and still
+		// count for double-booking; declined/removed drop out entirely.
+		const active = speakers.filter(
+			(speaker) =>
+				speaker.status === "confirmed" || speaker.status === "pending",
+		);
 		const slot = slotsBySubmission.get(row.id) ?? null;
 		sessions.push({
 			id: row.id,
@@ -76,10 +82,14 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			status: row.status,
 			submitterName: row.submitter_name,
 			durationMinutes: durationMinutesFromAnswers(answers),
-			speakerKeys: speakers.map((speaker) =>
+			speakerKeys: active.map((speaker) =>
 				normalizeSpeakerKey(speaker.email),
 			),
-			speakerLabels: speakers.map((speaker) => speaker.name || speaker.email),
+			speakerLabels: active.map((speaker) =>
+				speaker.status === "pending"
+					? `${speaker.name || speaker.email} (pending)`
+					: speaker.name || speaker.email,
+			),
 			slot: slot
 				? {
 						roomName: slot.room_name,

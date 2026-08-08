@@ -37,12 +37,18 @@ async function loadInterval(
 	slot: Pick<AgendaSlotRow, "submission_id" | "room_name" | "starts_at" | "ends_at">,
 ): Promise<ScheduleInterval> {
 	const speakers = await listSpeakersForSubmission(db, slot.submission_id);
+	// Pending co-speakers still count for double-booking; declined/removed don't.
 	return {
 		submissionId: slot.submission_id,
 		roomName: slot.room_name,
 		startsAtMs: slot.starts_at,
 		endsAtMs: slot.ends_at,
-		speakerKeys: speakers.map((speaker) => normalizeSpeakerKey(speaker.email)),
+		speakerKeys: speakers
+			.filter(
+				(speaker) =>
+					speaker.status === "confirmed" || speaker.status === "pending",
+			)
+			.map((speaker) => normalizeSpeakerKey(speaker.email)),
 	};
 }
 

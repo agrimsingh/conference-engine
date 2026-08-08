@@ -163,7 +163,11 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 			startsAtMs: slot.starts_at,
 			endsAtMs: slot.ends_at,
 			status: slot.submission_status,
-			speakers: speakers.map((speaker) => speaker.name || speaker.email),
+			// Public schedule lists confirmed speakers only; pending co-speakers
+			// are an organizer-facing state (admin schedule + dashboard).
+			speakers: speakers
+				.filter((speaker) => speaker.status === "confirmed")
+				.map((speaker) => speaker.name || speaker.email),
 			dayKey: dayKeyInTimeZone(slot.starts_at, event.timezone),
 		});
 	}

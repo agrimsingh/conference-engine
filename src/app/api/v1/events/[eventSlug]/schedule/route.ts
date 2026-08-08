@@ -57,10 +57,13 @@ export async function GET(request: Request, context: RouteContext) {
 			roomName: slot.room_name,
 			startsAt: slot.starts_at,
 			endsAt: slot.ends_at,
-			speakers: speakers.map((speaker) => ({
-				name: speaker.name,
-				email: speaker.email,
-			})),
+			// Public schedule payload mirrors the public page: confirmed only.
+			speakers: speakers
+				.filter((speaker) => speaker.status === "confirmed")
+				.map((speaker) => ({
+					name: speaker.name,
+					email: speaker.email,
+				})),
 		});
 	}
 

@@ -3,10 +3,12 @@ import {
 	titleFromAnswers,
 	type OutstandingTaskRow,
 	type OutstandingTasksSnapshot,
+	type PendingCoSpeakerItem,
 } from "@/lib/domain";
 import {
 	getPersonById,
 	getSubmissionById,
+	listPendingCoSpeakersForEvent,
 	listTasksForEvent,
 } from "@/lib/db/queries";
 import type { EventRow } from "@/lib/db/types";
@@ -67,12 +69,25 @@ export async function loadOutstandingTasksSnapshot(
 		});
 	}
 
+	const pendingRows = await listPendingCoSpeakersForEvent(db, event.id);
+	const pendingCoSpeakers: PendingCoSpeakerItem[] = pendingRows.map((row) => ({
+		speakerId: row.id,
+		name: row.name,
+		email: row.email,
+		submissionId: row.submission_id,
+		submissionTitle: titleFromAnswers(parseAnswers(row.answers_json)),
+		submissionStatus: row.submission_status,
+		addedAfterAcceptance: row.added_after_acceptance === 1,
+		invitedAt: row.invited_at,
+	}));
+
 	const groups = groupOutstandingTasks(rows);
 	return {
 		eventId: event.id,
 		eventSlug: event.slug,
 		incompleteCount: rows.length,
 		groups,
+		pendingCoSpeakers,
 		fetchedAt: Date.now(),
 	};
 }

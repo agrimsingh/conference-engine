@@ -139,6 +139,11 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 					{snapshot.incompleteCount === 1 ? "" : "s"} across {snapshot.groups.length}{" "}
 					speaker
 					{snapshot.groups.length === 1 ? "" : "s"}
+					{snapshot.pendingCoSpeakers.length > 0
+						? ` · ${snapshot.pendingCoSpeakers.length} co-speaker${
+								snapshot.pendingCoSpeakers.length === 1 ? "" : "s"
+							} unconfirmed`
+						: ""}
 				</p>
 				<div className="flex items-center gap-2">
 					<span
@@ -162,6 +167,42 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 				<p className={noticeClasses("warning")}>
 					Couldn&apos;t refresh live data: {lastError}
 				</p>
+			) : null}
+
+			{snapshot.pendingCoSpeakers.length > 0 ? (
+				<div className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+					<div className="flex flex-wrap items-baseline justify-between gap-2">
+						<p className="font-medium text-neutral-100">
+							Co-speakers awaiting confirmation
+						</p>
+						<span className="text-xs text-neutral-500">
+							{snapshot.pendingCoSpeakers.length} pending
+						</span>
+					</div>
+					<ul className="mt-3 divide-y divide-neutral-800">
+						{snapshot.pendingCoSpeakers.map((item) => (
+							<li
+								key={item.speakerId}
+								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+							>
+								<span>
+									<span className="font-medium text-neutral-200">
+										{item.name || item.email}
+									</span>
+									<span className="text-neutral-500"> · {item.submissionTitle}</span>
+									{item.addedAfterAcceptance ? (
+										<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-400">
+											added late
+										</span>
+									) : null}
+								</span>
+								<StatusPill tone="warning">
+									{item.invitedAt ? "invite sent" : "not invited"}
+								</StatusPill>
+							</li>
+						))}
+					</ul>
+				</div>
 			) : null}
 
 			{snapshot.groups.length === 0 ? (

@@ -126,4 +126,5 @@ export {
 	type OutstandingTaskGroup,
 	type OutstandingTaskRow,
 	type OutstandingTasksSnapshot,
+	type PendingCoSpeakerItem,
 } from "./outstanding-tasks";
