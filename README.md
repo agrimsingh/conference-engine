@@ -9,7 +9,7 @@ Built as a Sessionboard Program alternative for the AI Engineer hackathon. Job-t
 | Requirement | State |
 |---|---|
 | 1. Conditional CFP forms + category routing | ✅ Local (AIE preset) |
-| 2. Speaker portal (bio, headshot, slides, docs) | 🚧 Next |
+| 2. Speaker portal (bio, headshot, slides, docs) | ✅ Local (accept → tasks → R2) |
 | 3. Templated email + calendar ICS | 🚧 |
 | 4. Evaluation / scoring workflows | 🚧 |
 | 5. DnD schedule + conflict detection | 🚧 |
@@ -38,10 +38,13 @@ npm run dev                      # http://localhost:3000
 
 - Public CFP: `/e/aie-sandbox/submit/cfp`
 - Admin bypass (local): `/admin/bypass` → `/admin/events/aie-sandbox/submissions`
+- Speaker portal: `/portal` (email + KV token; no email send yet)
+- Admin tasks: `/admin/events/aie-sandbox/tasks`
 
 ### API smoke
 
 ```bash
+# 1) Submit a talk
 curl -sS -X POST http://localhost:3000/api/e/aie-sandbox/submit/cfp \
   -H 'content-type: application/json' \
   -d '{
@@ -55,6 +58,27 @@ curl -sS -X POST http://localhost:3000/api/e/aie-sandbox/submit/cfp \
       "speakers": [{"name":"Ada","email":"ada@example.com"}]
     }
   }'
+
+# 2) Accept (admin bypass cookie)
+curl -sS -c /tmp/ce-admin.txt -b /tmp/ce-admin.txt \
+  http://localhost:3000/admin/bypass
+curl -sS -b /tmp/ce-admin.txt -X POST \
+  http://localhost:3000/api/admin/events/aie-sandbox/submissions/<SUBMISSION_ID>/accept
+
+# 3) Mint speaker portal token
+curl -sS -X POST http://localhost:3000/api/portal/session \
+  -H 'content-type: application/json' \
+  -d '{"email":"ada@example.com"}'
+
+# 4) Complete bio
+curl -sS -X POST http://localhost:3000/api/portal/tasks/<TASK_ID>/complete \
+  -H 'content-type: application/json' \
+  -d '{"token":"<TOKEN>","text":"Ada builds systems for conference speakers."}'
+
+# 5) Upload headshot / slides (multipart)
+curl -sS -X POST http://localhost:3000/api/portal/tasks/<TASK_ID>/upload \
+  -F "token=<TOKEN>" \
+  -F "file=@./headshot.png;type=image/png"
 ```
 
 ## Deploy
@@ -71,7 +95,7 @@ Custom domain is configured in `wrangler.jsonc` as `conference-engine.65labs.org
 
 Spine: `Event → CFPForm → Submission → Evaluation → Acceptance → SpeakerTask → AgendaSlot`.
 
-A `Submission` *is* the session once accepted. Status transitions are enforced in `src/lib/domain/submission-status.ts`. Form field types and visibility rules live in typed registries under `src/lib/domain/`.
+A `Submission` *is* the session once accepted. Status transitions are enforced in `src/lib/domain/submission-status.ts`. Speaker onboarding task types live in `SPEAKER_TASK_TYPE_REGISTRY` (`bio`, `headshot`, `slides`); accept spawns `speaker_tasks` idempotently on `(submission_id, person_id, template_key)`. Form field types and visibility rules live in typed registries under `src/lib/domain/`.
 
 ## License
 

@@ -19,3 +19,4 @@ All true with runtime evidence:
 |---|---|---|
 | start | Goal armed; repo + Sat baseline next | 1 already true locally |
 | Sat commit | Public repo + CFP baseline pushed | 1 ✅; 8 partial (repo exists) |
+| Sun slice | Accept → speaker_tasks + /portal + R2 uploads | 2 ✅ locally (pending parent commit) |

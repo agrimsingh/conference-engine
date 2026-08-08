@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug, listSubmissionsForEvent } from "@/lib/db/queries";
+import {
+	getEventBySlug,
+	getPersonById,
+	listSubmissionsForEvent,
+	listTasksForSubmission,
+} from "@/lib/db/queries";
+import { AcceptButton } from "./accept-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -20,6 +26,25 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 	if (!event) notFound();
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
+	const tasksBySubmission = new Map<
+		string,
+		Awaited<ReturnType<typeof listTasksForSubmission>>
+	>();
+	const personNames = new Map<string, string>();
+
+	for (const row of submissions) {
+		const tasks = await listTasksForSubmission(db, row.id);
+		tasksBySubmission.set(row.id, tasks);
+		for (const task of tasks) {
+			if (!personNames.has(task.person_id)) {
+				const person = await getPersonById(db, task.person_id);
+				personNames.set(
+					task.person_id,
+					person?.name ?? person?.email ?? task.person_id,
+				);
+			}
+		}
+	}
 
 	return (
 		<main className="mx-auto min-h-screen max-w-4xl px-4 py-10 text-neutral-900">
@@ -34,12 +59,20 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 					<Link className="underline" href="/admin/bypass">
 						/admin/bypass
 					</Link>
-					. Magic-link auth comes later.
+					.
 				</p>
 				<p className="text-sm">
 					Public CFP:{" "}
 					<Link className="underline" href={`/e/${event.slug}/submit/cfp`}>
 						/e/{event.slug}/submit/cfp
+					</Link>
+					{" · "}
+					<Link className="underline" href={`/admin/events/${event.slug}/tasks`}>
+						Speaker tasks
+					</Link>
+					{" · "}
+					<Link className="underline" href="/portal">
+						Speaker portal
 					</Link>
 				</p>
 			</header>
@@ -50,21 +83,57 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
 					{submissions.map((row) => {
 						const answers = parseAnswers(row.answers_json);
+						const tasks = tasksBySubmission.get(row.id) ?? [];
+						const canAccept =
+							row.status === "submitted" || row.status === "under_review";
+						const completed = tasks.filter((t) => t.status === "completed").length;
 						return (
 							<li key={row.id} className="px-4 py-3 text-sm">
-								<div className="flex flex-wrap items-baseline justify-between gap-2">
-									<p className="font-medium">
-										{typeof answers.title === "string" ? answers.title : "(untitled)"}
-									</p>
-									<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
-										{row.status}
-									</span>
+								<div className="flex flex-wrap items-start justify-between gap-3">
+									<div>
+										<p className="font-medium">
+											{typeof answers.title === "string"
+												? answers.title
+												: "(untitled)"}
+										</p>
+										<p className="mt-1 text-neutral-600">
+											{row.submitter_name} · {row.submitter_email}
+											{typeof answers.format === "string"
+												? ` · ${answers.format}`
+												: ""}
+										</p>
+										<p className="mt-1 font-mono text-xs text-neutral-500">
+											{row.id}
+										</p>
+									</div>
+									<div className="flex flex-col items-end gap-2">
+										<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
+											{row.status}
+										</span>
+										{(canAccept || row.status === "accepted") && (
+											<AcceptButton
+												eventSlug={event.slug}
+												submissionId={row.id}
+												disabled={!canAccept && row.status !== "accepted"}
+											/>
+										)}
+									</div>
 								</div>
-								<p className="mt-1 text-neutral-600">
-									{row.submitter_name} · {row.submitter_email}
-									{typeof answers.format === "string" ? ` · ${answers.format}` : ""}
-								</p>
-								<p className="mt-1 font-mono text-xs text-neutral-500">{row.id}</p>
+								{tasks.length > 0 ? (
+									<div className="mt-3 rounded bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+										<p className="font-medium">
+											Tasks {completed}/{tasks.length}
+										</p>
+										<ul className="mt-1 space-y-0.5">
+											{tasks.map((task) => (
+												<li key={task.id}>
+													{personNames.get(task.person_id) ?? task.person_id} ·{" "}
+													{task.template_key} · {task.status}
+												</li>
+											))}
+										</ul>
+									</div>
+								) : null}
 							</li>
 						);
 					})}

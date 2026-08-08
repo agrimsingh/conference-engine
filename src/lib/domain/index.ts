@@ -30,3 +30,16 @@ export {
 } from "./form-fields";
 
 export { createAieCfpPreset, type AieCfpPreset } from "./aie-cfp-preset";
+
+export {
+	isSpeakerTaskKey,
+	isSpeakerTaskStatus,
+	SPEAKER_TASK_KEYS,
+	SPEAKER_TASK_STATUSES,
+	SPEAKER_TASK_TYPE_REGISTRY,
+	speakerTaskTypesInOrder,
+	type SpeakerTaskKey,
+	type SpeakerTaskKind,
+	type SpeakerTaskStatus,
+	type SpeakerTaskTypeMeta,
+} from "./speaker-tasks";

@@ -1,4 +1,6 @@
 -- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
+DELETE FROM speaker_tasks;
+DELETE FROM task_templates;
 DELETE FROM submission_speakers;
 DELETE FROM submissions;
 DELETE FROM form_fields;
@@ -144,4 +146,35 @@ INSERT INTO form_fields (
 	'{"op":"always"}',
 	'{"kind":"speaker_block","minSpeakers":1,"maxSpeakers":4}',
 	0
+);
+
+INSERT INTO task_templates (
+	id, event_id, key, label, task_kind, required, position
+) VALUES
+(
+	'tmpl_evt_aie_sandbox_bio',
+	'evt_aie_sandbox',
+	'bio',
+	'Speaker bio',
+	'text',
+	1,
+	0
+),
+(
+	'tmpl_evt_aie_sandbox_headshot',
+	'evt_aie_sandbox',
+	'headshot',
+	'Headshot',
+	'file',
+	1,
+	1
+),
+(
+	'tmpl_evt_aie_sandbox_slides',
+	'evt_aie_sandbox',
+	'slides',
+	'Slides',
+	'file',
+	1,
+	2
 );

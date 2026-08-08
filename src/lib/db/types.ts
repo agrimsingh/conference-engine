@@ -55,3 +55,55 @@ export type SubmissionSpeakerRow = {
 	bio: string | null;
 	position: number;
 };
+
+export type PersonRow = {
+	id: string;
+	email: string;
+	name: string | null;
+	created_at: number;
+};
+
+export type TaskTemplateRow = {
+	id: string;
+	event_id: string;
+	key: string;
+	label: string;
+	task_kind: "text" | "file";
+	required: number;
+	position: number;
+};
+
+export type SpeakerTaskRow = {
+	id: string;
+	event_id: string;
+	submission_id: string;
+	person_id: string;
+	template_key: string;
+	status: "pending" | "completed";
+	asset_id: string | null;
+	text_value: string | null;
+	completed_at: number | null;
+	created_at: number;
+	updated_at: number;
+};
+
+export type AssetRow = {
+	id: string;
+	event_id: string;
+	r2_key: string;
+	content_type: string | null;
+	filename: string | null;
+	uploaded_by_person_id: string | null;
+	created_at: number;
+};
+
+export type SpeakerProfileRow = {
+	id: string;
+	event_id: string;
+	person_id: string;
+	display_name: string | null;
+	bio: string | null;
+	headshot_asset_id: string | null;
+	created_at: number;
+	updated_at: number;
+};
