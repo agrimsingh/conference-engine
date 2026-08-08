@@ -25,7 +25,7 @@ export function TaskChecklist({ token, tasks }: Props) {
 	const [error, setError] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
 
-	async function completeBio(taskId: string, text: string) {
+	async function completeTextTask(taskId: string, label: string, text: string) {
 		setBusyId(taskId);
 		setError(null);
 		setMessage(null);
@@ -37,10 +37,10 @@ export function TaskChecklist({ token, tasks }: Props) {
 			});
 			const data = (await response.json()) as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) {
-				setError(data.error ?? "Failed to save bio");
+				setError(data.error ?? `Failed to save ${label}`);
 				return;
 			}
-			setMessage("Bio saved");
+			setMessage(`${label} saved`);
 			router.refresh();
 		} catch {
 			setError("Network error");
@@ -106,7 +106,7 @@ export function TaskChecklist({ token, tasks }: Props) {
 									event.preventDefault();
 									const form = new FormData(event.currentTarget);
 									const text = String(form.get("text") ?? "");
-									void completeBio(task.id, text);
+									void completeTextTask(task.id, task.label, text);
 								}}
 							>
 								<textarea
@@ -115,14 +115,14 @@ export function TaskChecklist({ token, tasks }: Props) {
 									minLength={20}
 									rows={4}
 									className="w-full rounded border border-neutral-300 px-3 py-2"
-									placeholder="Short speaker bio (20+ chars)"
+									placeholder={`${task.label} (20+ chars)`}
 								/>
 								<button
 									type="submit"
 									disabled={busyId === task.id}
 									className="rounded bg-neutral-900 px-3 py-1.5 text-white disabled:opacity-50"
 								>
-									{busyId === task.id ? "Saving…" : "Save bio"}
+									{busyId === task.id ? "Saving…" : `Save ${task.label}`}
 								</button>
 							</form>
 						) : (

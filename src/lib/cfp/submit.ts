@@ -2,6 +2,7 @@ import {
 	evaluateVisibilityRule,
 	validateFieldAnswer,
 	type AnswerMap,
+	type CategoryLabel,
 	type FormFieldDef,
 	type SpeakerAnswer,
 } from "@/lib/domain";
@@ -55,6 +56,7 @@ export async function insertSubmission(
 		submitterName: string;
 		answers: AnswerMap;
 		speakers: SpeakerAnswer[];
+		category?: CategoryLabel | null;
 	},
 ): Promise<string> {
 	const now = Date.now();
@@ -63,15 +65,16 @@ export async function insertSubmission(
 	await db
 		.prepare(
 			`INSERT INTO submissions (
-        id, form_id, event_id, status, answers_json,
+        id, form_id, event_id, status, answers_json, category,
         submitter_email, submitter_name, created_at, updated_at, submitted_at
-      ) VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?, ?)`,
 		)
 		.bind(
 			submissionId,
 			args.formId,
 			args.eventId,
 			JSON.stringify(args.answers),
+			args.category ?? null,
 			args.submitterEmail,
 			args.submitterName,
 			now,

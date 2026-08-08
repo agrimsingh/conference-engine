@@ -32,6 +32,20 @@ export {
 export { createAieCfpPreset, type AieCfpPreset } from "./aie-cfp-preset";
 
 export {
+	AIE_CATEGORY_LABELS,
+	AIE_FORMAT_CATEGORY_ROUTE,
+	UNCATEGORIZED_CATEGORY,
+	categoryRouteForForm,
+	displayCategory,
+	isAieCategoryLabel,
+	resolveCategory,
+	resolveSubmissionCategory,
+	type AieCategoryLabel,
+	type CategoryLabel,
+	type CategoryRoute,
+} from "./category-routing";
+
+export {
 	isSpeakerTaskKey,
 	isSpeakerTaskStatus,
 	SPEAKER_TASK_KEYS,

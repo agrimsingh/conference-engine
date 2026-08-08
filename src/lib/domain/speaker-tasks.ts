@@ -1,4 +1,4 @@
-export const SPEAKER_TASK_KEYS = ["bio", "headshot", "slides"] as const;
+export const SPEAKER_TASK_KEYS = ["bio", "headshot", "slides", "docs"] as const;
 
 export type SpeakerTaskKey = (typeof SPEAKER_TASK_KEYS)[number];
 
@@ -38,6 +38,19 @@ export const SPEAKER_TASK_TYPE_REGISTRY: Record<SpeakerTaskKey, SpeakerTaskTypeM
 				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
 			],
 			position: 2,
+		},
+		docs: {
+			key: "docs",
+			label: "Supporting docs",
+			kind: "file",
+			accept: [
+				"application/pdf",
+				"application/msword",
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				"application/zip",
+				"application/x-zip-compressed",
+			],
+			position: 3,
 		},
 	};
 

@@ -48,7 +48,6 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 					submissionId,
 					score,
 					comment,
-					scoredBy: "reviewer",
 				}),
 			});
 			const data = (await response.json()) as { ok?: boolean; error?: string };

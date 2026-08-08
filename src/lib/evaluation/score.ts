@@ -1,8 +1,9 @@
 import {
 	getEvaluationPlanByToken,
+	getReviewerByToken,
 	getSubmissionById,
 } from "@/lib/db/queries";
-import type { EvaluationScoreRow } from "@/lib/db/types";
+import type { EvaluationPlanRow, EvaluationScoreRow, ReviewerRow } from "@/lib/db/types";
 import {
 	IllegalSubmissionTransitionError,
 	isReviewableSubmissionStatus,
@@ -11,9 +12,32 @@ import {
 	transitionSubmission,
 } from "@/lib/domain";
 
+export type ReviewIdentity =
+	| { mode: "reviewer"; plan: EvaluationPlanRow; reviewer: ReviewerRow }
+	| { mode: "committee"; plan: EvaluationPlanRow; reviewer: null };
+
 export type ScoreResult =
 	| { ok: true; score: EvaluationScoreRow }
 	| { ok: false; error: string; status: number };
+
+export async function resolveReviewIdentity(
+	db: D1Database,
+	token: string,
+): Promise<ReviewIdentity | null> {
+	const reviewer = await getReviewerByToken(db, token);
+	if (reviewer) {
+		const plan = await db
+			.prepare("SELECT * FROM evaluation_plans WHERE id = ?")
+			.bind(reviewer.plan_id)
+			.first<EvaluationPlanRow>();
+		if (!plan) return null;
+		return { mode: "reviewer", plan, reviewer };
+	}
+
+	const plan = await getEvaluationPlanByToken(db, token);
+	if (!plan) return null;
+	return { mode: "committee", plan, reviewer: null };
+}
 
 export async function upsertEvaluationScore(
 	db: D1Database,
@@ -22,18 +46,18 @@ export async function upsertEvaluationScore(
 		submissionId: string;
 		score: number;
 		comment?: string;
-		scoredBy: string;
 	},
 ): Promise<ScoreResult> {
 	if (!isValidScore(args.score)) {
 		return { ok: false, error: "score must be an integer 1–5", status: 400 };
 	}
 
-	const plan = await getEvaluationPlanByToken(db, args.token);
-	if (!plan || plan.status !== "active") {
+	const identity = await resolveReviewIdentity(db, args.token);
+	if (!identity || identity.plan.status !== "active") {
 		return { ok: false, error: "Invalid or inactive review token", status: 401 };
 	}
 
+	const { plan } = identity;
 	const submission = await getSubmissionById(db, args.submissionId);
 	if (!submission || submission.event_id !== plan.event_id) {
 		return { ok: false, error: "Submission not found", status: 404 };
@@ -52,16 +76,30 @@ export async function upsertEvaluationScore(
 	}
 
 	const now = Date.now();
-	const scoredBy = args.scoredBy.trim() || "reviewer";
 	const comment = args.comment?.trim() || null;
+	const scoredBy =
+		identity.mode === "reviewer" ? identity.reviewer.name : "committee";
+	const reviewerId =
+		identity.mode === "reviewer" ? identity.reviewer.id : null;
 
-	const existing = await db
-		.prepare(
-			`SELECT * FROM evaluation_scores
-       WHERE plan_id = ? AND submission_id = ? AND scored_by = ?`,
-		)
-		.bind(plan.id, args.submissionId, scoredBy)
-		.first<EvaluationScoreRow>();
+	let existing: EvaluationScoreRow | null;
+	if (reviewerId) {
+		existing = await db
+			.prepare(
+				`SELECT * FROM evaluation_scores
+         WHERE submission_id = ? AND reviewer_id = ?`,
+			)
+			.bind(args.submissionId, reviewerId)
+			.first<EvaluationScoreRow>();
+	} else {
+		existing = await db
+			.prepare(
+				`SELECT * FROM evaluation_scores
+         WHERE plan_id = ? AND submission_id = ? AND scored_by = ? AND reviewer_id IS NULL`,
+			)
+			.bind(plan.id, args.submissionId, scoredBy)
+			.first<EvaluationScoreRow>();
+	}
 
 	let scoreRow: EvaluationScoreRow;
 
@@ -69,15 +107,17 @@ export async function upsertEvaluationScore(
 		await db
 			.prepare(
 				`UPDATE evaluation_scores
-         SET score = ?, comment = ?, updated_at = ?
+         SET score = ?, comment = ?, scored_by = ?, updated_at = ?
          WHERE id = ?`,
 			)
-			.bind(args.score, comment, now, existing.id)
+			.bind(args.score, comment, scoredBy, now, existing.id)
 			.run();
 		scoreRow = {
 			...existing,
 			score: args.score,
 			comment,
+			scored_by: scoredBy,
+			reviewer_id: reviewerId,
 			updated_at: now,
 		};
 	} else {
@@ -85,8 +125,8 @@ export async function upsertEvaluationScore(
 		await db
 			.prepare(
 				`INSERT INTO evaluation_scores (
-          id, plan_id, submission_id, score, comment, scored_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, plan_id, submission_id, score, comment, scored_by, reviewer_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
@@ -95,6 +135,7 @@ export async function upsertEvaluationScore(
 				args.score,
 				comment,
 				scoredBy,
+				reviewerId,
 				now,
 				now,
 			)
@@ -106,6 +147,7 @@ export async function upsertEvaluationScore(
 			score: args.score,
 			comment,
 			scored_by: scoredBy,
+			reviewer_id: reviewerId,
 			created_at: now,
 			updated_at: now,
 		};

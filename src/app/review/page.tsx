@@ -4,12 +4,12 @@ import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
-	getEvaluationPlanByToken,
 	getEventById,
 	getEventBySlug,
 	listEvaluationScoresForPlan,
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
+import { resolveReviewIdentity } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
 
 type Props = {
@@ -21,18 +21,23 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const db = await getDb();
 	const admin = await isAdminBypass();
 
-	let plan = params.token
-		? await getEvaluationPlanByToken(db, params.token)
+	let identity = params.token
+		? await resolveReviewIdentity(db, params.token)
 		: null;
+	let accessToken = params.token?.trim() || "";
 
-	if (!plan && admin && params.event) {
+	if (!identity && admin && params.event) {
 		const event = await getEventBySlug(db, params.event);
 		if (event) {
-			plan = await getActiveEvaluationPlan(db, event.id);
+			const plan = await getActiveEvaluationPlan(db, event.id);
+			if (plan) {
+				identity = { mode: "committee", plan, reviewer: null };
+				accessToken = plan.reviewer_token;
+			}
 		}
 	}
 
-	if (!plan) {
+	if (!identity) {
 		return (
 			<main className="mx-auto min-h-screen max-w-3xl px-4 py-10 text-neutral-900">
 				<h1 className="text-2xl font-semibold">Review</h1>
@@ -54,6 +59,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 		);
 	}
 
+	const { plan } = identity;
 	const event = await getEventById(db, plan.event_id);
 	if (!event) notFound();
 
@@ -96,6 +102,9 @@ export default async function ReviewPage({ searchParams }: Props) {
 		};
 	});
 
+	const reviewingAs =
+		identity.mode === "reviewer" ? identity.reviewer.name : "committee";
+
 	return (
 		<main className="mx-auto min-h-screen max-w-3xl px-4 py-10 text-neutral-900">
 			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
@@ -103,6 +112,9 @@ export default async function ReviewPage({ searchParams }: Props) {
 					Evaluation · {plan.name} · {plan.status}
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
+				<p className="text-sm font-medium text-neutral-800">
+					Reviewing as {reviewingAs}
+				</p>
 				<p className="text-sm text-neutral-600">
 					Score 1–5. Organizer accept/reject requires admin bypass.
 				</p>
@@ -110,7 +122,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 
 			<ReviewBoard
 				eventSlug={event.slug}
-				token={plan.reviewer_token}
+				token={accessToken}
 				canDecide={admin}
 				submissions={rows}
 			/>

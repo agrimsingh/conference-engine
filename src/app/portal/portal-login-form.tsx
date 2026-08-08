@@ -11,12 +11,14 @@ export function PortalLoginForm({ initialEmail }: Props) {
 	const router = useRouter();
 	const [email, setEmail] = useState(initialEmail);
 	const [error, setError] = useState<string | null>(null);
+	const [sent, setSent] = useState(false);
 	const [pending, setPending] = useState(false);
 
 	async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setPending(true);
 		setError(null);
+		setSent(false);
 		try {
 			const response = await fetch("/api/portal/session", {
 				method: "POST",
@@ -25,15 +27,21 @@ export function PortalLoginForm({ initialEmail }: Props) {
 			});
 			const data = (await response.json()) as {
 				ok?: boolean;
+				sent?: boolean;
 				error?: string;
 				portalUrl?: string;
 			};
-			if (!response.ok || !data.ok || !data.portalUrl) {
-				setError(data.error ?? "Could not create session");
+			if (!response.ok || !data.ok) {
+				setError(data.error ?? "Could not send sign-in link");
 				return;
 			}
-			router.push(data.portalUrl);
-			router.refresh();
+			// Admin bypass demo: API still returns portalUrl for one-click entry.
+			if (data.portalUrl) {
+				router.push(data.portalUrl);
+				router.refresh();
+				return;
+			}
+			setSent(true);
 		} catch {
 			setError("Network error");
 		} finally {
@@ -55,12 +63,17 @@ export function PortalLoginForm({ initialEmail }: Props) {
 				/>
 			</label>
 			{error ? <p className="text-sm text-red-700">{error}</p> : null}
+			{sent ? (
+				<p className="text-sm text-neutral-800">
+					Check your email for a sign-in link.
+				</p>
+			) : null}
 			<button
 				type="submit"
 				disabled={pending}
 				className="rounded bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
 			>
-				{pending ? "Minting…" : "Open portal"}
+				{pending ? "Sending…" : "Email me a sign-in link"}
 			</button>
 		</form>
 	);

@@ -1,5 +1,6 @@
 import type { EvaluationPlanRow } from "@/lib/db/types";
 import { getActiveEvaluationPlan } from "@/lib/db/queries";
+import { ensureSeedReviewers } from "@/lib/evaluation/reviewers";
 
 export type ActivatePlanResult =
 	| { ok: true; plan: EvaluationPlanRow; created: boolean }
@@ -12,6 +13,7 @@ export async function activateEvaluationPlan(
 	const now = Date.now();
 	const existing = await getActiveEvaluationPlan(db, args.eventId);
 	if (existing) {
+		await ensureSeedReviewers(db, existing.id);
 		return { ok: true, plan: existing, created: false };
 	}
 
@@ -34,11 +36,13 @@ export async function activateEvaluationPlan(
 			)
 			.bind(now, draft.id)
 			.run();
-		return {
-			ok: true,
-			plan: { ...draft, status: "active", updated_at: now },
-			created: false,
+		const plan: EvaluationPlanRow = {
+			...draft,
+			status: "active",
+			updated_at: now,
 		};
+		await ensureSeedReviewers(db, plan.id);
+		return { ok: true, plan, created: false };
 	}
 
 	const id = crypto.randomUUID();
@@ -64,5 +68,6 @@ export async function activateEvaluationPlan(
 		updated_at: now,
 	};
 
+	await ensureSeedReviewers(db, plan.id);
 	return { ok: true, plan, created: true };
 }

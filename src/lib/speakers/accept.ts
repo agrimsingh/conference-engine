@@ -105,7 +105,8 @@ export async function acceptSubmission(
 	const email = await notifySubmissionLifecycle(db, {
 		submissionId,
 		templateKey: "acceptance",
-		portalHint: "Sign in at /portal with your speaker email to complete bio, headshot, and slides.",
+		portalHint:
+			"Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs.",
 	});
 
 	return {

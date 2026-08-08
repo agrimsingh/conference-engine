@@ -89,3 +89,24 @@ export const DEMO_SCHEDULE_DAY = "2026-10-01";
 export const DAY_START_MINUTES = 9 * 60;
 export const DAY_END_MINUTES = 18 * 60;
 export const SLOT_STEP_MINUTES = 30;
+
+/** Monday–Sunday calendar week containing `dayKey` (YYYY-MM-DD as a civil date). */
+export function weekDayKeys(dayKey: string): string[] {
+	const [year, month, day] = dayKey.split("-").map(Number) as [
+		number,
+		number,
+		number,
+	];
+	const utc = Date.UTC(year, month - 1, day);
+	const dow = new Date(utc).getUTCDay(); // 0 = Sun
+	const mondayOffset = dow === 0 ? -6 : 1 - dow;
+	const mondayMs = utc + mondayOffset * 24 * 60 * 60 * 1000;
+	const keys: string[] = [];
+	for (let i = 0; i < 7; i++) {
+		const d = new Date(mondayMs + i * 24 * 60 * 60 * 1000);
+		keys.push(
+			`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`,
+		);
+	}
+	return keys;
+}

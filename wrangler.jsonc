@@ -23,6 +23,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"triggers": {
+		"crons": ["0 1 * * *"]
+	},
 	"upload_source_maps": true,
 	"vars": {
 		"RESEND_FROM_EMAIL": "team@65labs.org",

@@ -27,8 +27,8 @@ export default async function PortalPage({ searchParams }: Props) {
 					</p>
 					<h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
 					<p className="text-sm text-neutral-600">
-						Enter the email from your accepted talk. Local demo mints a KV token
-						(no email send).
+						Enter the email from your accepted talk. We&apos;ll email you a
+						sign-in link — check your inbox.
 					</p>
 				</header>
 				<PortalLoginForm initialEmail={params.email ?? ""} />

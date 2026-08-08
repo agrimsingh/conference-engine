@@ -4,7 +4,6 @@ import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getEventBySlug,
-	getEvaluationPlanByToken,
 } from "@/lib/db/queries";
 import { upsertEvaluationScore } from "@/lib/evaluation/score";
 
@@ -14,7 +13,6 @@ type Body = {
 	submissionId?: unknown;
 	score?: unknown;
 	comment?: unknown;
-	scoredBy?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -29,10 +27,6 @@ export async function POST(request: Request) {
 		typeof body.submissionId === "string" ? body.submissionId : "";
 	const score = typeof body.score === "number" ? body.score : Number(body.score);
 	const comment = typeof body.comment === "string" ? body.comment : undefined;
-	const scoredBy =
-		typeof body.scoredBy === "string" && body.scoredBy.trim()
-			? body.scoredBy.trim()
-			: "reviewer";
 
 	if (!submissionId || !Number.isFinite(score)) {
 		return NextResponse.json(
@@ -71,17 +65,11 @@ export async function POST(request: Request) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	const plan = await getEvaluationPlanByToken(db, token);
-	if (!plan) {
-		return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
-	}
-
 	const result = await upsertEvaluationScore(db, {
 		token,
 		submissionId,
 		score,
 		comment,
-		scoredBy: (await isAdminBypass()) ? `admin:${scoredBy}` : scoredBy,
 	});
 
 	if (!result.ok) {

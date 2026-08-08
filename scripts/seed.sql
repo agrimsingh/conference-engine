@@ -1,5 +1,6 @@
 -- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
 DELETE FROM evaluation_scores;
+DELETE FROM reviewers;
 DELETE FROM evaluation_plans;
 DELETE FROM outbound_messages;
 DELETE FROM agenda_slots;
@@ -182,6 +183,15 @@ INSERT INTO task_templates (
 	'file',
 	1,
 	2
+),
+(
+	'tmpl_evt_aie_sandbox_docs',
+	'evt_aie_sandbox',
+	'docs',
+	'Supporting docs',
+	'file',
+	1,
+	3
 );
 
 INSERT INTO event_rooms (id, event_id, name, position, created_at) VALUES

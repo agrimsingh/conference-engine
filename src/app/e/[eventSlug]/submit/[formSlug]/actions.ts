@@ -1,9 +1,10 @@
 "use server";
 
+import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
 import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
-import type { AnswerMap } from "@/lib/domain";
+import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 
 export type SubmitActionResult =
 	| { ok: true; submissionId: string }
@@ -24,6 +25,10 @@ export async function submitCfpAction(input: {
 		return { ok: false, errors: ["CFP form not found or closed"] };
 	}
 
+	if (isCfpPastClosesAt(loaded.form, Date.now())) {
+		return { ok: false, errors: ["CFP closed"] };
+	}
+
 	const name = input.submitterName.trim();
 	const email = input.submitterEmail.trim().toLowerCase();
 	if (!name) return { ok: false, errors: ["Your name is required"] };
@@ -32,6 +37,11 @@ export async function submitCfpAction(input: {
 	const validated = validateSubmissionAnswers(loaded.fields, input.answers);
 	if (!validated.ok) return validated;
 
+	const category = resolveSubmissionCategory(
+		input.formSlug,
+		validated.visibleAnswers,
+	);
+
 	const submissionId = await insertSubmission(db, {
 		eventId: loaded.event.id,
 		formId: loaded.form.id,
@@ -39,6 +49,7 @@ export async function submitCfpAction(input: {
 		submitterName: name,
 		answers: validated.visibleAnswers,
 		speakers: validated.speakers,
+		category,
 	});
 
 	return { ok: true, submissionId };

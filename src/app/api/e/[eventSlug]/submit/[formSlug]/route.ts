@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
 import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
-import type { AnswerMap } from "@/lib/domain";
+import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { notifySubmissionLifecycle } from "@/lib/email/notify";
 
 type RouteContext = {
@@ -51,10 +52,20 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
+	const now = Date.now();
+	if (isCfpPastClosesAt(loaded.form, now)) {
+		return NextResponse.json(
+			{ ok: false, errors: ["CFP closed"] },
+			{ status: 403 },
+		);
+	}
+
 	const validated = validateSubmissionAnswers(loaded.fields, answers);
 	if (!validated.ok) {
 		return NextResponse.json(validated, { status: 400 });
 	}
+
+	const category = resolveSubmissionCategory(formSlug, validated.visibleAnswers);
 
 	const submissionId = await insertSubmission(db, {
 		eventId: loaded.event.id,
@@ -63,6 +74,7 @@ export async function POST(request: Request, context: RouteContext) {
 		submitterName,
 		answers: validated.visibleAnswers,
 		speakers: validated.speakers,
+		category,
 	});
 
 	const email = await notifySubmissionLifecycle(db, {

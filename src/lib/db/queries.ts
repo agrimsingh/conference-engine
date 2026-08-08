@@ -10,6 +10,7 @@ import type {
 	FormFieldRow,
 	OutboundMessageRow,
 	PersonRow,
+	ReviewerRow,
 	SpeakerProfileRow,
 	SpeakerTaskRow,
 	SubmissionRow,
@@ -261,6 +262,31 @@ export async function getEvaluationPlanByToken(
 		.first<EvaluationPlanRow>();
 }
 
+export async function getReviewerByToken(
+	db: D1Database,
+	token: string,
+): Promise<ReviewerRow | null> {
+	return db
+		.prepare("SELECT * FROM reviewers WHERE token = ?")
+		.bind(token)
+		.first<ReviewerRow>();
+}
+
+export async function listReviewersForPlan(
+	db: D1Database,
+	planId: string,
+): Promise<ReviewerRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM reviewers
+       WHERE plan_id = ?
+       ORDER BY created_at ASC, name ASC`,
+		)
+		.bind(planId)
+		.all<ReviewerRow>();
+	return result.results;
+}
+
 export async function listEvaluationScoresForPlan(
 	db: D1Database,
 	planId: string,
@@ -327,6 +353,7 @@ export async function listAgendaSlotsWithSubmissions(
          a.*,
          s.status AS submission_status,
          s.answers_json AS answers_json,
+         s.category AS category,
          s.submitter_name AS submitter_name,
          s.submitter_email AS submitter_email
        FROM agenda_slots a

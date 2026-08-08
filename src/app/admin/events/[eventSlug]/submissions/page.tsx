@@ -8,15 +8,22 @@ import {
 	listSubmissionsForEvent,
 	listTasksForSubmission,
 } from "@/lib/db/queries";
+import {
+	AIE_CATEGORY_LABELS,
+	UNCATEGORIZED_CATEGORY,
+	displayCategory,
+} from "@/lib/domain";
 import { AcceptButton } from "./accept-button";
 import { ActivatePlanButton } from "./activate-plan-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
+	searchParams: Promise<{ category?: string }>;
 };
 
-export default async function AdminSubmissionsPage({ params }: Props) {
+export default async function AdminSubmissionsPage({ params, searchParams }: Props) {
 	const { eventSlug } = await params;
+	const { category: categoryParam } = await searchParams;
 
 	if (!(await isAdminBypass())) {
 		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/submissions`);
@@ -27,13 +34,38 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 	if (!event) notFound();
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
+	const categoryFilter = categoryParam?.trim() || "all";
+
+	const categoryCounts = new Map<string, number>();
+	for (const row of submissions) {
+		const label = displayCategory(row.category);
+		categoryCounts.set(label, (categoryCounts.get(label) ?? 0) + 1);
+	}
+
+	const chipLabels = [
+		...AIE_CATEGORY_LABELS,
+		...[...categoryCounts.keys()].filter(
+			(label) =>
+				!(AIE_CATEGORY_LABELS as readonly string[]).includes(label) &&
+				label !== UNCATEGORIZED_CATEGORY,
+		),
+		UNCATEGORIZED_CATEGORY,
+	];
+
+	const filtered =
+		categoryFilter === "all"
+			? submissions
+			: submissions.filter(
+					(row) => displayCategory(row.category) === categoryFilter,
+				);
+
 	const tasksBySubmission = new Map<
 		string,
 		Awaited<ReturnType<typeof listTasksForSubmission>>
 	>();
 	const personNames = new Map<string, string>();
 
-	for (const row of submissions) {
+	for (const row of filtered) {
 		const tasks = await listTasksForSubmission(db, row.id);
 		tasksBySubmission.set(row.id, tasks);
 		for (const task of tasks) {
@@ -47,6 +79,8 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 		}
 	}
 
+	const baseHref = `/admin/events/${event.slug}/submissions`;
+
 	return (
 		<main className="mx-auto min-h-screen max-w-4xl px-4 py-10 text-neutral-900">
 			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
@@ -55,8 +89,10 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
 				<p className="text-sm text-neutral-600">
-					Submissions ({submissions.length}). Auth is a temporary{" "}
-					<code className="text-xs">ce_admin_bypass=1</code> cookie via{" "}
+					Submissions ({filtered.length}
+					{categoryFilter !== "all" ? ` of ${submissions.length}` : ""}). Auth is
+					a temporary <code className="text-xs">ce_admin_bypass=1</code> cookie
+					via{" "}
 					<Link className="underline" href="/admin/bypass">
 						/admin/bypass
 					</Link>
@@ -92,21 +128,51 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 						Speaker portal
 					</Link>
 				</p>
+				<div className="flex flex-wrap gap-2 pt-2 text-sm">
+					<Link
+						className={
+							categoryFilter === "all"
+								? "rounded border border-neutral-900 bg-neutral-900 px-2 py-0.5 text-xs text-white"
+								: "rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
+						}
+						href={baseHref}
+					>
+						All ({submissions.length})
+					</Link>
+					{chipLabels.map((label) => {
+						const count = categoryCounts.get(label) ?? 0;
+						const active = categoryFilter === label;
+						return (
+							<Link
+								key={label}
+								className={
+									active
+										? "rounded border border-neutral-900 bg-neutral-900 px-2 py-0.5 text-xs text-white"
+										: "rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
+								}
+								href={`${baseHref}?category=${encodeURIComponent(label)}`}
+							>
+								{label} ({count})
+							</Link>
+						);
+					})}
+				</div>
 				<div className="pt-1">
 					<ActivatePlanButton eventSlug={event.slug} />
 				</div>
 			</header>
 
-			{submissions.length === 0 ? (
+			{filtered.length === 0 ? (
 				<p className="text-sm text-neutral-600">No submissions yet.</p>
 			) : (
 				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
-					{submissions.map((row) => {
+					{filtered.map((row) => {
 						const answers = parseAnswers(row.answers_json);
 						const tasks = tasksBySubmission.get(row.id) ?? [];
 						const canAccept =
 							row.status === "submitted" || row.status === "under_review";
 						const completed = tasks.filter((t) => t.status === "completed").length;
+						const category = displayCategory(row.category);
 						return (
 							<li key={row.id} className="px-4 py-3 text-sm">
 								<div className="flex flex-wrap items-start justify-between gap-3">
@@ -127,9 +193,14 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 										</p>
 									</div>
 									<div className="flex flex-col items-end gap-2">
-										<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
-											{row.status}
-										</span>
+										<div className="flex flex-wrap justify-end gap-1.5">
+											<span className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs tracking-wide text-neutral-700">
+												{category}
+											</span>
+											<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
+												{row.status}
+											</span>
+										</div>
 										{(canAccept || row.status === "accepted") && (
 											<AcceptButton
 												eventSlug={event.slug}

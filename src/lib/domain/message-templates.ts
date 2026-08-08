@@ -3,6 +3,8 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"acceptance",
 	"rejection",
 	"calendar_invite",
+	"task_reminder",
+	"portal_magic_link",
 ] as const;
 
 export type MessageTemplateKey = (typeof MESSAGE_TEMPLATE_KEYS)[number];
@@ -15,6 +17,9 @@ export type MessageTemplateContext = {
 	roomName?: string;
 	startsAtIso?: string;
 	endsAtIso?: string;
+	taskLabels?: string[];
+	outstandingCount?: number;
+	portalUrl?: string;
 };
 
 export type RenderedMessage = {
@@ -76,6 +81,42 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			.filter((line): line is string => line !== null)
 			.join("\n"),
 	}),
+	task_reminder: (ctx) => {
+		const count = ctx.outstandingCount ?? ctx.taskLabels?.length ?? 0;
+		const labels = ctx.taskLabels ?? [];
+		const taskLines =
+			labels.length > 0
+				? labels.map((label) => `• ${label}`)
+				: ["• (see portal for details)"];
+		return {
+			subject: `Reminder: ${count} outstanding speaker tasks for ${ctx.eventName}`,
+			text: [
+				`Hi ${ctx.submitterName},`,
+				"",
+				`You still have ${count} outstanding speaker task${count === 1 ? "" : "s"} for ${ctx.eventName}:`,
+				"",
+				...taskLines,
+				"",
+				ctx.portalHint ??
+					"Sign in at the speaker portal to complete them: /portal",
+				"",
+				"— conference-engine",
+			].join("\n"),
+		};
+	},
+	portal_magic_link: (ctx) => ({
+		subject: `Sign in to your ${ctx.eventName} speaker portal`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			"Use this one-time link to open your speaker portal:",
+			ctx.portalUrl ?? ctx.portalHint ?? "/portal",
+			"",
+			"If you did not request this, you can ignore this email.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
 };
 
 export function isMessageTemplateKey(value: string): value is MessageTemplateKey {
@@ -90,5 +131,9 @@ export function renderMessageTemplate(
 }
 
 export function isOneShotTemplate(key: MessageTemplateKey): boolean {
-	return key !== "calendar_invite";
+	return (
+		key !== "calendar_invite" &&
+		key !== "task_reminder" &&
+		key !== "portal_magic_link"
+	);
 }

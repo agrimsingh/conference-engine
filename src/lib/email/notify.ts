@@ -27,7 +27,10 @@ export async function notifySubmissionLifecycle(
 	db: D1Database,
 	args: {
 		submissionId: string;
-		templateKey: Exclude<MessageTemplateKey, "calendar_invite">;
+		templateKey: Extract<
+			MessageTemplateKey,
+			"submission_received" | "acceptance" | "rejection"
+		>;
 		portalHint?: string;
 	},
 ): Promise<OutboundSendResult | null> {

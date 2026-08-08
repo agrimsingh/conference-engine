@@ -39,6 +39,8 @@ export type SubmissionRow = {
 	event_id: string;
 	status: string;
 	answers_json: string;
+	/** Schedule track label; NULL → Uncategorized */
+	category: string | null;
 	submitter_email: string | null;
 	submitter_name: string | null;
 	created_at: number;
@@ -125,8 +127,17 @@ export type EvaluationScoreRow = {
 	score: number;
 	comment: string | null;
 	scored_by: string;
+	reviewer_id: string | null;
 	created_at: number;
 	updated_at: number;
+};
+
+export type ReviewerRow = {
+	id: string;
+	plan_id: string;
+	name: string;
+	token: string;
+	created_at: number;
 };
 
 export type OutboundMessageRow = {
@@ -165,6 +176,7 @@ export type EventRoomRow = {
 export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
 	submission_status: string;
 	answers_json: string;
+	category: string | null;
 	submitter_name: string | null;
 	submitter_email: string | null;
 };
