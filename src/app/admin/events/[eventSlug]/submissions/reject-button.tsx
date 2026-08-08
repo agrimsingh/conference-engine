@@ -9,7 +9,7 @@ type Props = {
 	disabled?: boolean;
 };
 
-export function AcceptButton({ eventSlug, submissionId, disabled }: Props) {
+export function RejectButton({ eventSlug, submissionId, disabled }: Props) {
 	const router = useRouter();
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
@@ -19,12 +19,12 @@ export function AcceptButton({ eventSlug, submissionId, disabled }: Props) {
 		setError(null);
 		try {
 			const response = await fetch(
-				`/api/admin/events/${eventSlug}/submissions/${submissionId}/accept`,
+				`/api/admin/events/${eventSlug}/submissions/${submissionId}/reject`,
 				{ method: "POST" },
 			);
 			const data = (await response.json()) as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) {
-				setError(data.error ?? "Accept failed");
+				setError(data.error ?? "Reject failed");
 				return;
 			}
 			router.refresh();
@@ -41,9 +41,9 @@ export function AcceptButton({ eventSlug, submissionId, disabled }: Props) {
 				type="button"
 				onClick={() => void onClick()}
 				disabled={disabled || pending}
-				className="rounded-md bg-emerald-800 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+				className="rounded border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-800 hover:bg-neutral-50 disabled:opacity-40"
 			>
-				{pending ? "Accepting…" : "Accept"}
+				{pending ? "Rejecting…" : "Reject"}
 			</button>
 			{error ? <p className="text-xs text-red-700">{error}</p> : null}
 		</div>

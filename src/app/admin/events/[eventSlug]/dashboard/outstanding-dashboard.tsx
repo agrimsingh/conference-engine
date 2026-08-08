@@ -143,40 +143,45 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 					<span
 						className={
 							transport === "broadcasted"
-								? "rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-800"
-								: "rounded bg-amber-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-900"
+								? "rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-800"
+								: "rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-900"
 						}
 						title={
 							transport === "broadcasted"
-								? "EventRoom WebSocket invalidate path"
-								: "2s poll fallback (typical under next dev without DO upgrade)"
+								? "Live updates connected"
+								: "Refreshing every few seconds"
 						}
 					>
-						{transport}
+						{transport === "broadcasted" ? "Live" : "Auto-refresh"}
 					</span>
-					<span className="text-xs text-neutral-500">
+					<span className="text-xs tabular-nums text-neutral-500">
 						updated {new Date(snapshot.fetchedAt).toLocaleTimeString()}
 					</span>
 				</div>
 			</div>
 
 			{lastError ? (
-				<p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-					Live sync issue: {lastError}
+				<p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+					Couldn&apos;t refresh live data: {lastError}
 				</p>
 			) : null}
 
 			{snapshot.groups.length === 0 ? (
-				<p className="text-sm text-neutral-600">
-					No outstanding speaker tasks. Accept a submission or wait for speakers to
-					finish uploads.
-				</p>
+				<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
+					<p className="text-sm font-medium text-neutral-900">
+						All caught up
+					</p>
+					<p className="mt-1 text-sm text-neutral-600">
+						No outstanding speaker tasks. Accept a talk or wait for speakers to
+						finish their checklist.
+					</p>
+				</div>
 			) : (
 				<ul className="space-y-4">
 					{snapshot.groups.map((group) => (
 						<li
 							key={group.key}
-							className="rounded border border-neutral-200 bg-white px-4 py-3"
+							className="rounded-lg border border-neutral-200 bg-white px-4 py-3"
 						>
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
 								<p className="font-medium">
@@ -195,7 +200,7 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 										className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 									>
 										<span className="font-medium">{task.templateKey}</span>
-										<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
+										<span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-900">
 											{task.status}
 										</span>
 									</li>

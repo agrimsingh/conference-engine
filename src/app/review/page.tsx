@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -39,22 +40,35 @@ export default async function ReviewPage({ searchParams }: Props) {
 
 	if (!identity) {
 		return (
-			<main className="mx-auto min-h-screen max-w-3xl px-4 py-10 text-neutral-900">
-				<h1 className="text-2xl font-semibold">Review</h1>
-				<p className="mt-2 text-sm text-neutral-600">
-					Provide a reviewer <code className="text-xs">?token=</code> or activate a
-					plan as admin, then open{" "}
-					<code className="text-xs">/review?event=aie-sandbox</code> with the bypass
-					cookie.
-				</p>
+			<main className="mx-auto min-h-dvh max-w-3xl px-4 py-10 text-neutral-900">
+				<PageHeader
+					eyebrow="Review"
+					title="Open your review link"
+					description="Use the personal link from your invite email, or ask an organizer to activate the evaluation plan and share the board URL."
+				/>
 				{admin ? (
-					<p className="mt-4 text-sm">
-						Admin:{" "}
-						<Link className="underline" href="/admin/events/aie-sandbox/submissions">
-							submissions
+					<p className="text-sm text-neutral-600">
+						As organizer: activate a plan from{" "}
+						<Link
+							className="font-medium underline underline-offset-2"
+							href="/admin/events/aie-sandbox/submissions"
+						>
+							Submissions
+						</Link>
+						, then reopen this page with{" "}
+						<code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">
+							?event=aie-sandbox
+						</code>
+						.
+					</p>
+				) : (
+					<p className="text-sm text-neutral-600">
+						Missing or invalid token.{" "}
+						<Link className="underline underline-offset-2" href="/">
+							Back home
 						</Link>
 					</p>
-				) : null}
+				)}
 			</main>
 		);
 	}
@@ -106,17 +120,20 @@ export default async function ReviewPage({ searchParams }: Props) {
 		identity.mode === "reviewer" ? identity.reviewer.name : "committee";
 
 	return (
-		<main className="mx-auto min-h-screen max-w-3xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Evaluation · {plan.name} · {plan.status}
+		<main className="mx-auto min-h-dvh max-w-3xl px-4 py-10 text-neutral-900">
+			<header className="mb-8 space-y-3 border-b border-neutral-200 pb-5">
+				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+					Review · {plan.name}
 				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm font-medium text-neutral-800">
+				<h1 className="text-balance text-3xl font-semibold tracking-tight">
+					{event.name}
+				</h1>
+				<p className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
 					Reviewing as {reviewingAs}
 				</p>
-				<p className="text-sm text-neutral-600">
-					Score 1–5. Organizer accept/reject requires admin bypass.
+				<p className="text-pretty text-sm text-neutral-600">
+					Tap 1–5 to score. Optional comment, then save. Organizers can accept or
+					reject from here when signed in.
 				</p>
 			</header>
 

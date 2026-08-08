@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
 	title: "conference-engine",
-	description: "CFP → review → schedule",
+	description: "CFP → review → accept → speaker tasks → schedule → publish",
 };
 
 export default function RootLayout({

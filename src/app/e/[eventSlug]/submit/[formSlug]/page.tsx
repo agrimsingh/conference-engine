@@ -16,13 +16,15 @@ export default async function PublicCfpPage({ params }: Props) {
 
 	if (isCfpPastClosesAt(loaded.form, Date.now())) {
 		return (
-			<main className="min-h-screen bg-neutral-50 px-4 py-10 text-neutral-900">
-				<div className="mx-auto max-w-2xl space-y-3">
-					<p className="text-xs uppercase tracking-wide text-neutral-500">
-						{loaded.event.name}
+			<main className="min-h-dvh bg-neutral-50 px-4 py-10 text-neutral-900">
+				<div className="mx-auto max-w-2xl space-y-3 rounded-lg border border-neutral-200 bg-white px-5 py-8">
+					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+						{loaded.event.name} · Call for proposals
 					</p>
-					<h1 className="text-3xl font-semibold tracking-tight">CFP closed</h1>
-					<p className="text-sm text-neutral-600">
+					<h1 className="text-balance text-3xl font-semibold tracking-tight">
+						CFP closed
+					</h1>
+					<p className="text-pretty text-sm text-neutral-600">
 						{loaded.form.title} is no longer accepting submissions.
 					</p>
 				</div>
@@ -31,7 +33,7 @@ export default async function PublicCfpPage({ params }: Props) {
 	}
 
 	return (
-		<main className="min-h-screen bg-neutral-50 px-4 py-10 text-neutral-900">
+		<main className="min-h-dvh bg-neutral-50 px-4 py-10 text-neutral-900">
 			<CfpForm
 				eventSlug={eventSlug}
 				formSlug={formSlug}

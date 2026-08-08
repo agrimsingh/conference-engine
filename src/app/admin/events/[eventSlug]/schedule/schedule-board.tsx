@@ -262,8 +262,11 @@ export function ScheduleBoard({
 			</div>
 
 			{error ? (
-				<p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-					{error}
+				<p
+					role="alert"
+					className="rounded-md border-2 border-red-500 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-900"
+				>
+					Conflict: {error}
 				</p>
 			) : null}
 			{message ? (
@@ -280,7 +283,9 @@ export function ScheduleBoard({
 					Unplaced / other days
 				</h2>
 				{pool.length === 0 ? (
-					<p className="text-sm text-neutral-500">Nothing waiting.</p>
+					<p className="text-sm text-neutral-500">
+						All accepted talks are placed on this day.
+					</p>
 				) : (
 					<ul className="flex flex-wrap gap-2">
 						{pool.map((session) => (
@@ -430,8 +435,9 @@ export function ScheduleBoard({
 			) : (
 				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
 					{listSessions.length === 0 ? (
-						<li className="px-4 py-6 text-sm text-neutral-500">
-							No sessions on this day.
+						<li className="px-4 py-8 text-center text-sm text-neutral-600">
+							<p className="font-medium text-neutral-900">No sessions on this day</p>
+							<p className="mt-1">Drag a talk from the pool onto the day grid.</p>
 						</li>
 					) : (
 						listSessions.map((session) => (

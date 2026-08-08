@@ -40,11 +40,29 @@ export function CfpForm({
 
 	if (submissionId) {
 		return (
-			<div className="space-y-3">
-				<h1 className="text-2xl font-semibold tracking-tight">Submitted</h1>
-				<p className="text-sm text-neutral-600">
-					Thanks. Submission id: <code className="text-xs">{submissionId}</code>
+			<div className="mx-auto w-full max-w-2xl space-y-5 rounded-lg border border-emerald-200 bg-white px-5 py-8">
+				<p className="text-xs font-medium uppercase tracking-wide text-emerald-800">
+					{eventName}
 				</p>
+				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-900">
+					Thanks — your talk is in
+				</h1>
+				<div className="space-y-3 text-pretty text-sm text-neutral-700">
+					<p>
+						We received your proposal for <span className="font-medium">{formTitle}</span>.
+						The program committee will review it over the next few weeks.
+					</p>
+					<p>
+						If your talk is accepted, you&apos;ll get an email with a speaker portal
+						link to finish your bio, headshot, slides, and docs.
+					</p>
+					<p className="text-neutral-500">
+						Reference:{" "}
+						<code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">
+							{submissionId}
+						</code>
+					</p>
+				</div>
 			</div>
 		);
 	}
@@ -71,12 +89,21 @@ export function CfpForm({
 				});
 			}}
 		>
-			<header className="space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">{eventName}</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{formTitle}</h1>
+			<header className="space-y-2 border-b border-neutral-200 pb-5">
+				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+					{eventName} · Call for proposals
+				</p>
+				<h1 className="text-balance text-3xl font-semibold tracking-tight">
+					{formTitle}
+				</h1>
 				{formDescription ? (
-					<p className="text-sm text-neutral-600">{formDescription}</p>
-				) : null}
+					<p className="text-pretty text-sm text-neutral-600">{formDescription}</p>
+				) : (
+					<p className="text-pretty text-sm text-neutral-600">
+						Pick a format — the form adapts. Submit when you&apos;re ready; we&apos;ll
+						confirm what happens next.
+					</p>
+				)}
 			</header>
 
 			<section className="grid gap-4 sm:grid-cols-2">

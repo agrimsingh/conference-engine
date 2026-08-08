@@ -46,14 +46,14 @@ export function ActivatePlanButton({ eventSlug }: Props) {
 				type="button"
 				onClick={() => void onClick()}
 				disabled={pending}
-				className="underline disabled:opacity-40"
+				className="font-medium text-neutral-800 underline underline-offset-2 disabled:opacity-40"
 			>
-				{pending ? "Activating…" : "Activate evaluation plan"}
+				{pending ? "Opening review…" : "Open review board"}
 			</button>
 			{reviewPath ? (
-				<p>
-					Review:{" "}
-					<a className="underline" href={reviewPath}>
+				<p className="text-neutral-600">
+					Share with reviewers:{" "}
+					<a className="font-medium underline underline-offset-2" href={reviewPath}>
 						{reviewPath}
 					</a>
 				</p>

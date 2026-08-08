@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AdminEventNav } from "@/components/admin-event-nav";
+import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -15,6 +17,7 @@ import {
 } from "@/lib/domain";
 import { AcceptButton } from "./accept-button";
 import { ActivatePlanButton } from "./activate-plan-button";
+import { RejectButton } from "./reject-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -82,155 +85,170 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	const baseHref = `/admin/events/${event.slug}/submissions`;
 
 	return (
-		<main className="mx-auto min-h-screen max-w-4xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Organizer · local admin bypass cookie
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm text-neutral-600">
-					Submissions ({filtered.length}
-					{categoryFilter !== "all" ? ` of ${submissions.length}` : ""}). Auth is
-					a temporary <code className="text-xs">ce_admin_bypass=1</code> cookie
-					via{" "}
-					<Link className="underline" href="/admin/bypass">
-						/admin/bypass
-					</Link>
-					.
-				</p>
-				<p className="text-sm">
-					Public CFP:{" "}
-					<Link className="underline" href={`/e/${event.slug}/submit/cfp`}>
-						/e/{event.slug}/submit/cfp
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/admin/events/${event.slug}/schedule`}>
-						Schedule
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/admin/events/${event.slug}/dashboard`}>
-						Outstanding dashboard
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/admin/events/${event.slug}/tasks`}>
-						Speaker tasks
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/review?event=${event.slug}`}>
-						Review board
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/e/${event.slug}/schedule`}>
-						Public schedule
-					</Link>
-					{" · "}
-					<Link className="underline" href="/portal">
-						Speaker portal
-					</Link>
-				</p>
-				<div className="flex flex-wrap gap-2 pt-2 text-sm">
-					<Link
-						className={
-							categoryFilter === "all"
-								? "rounded border border-neutral-900 bg-neutral-900 px-2 py-0.5 text-xs text-white"
-								: "rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
-						}
-						href={baseHref}
-					>
-						All ({submissions.length})
-					</Link>
-					{chipLabels.map((label) => {
-						const count = categoryCounts.get(label) ?? 0;
-						const active = categoryFilter === label;
-						return (
+		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+			<AdminEventNav eventSlug={event.slug} />
+			<main className="mx-auto max-w-4xl px-4 py-10">
+				<PageHeader
+					eyebrow="Organizer · Submissions"
+					title={event.name}
+					description={
+						<>
+							Triage proposals by category, then accept or reject.{" "}
+							{filtered.length}
+							{categoryFilter !== "all" ? ` of ${submissions.length}` : ""} shown.{" "}
 							<Link
-								key={label}
-								className={
-									active
-										? "rounded border border-neutral-900 bg-neutral-900 px-2 py-0.5 text-xs text-white"
-										: "rounded border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700"
-								}
-								href={`${baseHref}?category=${encodeURIComponent(label)}`}
+								className="font-medium text-neutral-900 underline underline-offset-2"
+								href={`/e/${event.slug}/submit/cfp`}
 							>
-								{label} ({count})
+								Share CFP link
 							</Link>
-						);
-					})}
-				</div>
-				<div className="pt-1">
-					<ActivatePlanButton eventSlug={event.slug} />
-				</div>
-			</header>
+						</>
+					}
+				>
+					<div className="flex flex-wrap gap-1.5 pt-2">
+						<CategoryChip
+							active={categoryFilter === "all"}
+							href={baseHref}
+							label={`All (${submissions.length})`}
+						/>
+						{chipLabels.map((label) => {
+							const count = categoryCounts.get(label) ?? 0;
+							return (
+								<CategoryChip
+									key={label}
+									active={categoryFilter === label}
+									href={`${baseHref}?category=${encodeURIComponent(label)}`}
+									label={`${label} (${count})`}
+								/>
+							);
+						})}
+					</div>
+					<div className="pt-3">
+						<ActivatePlanButton eventSlug={event.slug} />
+					</div>
+				</PageHeader>
 
-			{filtered.length === 0 ? (
-				<p className="text-sm text-neutral-600">No submissions yet.</p>
-			) : (
-				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
-					{filtered.map((row) => {
-						const answers = parseAnswers(row.answers_json);
-						const tasks = tasksBySubmission.get(row.id) ?? [];
-						const canAccept =
-							row.status === "submitted" || row.status === "under_review";
-						const completed = tasks.filter((t) => t.status === "completed").length;
-						const category = displayCategory(row.category);
-						return (
-							<li key={row.id} className="px-4 py-3 text-sm">
-								<div className="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p className="font-medium">
-											{typeof answers.title === "string"
-												? answers.title
-												: "(untitled)"}
-										</p>
-										<p className="mt-1 text-neutral-600">
-											{row.submitter_name} · {row.submitter_email}
-											{typeof answers.format === "string"
-												? ` · ${answers.format}`
-												: ""}
-										</p>
-										<p className="mt-1 font-mono text-xs text-neutral-500">
-											{row.id}
-										</p>
-									</div>
-									<div className="flex flex-col items-end gap-2">
-										<div className="flex flex-wrap justify-end gap-1.5">
-											<span className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs tracking-wide text-neutral-700">
-												{category}
-											</span>
-											<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
-												{row.status}
-											</span>
+				{filtered.length === 0 ? (
+					<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
+						<p className="text-sm font-medium text-neutral-900">
+							No submissions yet
+						</p>
+						<p className="mt-1 text-sm text-neutral-600">
+							Share your CFP link to start collecting talks.
+						</p>
+						<p className="mt-4">
+							<Link
+								className="text-sm font-medium underline underline-offset-2"
+								href={`/e/${event.slug}/submit/cfp`}
+							>
+								/e/{event.slug}/submit/cfp
+							</Link>
+						</p>
+					</div>
+				) : (
+					<ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+						{filtered.map((row) => {
+							const answers = parseAnswers(row.answers_json);
+							const tasks = tasksBySubmission.get(row.id) ?? [];
+							const canDecide =
+								row.status === "submitted" || row.status === "under_review";
+							const completed = tasks.filter(
+								(t) => t.status === "completed",
+							).length;
+							const category = displayCategory(row.category);
+							return (
+								<li key={row.id} className="px-4 py-3 text-sm">
+									<div className="flex flex-wrap items-start justify-between gap-3">
+										<div>
+											<p className="font-medium">
+												{typeof answers.title === "string"
+													? answers.title
+													: "(untitled)"}
+											</p>
+											<p className="mt-1 text-neutral-600">
+												{row.submitter_name} · {row.submitter_email}
+												{typeof answers.format === "string"
+													? ` · ${answers.format}`
+													: ""}
+											</p>
 										</div>
-										{(canAccept || row.status === "accepted") && (
-											<AcceptButton
-												eventSlug={event.slug}
-												submissionId={row.id}
-												disabled={!canAccept && row.status !== "accepted"}
-											/>
-										)}
+										<div className="flex flex-col items-end gap-2">
+											<div className="flex flex-wrap justify-end gap-1.5">
+												<span className="rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-xs text-neutral-700">
+													{category}
+												</span>
+												<span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-neutral-700">
+													{row.status.replaceAll("_", " ")}
+												</span>
+											</div>
+											{(canDecide ||
+												row.status === "accepted" ||
+												row.status === "rejected") && (
+												<div className="flex gap-2">
+													<AcceptButton
+														eventSlug={event.slug}
+														submissionId={row.id}
+														disabled={
+															!canDecide || row.status === "accepted"
+														}
+													/>
+													<RejectButton
+														eventSlug={event.slug}
+														submissionId={row.id}
+														disabled={
+															!canDecide || row.status === "rejected"
+														}
+													/>
+												</div>
+											)}
+										</div>
 									</div>
-								</div>
-								{tasks.length > 0 ? (
-									<div className="mt-3 rounded bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
-										<p className="font-medium">
-											Tasks {completed}/{tasks.length}
-										</p>
-										<ul className="mt-1 space-y-0.5">
-											{tasks.map((task) => (
-												<li key={task.id}>
-													{personNames.get(task.person_id) ?? task.person_id} ·{" "}
-													{task.template_key} · {task.status}
-												</li>
-											))}
-										</ul>
-									</div>
-								) : null}
-							</li>
-						);
-					})}
-				</ul>
-			)}
-		</main>
+									{tasks.length > 0 ? (
+										<div className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+											<p className="font-medium">
+												Speaker tasks {completed}/{tasks.length}
+											</p>
+											<ul className="mt-1 space-y-0.5">
+												{tasks.map((task) => (
+													<li key={task.id}>
+														{personNames.get(task.person_id) ??
+															task.person_id}{" "}
+														· {task.template_key} · {task.status}
+													</li>
+												))}
+											</ul>
+										</div>
+									) : null}
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</main>
+		</div>
+	);
+}
+
+function CategoryChip({
+	active,
+	href,
+	label,
+}: {
+	active: boolean;
+	href: string;
+	label: string;
+}) {
+	return (
+		<Link
+			href={href}
+			className={
+				active
+					? "rounded-full bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white"
+					: "rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 hover:border-neutral-400"
+			}
+		>
+			{label}
+		</Link>
 	);
 }
 

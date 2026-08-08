@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AdminEventNav } from "@/components/admin-event-nav";
+import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -47,59 +48,60 @@ export default async function AdminTasksPage({ params }: Props) {
 	const completed = tasks.filter((t) => t.status === "completed").length;
 
 	return (
-		<main className="mx-auto min-h-screen max-w-4xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Organizer · speaker tasks
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm text-neutral-600">
-					{completed}/{tasks.length} tasks complete.{" "}
-					<Link
-						className="underline"
-						href={`/admin/events/${event.slug}/dashboard`}
-					>
-						Live outstanding dashboard
-					</Link>
-					{" · "}
-					<Link
-						className="underline"
-						href={`/admin/events/${event.slug}/submissions`}
-					>
-						Back to submissions
-					</Link>
-				</p>
-			</header>
+		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+			<AdminEventNav eventSlug={event.slug} />
+			<main className="mx-auto max-w-4xl px-4 py-10">
+				<PageHeader
+					eyebrow="Organizer · Tasks"
+					title={event.name}
+					description={
+						tasks.length === 0
+							? "Speaker onboarding checklist across accepted talks."
+							: `${completed}/${tasks.length} tasks complete.`
+					}
+				/>
 
-			{tasks.length === 0 ? (
-				<p className="text-sm text-neutral-600">
-					No speaker tasks yet. Accept a submission first.
-				</p>
-			) : (
-				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
-					{tasks.map((task) => (
-						<li key={task.id} className="px-4 py-3 text-sm">
-							<div className="flex flex-wrap items-baseline justify-between gap-2">
-								<p className="font-medium">
-									{labels.get(task.submission_id) ?? task.submission_id} ·{" "}
-									{task.template_key}
+				{tasks.length === 0 ? (
+					<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
+						<p className="text-sm font-medium text-neutral-900">
+							No speaker tasks yet
+						</p>
+						<p className="mt-1 text-sm text-neutral-600">
+							Accept a submission to generate bio, headshot, slides, and docs tasks.
+						</p>
+					</div>
+				) : (
+					<ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+						{tasks.map((task) => (
+							<li key={task.id} className="px-4 py-3 text-sm">
+								<div className="flex flex-wrap items-baseline justify-between gap-2">
+									<p className="font-medium">
+										{labels.get(task.submission_id) ?? task.submission_id} ·{" "}
+										{task.template_key}
+									</p>
+									<span
+										className={
+											task.status === "completed"
+												? "rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-900"
+												: "rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-900"
+										}
+									>
+										{task.status}
+									</span>
+								</div>
+								<p className="mt-1 text-neutral-600">
+									{labels.get(task.person_id) ?? task.person_id}
+									{task.asset_id ? ` · file uploaded` : ""}
+									{task.text_value
+										? ` · ${task.text_value.slice(0, 80)}${task.text_value.length > 80 ? "…" : ""}`
+										: ""}
 								</p>
-								<span className="rounded bg-neutral-100 px-2 py-0.5 text-xs uppercase tracking-wide">
-									{task.status}
-								</span>
-							</div>
-							<p className="mt-1 text-neutral-600">
-								{labels.get(task.person_id) ?? task.person_id}
-								{task.asset_id ? ` · asset ${task.asset_id}` : ""}
-								{task.text_value
-									? ` · ${task.text_value.slice(0, 80)}${task.text_value.length > 80 ? "…" : ""}`
-									: ""}
-							</p>
-						</li>
-					))}
-				</ul>
-			)}
-		</main>
+							</li>
+						))}
+					</ul>
+				)}
+			</main>
+		</div>
 	);
 }
 

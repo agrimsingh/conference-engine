@@ -216,54 +216,91 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 	const views: ScheduleView[] = ["list", "day", "week", "track", "room"];
 
 	return (
-		<main className="mx-auto min-h-screen max-w-5xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-3 border-b border-neutral-200 pb-5">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Public schedule
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm text-neutral-600">
-					{view === "week"
-						? `${formatDayLabel(weekKeys[0]!, event.timezone)} – ${formatDayLabel(weekKeys[6]!, event.timezone)}`
-						: formatDayLabel(dayKey, event.timezone)}{" "}
-					· {event.timezone}. Shows sessions in{" "}
-					<code className="text-xs">scheduled</code> or{" "}
-					<code className="text-xs">published</code> status.
-				</p>
-				<div className="flex flex-wrap gap-3 text-sm">
-					{views.map((v) => (
-						<Link
-							key={v}
-							className={view === v ? "font-medium underline" : "underline"}
-							href={hrefFor(event.slug, { day: dayKey, view: v, room: roomFilter })}
-						>
-							{viewLabel(v)}
-						</Link>
-					))}
-					<span className="text-neutral-400">·</span>
-					{["all", ...roomsForDay].map((room) => (
-						<Link
-							key={room}
-							className={
-								roomFilter === room ? "font-medium underline" : "underline"
-							}
-							href={hrefFor(event.slug, {
-								day: dayKey,
-								view,
-								room,
-							})}
-						>
-							{room === "all" ? "All rooms" : room}
-						</Link>
-					))}
+		<main className="mx-auto min-h-dvh max-w-5xl px-4 py-10 text-neutral-900">
+			<header className="mb-8 space-y-4 border-b border-neutral-200 pb-5">
+				<div className="space-y-2">
+					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+						Public schedule
+					</p>
+					<h1 className="text-balance text-3xl font-semibold tracking-tight">
+						{event.name}
+					</h1>
+					<p className="text-pretty text-sm text-neutral-600">
+						{view === "week"
+							? `${formatDayLabel(weekKeys[0]!, event.timezone)} – ${formatDayLabel(weekKeys[6]!, event.timezone)}`
+							: formatDayLabel(dayKey, event.timezone)}{" "}
+						· {event.timezone}
+					</p>
+				</div>
+
+				<div className="flex flex-col gap-3">
+					<div
+						role="tablist"
+						aria-label="Schedule view"
+						className="inline-flex w-fit flex-wrap rounded-lg border border-neutral-300 bg-white p-0.5"
+					>
+						{views.map((v) => {
+							const active = view === v;
+							return (
+								<Link
+									key={v}
+									role="tab"
+									aria-selected={active}
+									href={hrefFor(event.slug, {
+										day: dayKey,
+										view: v,
+										room: roomFilter,
+									})}
+									className={
+										active
+											? "rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
+											: "rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900"
+									}
+								>
+									{viewLabel(v)}
+								</Link>
+							);
+						})}
+					</div>
+
+					<div className="flex flex-wrap items-center gap-1.5">
+						<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+							Room
+						</span>
+						{["all", ...roomsForDay].map((room) => {
+							const active = roomFilter === room;
+							return (
+								<Link
+									key={room}
+									href={hrefFor(event.slug, {
+										day: dayKey,
+										view,
+										room,
+									})}
+									className={
+										active
+											? "rounded-full bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white"
+											: "rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 hover:border-neutral-400"
+									}
+								>
+									{room === "all" ? "All rooms" : room}
+								</Link>
+							);
+						})}
+					</div>
 				</div>
 			</header>
 
 			{view === "list" ? (
 				daySlots.length === 0 ? (
-					<p className="text-sm text-neutral-600">
-						Nothing scheduled for this day yet.
-					</p>
+					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center">
+						<p className="text-sm font-medium text-neutral-900">
+							Nothing scheduled for this day
+						</p>
+						<p className="mt-1 text-sm text-neutral-600">
+							Check back once organizers publish the program, or try another view.
+						</p>
+					</div>
 				) : (
 					<ol className="space-y-4">
 						{daySlots.map((slot) => (
@@ -292,9 +329,14 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 
 			{view === "day" ? (
 				daySlots.length === 0 ? (
-					<p className="text-sm text-neutral-600">
-						Nothing scheduled for this day yet.
-					</p>
+					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center">
+						<p className="text-sm font-medium text-neutral-900">
+							Nothing scheduled for this day
+						</p>
+						<p className="mt-1 text-sm text-neutral-600">
+							Try another room filter or come back after scheduling.
+						</p>
+					</div>
 				) : (
 					<div className="space-y-6">
 						{roomsForDay
@@ -442,14 +484,24 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 						);
 					})}
 					{roomsForDay.length === 0 ? (
-						<p className="text-sm text-neutral-600">No rooms configured.</p>
+						<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center md:col-span-2 lg:col-span-3">
+							<p className="text-sm font-medium text-neutral-900">
+								No rooms configured
+							</p>
+							<p className="mt-1 text-sm text-neutral-600">
+								Organizers haven&apos;t set up rooms for this day yet.
+							</p>
+						</div>
 					) : null}
 				</div>
 			) : null}
 
-			<p className="mt-10 text-xs text-neutral-500">
-				<Link className="underline" href={`/e/${event.slug}/submit/cfp`}>
-					CFP
+			<p className="mt-10 text-sm text-neutral-500">
+				<Link
+					className="font-medium text-neutral-800 underline underline-offset-2"
+					href={`/e/${event.slug}/submit/cfp`}
+				>
+					Submit a talk
 				</Link>
 			</p>
 		</main>

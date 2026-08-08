@@ -35,7 +35,7 @@ export function PortalLoginForm({ initialEmail }: Props) {
 				setError(data.error ?? "Could not send sign-in link");
 				return;
 			}
-			// Admin bypass demo: API still returns portalUrl for one-click entry.
+			// Demo shortcut: API may return portalUrl for immediate entry.
 			if (data.portalUrl) {
 				router.push(data.portalUrl);
 				router.refresh();
@@ -49,29 +49,51 @@ export function PortalLoginForm({ initialEmail }: Props) {
 		}
 	}
 
+	if (sent) {
+		return (
+			<div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-5">
+				<p className="text-sm font-medium text-emerald-950">
+					Check your email
+				</p>
+				<p className="text-pretty text-sm text-emerald-900">
+					We sent a sign-in link to{" "}
+					<span className="font-medium">{email}</span>. It expires soon — open it
+					on this device to continue your checklist.
+				</p>
+				<button
+					type="button"
+					className="text-sm font-medium text-emerald-950 underline underline-offset-2"
+					onClick={() => setSent(false)}
+				>
+					Use a different email
+				</button>
+			</div>
+		);
+	}
+
 	return (
-		<form onSubmit={onSubmit} className="space-y-4">
-			<label className="block space-y-1 text-sm">
-				<span className="text-neutral-700">Email</span>
+		<form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-neutral-200 bg-white px-4 py-5">
+			<label className="block space-y-1.5 text-sm">
+				<span className="font-medium text-neutral-800">Email</span>
 				<input
 					type="email"
 					required
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
-					className="w-full rounded border border-neutral-300 px-3 py-2"
+					className="w-full rounded-md border border-neutral-300 px-3 py-2"
 					placeholder="you@example.com"
+					autoComplete="email"
 				/>
 			</label>
-			{error ? <p className="text-sm text-red-700">{error}</p> : null}
-			{sent ? (
-				<p className="text-sm text-neutral-800">
-					Check your email for a sign-in link.
+			{error ? (
+				<p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+					{error}
 				</p>
 			) : null}
 			<button
 				type="submit"
 				disabled={pending}
-				className="rounded bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+				className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 sm:w-auto"
 			>
 				{pending ? "Sending…" : "Email me a sign-in link"}
 			</button>

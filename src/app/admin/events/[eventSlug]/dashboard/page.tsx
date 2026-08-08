@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AdminEventNav } from "@/components/admin-event-nav";
+import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getEventBySlug } from "@/lib/db/queries";
@@ -24,33 +25,17 @@ export default async function AdminDashboardPage({ params }: Props) {
 	const snapshot = await loadOutstandingTasksSnapshot(db, event);
 
 	return (
-		<main className="mx-auto min-h-screen max-w-4xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Organizer · outstanding tasks
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm text-neutral-600">
-					Live incomplete speaker tasks. Prefers EventRoom WebSocket; falls back to 2s
-					poll under local `next dev`.{" "}
-					<Link
-						className="underline"
-						href={`/admin/events/${event.slug}/submissions`}
-					>
-						Submissions
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/admin/events/${event.slug}/schedule`}>
-						Schedule
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/admin/events/${event.slug}/tasks`}>
-						Static tasks
-					</Link>
-				</p>
-			</header>
+		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+			<AdminEventNav eventSlug={event.slug} />
+			<main className="mx-auto max-w-4xl px-4 py-10">
+				<PageHeader
+					eyebrow="Organizer · Dashboard"
+					title={event.name}
+					description="Live view of incomplete speaker tasks — bio, headshot, slides, and docs still outstanding."
+				/>
 
-			<OutstandingDashboard eventSlug={event.slug} initialSnapshot={snapshot} />
-		</main>
+				<OutstandingDashboard eventSlug={event.slug} initialSnapshot={snapshot} />
+			</main>
+		</div>
 	);
 }

@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AdminEventNav } from "@/components/admin-event-nav";
+import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -94,41 +95,34 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			: ["Main Stage", "Room B", "Workshop Lab"];
 
 	return (
-		<main className="mx-auto min-h-screen max-w-6xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-2 border-b border-neutral-200 pb-4">
-				<p className="text-xs uppercase tracking-wide text-neutral-500">
-					Organizer · schedule
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-				<p className="text-sm text-neutral-600">
-					Drag accepted talks onto the day grid. Hard conflicts (same room or
-					same speaker overlap) are blocked server-side.
-				</p>
-				<p className="text-sm">
-					<Link className="underline" href={`/admin/events/${event.slug}/submissions`}>
-						Submissions
-					</Link>
-					{" · "}
-					<Link className="underline" href={`/e/${event.slug}/schedule`}>
-						Public schedule
-					</Link>
-					{" · "}
-					<Link
-						className="underline"
-						href={`/admin/events/${event.slug}/schedule?day=${dayKey}`}
-					>
-						Day {dayKey}
-					</Link>
-				</p>
-			</header>
+		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+			<AdminEventNav eventSlug={event.slug} />
+			<main className="mx-auto max-w-6xl px-4 py-10">
+				<PageHeader
+					eyebrow="Organizer · Schedule"
+					title={event.name}
+					description="Drag accepted talks onto room/time slots. Room and speaker overlaps are blocked and shown loudly."
+				/>
 
-			<ScheduleBoard
-				eventSlug={event.slug}
-				timeZone={event.timezone}
-				dayKey={dayKey}
-				rooms={roomNames}
-				sessions={sessions}
-			/>
-		</main>
+				{sessions.length === 0 ? (
+					<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
+						<p className="text-sm font-medium text-neutral-900">
+							Nothing to schedule yet
+						</p>
+						<p className="mt-1 text-sm text-neutral-600">
+							Accept a submission first, then come back to place it on the grid.
+						</p>
+					</div>
+				) : (
+					<ScheduleBoard
+						eventSlug={event.slug}
+						timeZone={event.timezone}
+						dayKey={dayKey}
+						rooms={roomNames}
+						sessions={sessions}
+					/>
+				)}
+			</main>
+		</div>
 	);
 }
