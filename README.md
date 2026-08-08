@@ -169,4 +169,4 @@ Outstanding tasks are grouped by `(submissionId, personId)` in `src/lib/domain/o
 
 ## License
 
-MIT (pending). Hackathon submission code is yours to keep.
+[MIT](./LICENSE).
