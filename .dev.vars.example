@@ -1,0 +1,4 @@
+NEXTJS_ENV=development
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=team@65labs.org
+AUTH_SECRET=

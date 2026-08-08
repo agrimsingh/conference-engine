@@ -1,0 +1,72 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "conference-engine",
+	"main": "worker.ts",
+	"compatibility_date": "2026-08-08",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".open-next/assets"
+	},
+	"images": {
+		"binding": "IMAGES"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "conference-engine"
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"vars": {
+		"RESEND_FROM_EMAIL": "team@65labs.org",
+		"APP_NAME": "conference-engine"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "conference-engine",
+			"database_id": "021b5626-e4ba-44d2-bbfd-69b99d483efb",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "FILES",
+			"bucket_name": "conference-engine-assets"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "1062f9c0bed04ca2b7102bee84b3de39",
+			"preview_id": "104f076cc5e34024b3e7f720e2c8e901"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "EVENT_ROOM",
+				"class_name": "EventRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["EventRoom"]
+		}
+	],
+	"routes": [
+		{
+			"pattern": "conference-engine.65labs.org",
+			"custom_domain": true
+		}
+	]
+}
