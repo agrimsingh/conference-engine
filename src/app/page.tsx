@@ -1,129 +1,736 @@
 import Link from "next/link";
 
 const DEMO_EVENT = "aie-sandbox";
+const REPO_URL = "https://github.com/agrimsingh/conference-engine";
 
-const journeys = [
+const HOUR_PX = 64;
+const SCENE_START_MIN = 9 * 60;
+const SCENE_END_MIN = 15.25 * 60;
+const SCENE_HEIGHT = ((SCENE_END_MIN - SCENE_START_MIN) / 60) * HOUR_PX;
+
+type SlotCard = {
+	title: string;
+	speaker: string;
+	start: string;
+	end: string;
+	startMin: number;
+	durationMin: number;
+};
+
+type Lane = {
+	room: string;
+	capacity: number;
+	slots: SlotCard[];
+};
+
+function slot(
+	title: string,
+	speaker: string,
+	start: string,
+	end: string,
+): SlotCard {
+	const [sh, sm] = start.split(":").map(Number);
+	const [eh, em] = end.split(":").map(Number);
+	const startMin = sh * 60 + sm;
+	return {
+		title,
+		speaker,
+		start,
+		end,
+		startMin,
+		durationMin: eh * 60 + em - startMin,
+	};
+}
+
+const LANES: Lane[] = [
 	{
-		role: "Speaker",
-		title: "Submit a talk",
-		blurb: "Pick a format, fill adaptive fields, get a clear confirmation.",
+		room: "Main Stage",
+		capacity: 320,
+		slots: [
+			slot("Opening keynote: the agentic web", "Amara Diallo", "9:00", "9:45"),
+			slot(
+				"Agents in production: what actually breaks",
+				"Jonas Weber",
+				"10:00",
+				"10:45",
+			),
+			slot("Evals beyond vibes", "Priya Nair", "11:00", "11:30"),
+			slot("Serving a million tokens a second", "Sam Okafor", "13:00", "13:45"),
+			slot("Small models, big jobs", "Lena Fischer", "14:00", "14:30"),
+		],
+	},
+	{
+		room: "Room B",
+		capacity: 120,
+		slots: [
+			slot("Structured outputs at scale", "Diego Reyes", "9:30", "10:00"),
+			slot(
+				"Guardrails that don't lobotomize",
+				"Hana Sato",
+				"10:15",
+				"10:45",
+			),
+			slot("Prompt injection red-teaming", "Felix Braun", "13:30", "14:15"),
+		],
+	},
+	{
+		room: "Workshop Lab",
+		capacity: 60,
+		slots: [
+			slot("Workshop: build an MCP server", "Ines Almeida", "9:00", "10:30"),
+			slot(
+				"Workshop: fine-tuning on one GPU",
+				"Maya Chen",
+				"11:00",
+				"12:30",
+			),
+			slot(
+				"Workshop: observability for agents",
+				"Tom Eriksen",
+				"13:30",
+				"15:00",
+			),
+		],
+	},
+];
+
+const DRAG_CARD = slot(
+	"Postgres for AI workloads",
+	"Maya Chen",
+	"11:00",
+	"11:45",
+);
+
+const UNSCHEDULED: {
+	title: string;
+	speaker: string;
+	duration: string;
+	tags: string[];
+}[] = [
+	{
+		title: "Eval pipelines in CI",
+		speaker: "Ravi Patel",
+		duration: "30m",
+		tags: ["Evals", "Intermediate"],
+	},
+	{
+		title: "The MCP ecosystem, one year in",
+		speaker: "Zoe Martin",
+		duration: "45m",
+		tags: ["Tooling", "Beginner"],
+	},
+	{
+		title: "RAG postmortems",
+		speaker: "Omar Haddad",
+		duration: "30m",
+		tags: ["Retrieval", "Advanced"],
+	},
+	{
+		title: "Voice agents in production",
+		speaker: "Julia Kovacs",
+		duration: "30m",
+		tags: ["Agents", "Intermediate"],
+	},
+	{
+		title: "Shipping multimodal search",
+		speaker: "Wei Lin",
+		duration: "45m",
+		tags: ["Multimodal", "Advanced"],
+	},
+];
+
+const PIPELINE: {
+	stage: string;
+	description: string;
+	href: string;
+	linkLabel: string;
+}[] = [
+	{
+		stage: "CFP",
+		description:
+			"Conditional forms per format — a workshop asks different questions than a keynote — and answers route submissions into categories on their own.",
 		href: `/e/${DEMO_EVENT}/submit/cfp`,
-		cta: "Open CFP",
+		linkLabel: "Open the demo CFP",
 	},
 	{
-		role: "Organizer",
-		title: "Triage & schedule",
-		blurb: "Filter submissions, accept/reject, then drag talks onto the grid.",
-		href: "/admin/bypass",
-		cta: "Organizer sign-in (demo)",
-	},
-	{
-		role: "Reviewer",
-		title: "Score proposals",
-		blurb: "Open the review board after activating a plan from Submissions.",
+		stage: "Review",
+		description:
+			"Score proposals against a rubric, side by side, with per-reviewer attribution.",
 		href: `/review?event=${DEMO_EVENT}`,
-		cta: "Review board",
+		linkLabel: "Open the review board",
 	},
 	{
-		role: "Speaker",
-		title: "Complete onboarding",
-		blurb: "Magic-link portal for bio, headshot, slides, and docs.",
+		stage: "Accept",
+		description:
+			"Decisions send templated email with a calendar invite attached — acceptance, rejection, and reminders all from one template registry.",
+		href: "/admin/bypass",
+		linkLabel: "See it in the organizer demo",
+	},
+	{
+		stage: "Speaker tasks",
+		description:
+			"Accepted speakers get a magic-link portal for bio, headshot, slides, and supporting docs. Every upload lands in object storage, every gap stays visible.",
 		href: "/portal",
-		cta: "Speaker portal",
+		linkLabel: "Open the speaker portal",
 	},
 	{
-		role: "Everyone",
-		title: "Watch the program",
-		blurb: "Live outstanding tasks for organizers; public schedule for attendees.",
-		href: `/e/${DEMO_EVENT}/schedule`,
-		cta: "Public schedule",
+		stage: "Schedule",
+		description:
+			"Drag talks onto the grid. Room clashes and double-booked speakers flag themselves before you drop.",
+		href: "/admin/bypass",
+		linkLabel: "Try it in the organizer demo",
 	},
-] as const;
+	{
+		stage: "Publish",
+		description:
+			"A public schedule in list, day, week, track, and room views — plus a read-only JSON API for your site and apps.",
+		href: `/e/${DEMO_EVENT}/schedule`,
+		linkLabel: "View the public schedule",
+	},
+];
+
+function yFor(startMin: number): number {
+	return ((startMin - SCENE_START_MIN) / 60) * HOUR_PX;
+}
+
+function hFor(durationMin: number): number {
+	return (durationMin / 60) * HOUR_PX;
+}
+
+function ArrowIcon() {
+	return (
+		<svg
+			className="h-3.5 w-3.5"
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden
+		>
+			<path d="M3 8h10M9 4l4 4-4 4" />
+		</svg>
+	);
+}
+
+function GripIcon() {
+	return (
+		<svg
+			className="h-3.5 w-3.5 text-neutral-600"
+			viewBox="0 0 16 16"
+			fill="currentColor"
+			aria-hidden
+		>
+			<circle cx="6" cy="4" r="1.2" />
+			<circle cx="10" cy="4" r="1.2" />
+			<circle cx="6" cy="8" r="1.2" />
+			<circle cx="10" cy="8" r="1.2" />
+			<circle cx="6" cy="12" r="1.2" />
+			<circle cx="10" cy="12" r="1.2" />
+		</svg>
+	);
+}
+
+function WarningIcon() {
+	return (
+		<svg
+			className="h-3.5 w-3.5 shrink-0"
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden
+		>
+			<path d="M8 2 1.5 13.5h13L8 2Z" />
+			<path d="M8 6.5v3M8 11.8v.2" />
+		</svg>
+	);
+}
+
+function LogoMark() {
+	return (
+		<svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
+			<path
+				d="M10 1.5 17.5 5.75v8.5L10 18.5l-7.5-4.25v-8.5L10 1.5Z"
+				stroke="#10b981"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
+			<circle cx="10" cy="10" r="2.25" fill="#10b981" />
+		</svg>
+	);
+}
+
+function SlotCardBox({ card }: { card: SlotCard }) {
+	return (
+		<div
+			className="absolute inset-x-1.5 overflow-hidden rounded-md border border-neutral-800 bg-neutral-900 px-2.5 py-1.5"
+			style={{ top: yFor(card.startMin), height: hFor(card.durationMin) - 4 }}
+		>
+			<p className="truncate text-[13px] font-medium leading-tight text-neutral-200">
+				{card.title}
+			</p>
+			{card.durationMin > 30 ? (
+				<p className="truncate text-[11px] leading-tight text-neutral-400">
+					{card.start}–{card.end} · {card.speaker}
+				</p>
+			) : null}
+		</div>
+	);
+}
+
+function ScheduleScene() {
+	const hours = [9, 10, 11, 12, 13, 14, 15];
+	return (
+		<div aria-hidden className="relative select-none" role="presentation">
+			{/* Toolbar */}
+			<div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-3 sm:px-6">
+				<span className="rounded-full border border-neutral-700 px-2.5 py-0.5 text-[11px] text-neutral-400">
+					{DEMO_EVENT} · demo data
+				</span>
+				<div className="flex items-center gap-1 text-xs">
+					{["Day 1", "Day 2", "Day 3"].map((day, i) => (
+						<span
+							key={day}
+							className={
+								i === 0
+									? "rounded-md bg-neutral-800 px-2.5 py-1 font-medium text-neutral-100"
+									: "rounded-md px-2.5 py-1 text-neutral-400"
+							}
+						>
+							{day}
+						</span>
+					))}
+				</div>
+				<div className="ml-auto flex items-center gap-1 text-xs">
+					{["List", "Day", "Week", "Track", "Room"].map((view) => (
+						<span
+							key={view}
+							className={
+								view === "Day"
+									? "rounded-md bg-neutral-800 px-2.5 py-1 font-medium text-neutral-100"
+									: "hidden rounded-md px-2.5 py-1 text-neutral-400 sm:inline"
+							}
+						>
+							{view}
+						</span>
+					))}
+				</div>
+			</div>
+
+			<div className="mx-auto flex max-w-7xl gap-4 px-4 sm:px-6">
+				{/* Unscheduled rail */}
+				<aside className="hidden w-60 shrink-0 lg:block">
+					<div className="flex items-baseline justify-between border-b border-neutral-800 pb-2">
+						<p className="text-xs font-medium text-neutral-300">
+							Unscheduled · Accepted
+						</p>
+						<span className="text-xs text-neutral-500">8</span>
+					</div>
+					<ul className="mt-2 space-y-1.5">
+						{UNSCHEDULED.map((item) => (
+							<li
+								key={item.title}
+								className="flex items-start gap-2 rounded-md border border-neutral-800 bg-neutral-900 px-2.5 py-2"
+							>
+								<span className="mt-0.5">
+									<GripIcon />
+								</span>
+								<span className="min-w-0">
+									<span className="block truncate text-[13px] font-medium leading-tight text-neutral-200">
+										{item.title}
+									</span>
+									<span className="block text-[11px] text-neutral-400">
+										{item.speaker} · {item.duration}
+									</span>
+									<span className="mt-1 flex gap-1">
+										{item.tags.map((tag) => (
+											<span
+												key={tag}
+												className="rounded border border-neutral-700/80 px-1 py-px text-[10px] leading-tight text-neutral-400"
+											>
+												{tag}
+											</span>
+										))}
+									</span>
+								</span>
+							</li>
+						))}
+						<li className="px-2.5 py-1 text-[11px] text-neutral-500">
+							+ 3 more
+						</li>
+					</ul>
+				</aside>
+
+				{/* Grid */}
+				<div className="min-w-0 flex-1 overflow-x-auto">
+					<div className="min-w-[640px]">
+						{/* Room headers */}
+						<div className="grid grid-cols-[44px_repeat(3,1fr)] border-b border-neutral-800 pb-2">
+							<span />
+							{LANES.map((lane) => (
+								<div key={lane.room} className="px-2">
+									<p className="text-sm font-medium text-neutral-200">
+										{lane.room}
+									</p>
+									<p className="text-[11px] text-neutral-400">
+										{lane.capacity} seats
+									</p>
+								</div>
+							))}
+						</div>
+						{/* Time grid */}
+						<div
+							className="relative grid grid-cols-[44px_repeat(3,1fr)]"
+							style={{ height: SCENE_HEIGHT }}
+						>
+							{/* Hour lines */}
+							{hours.map((hour) => (
+								<div
+									key={hour}
+									className="pointer-events-none absolute inset-x-0 border-t border-dotted border-neutral-800"
+									style={{ top: yFor(hour * 60) }}
+								/>
+							))}
+							{/* Time ruler */}
+							<div className="relative">
+								{hours.map((hour) => (
+									<span
+										key={hour}
+										className="absolute -translate-y-1/2 text-[11px] tabular-nums text-neutral-500"
+										style={{ top: yFor(hour * 60) }}
+									>
+										{String(hour).padStart(2, "0")}:00
+									</span>
+								))}
+							</div>
+							{/* Lanes */}
+							{LANES.map((lane, laneIndex) => (
+								<div
+									key={lane.room}
+									className="relative border-l border-neutral-800/70"
+								>
+									{lane.slots.map((card) => (
+										<SlotCardBox key={card.title} card={card} />
+									))}
+									{laneIndex === 1 ? (
+										<>
+											{/* Ghost drop target */}
+											<div
+												className="absolute inset-x-1.5 rounded-md border border-dashed border-neutral-600 bg-neutral-900/40"
+												style={{
+													top: yFor(DRAG_CARD.startMin),
+													height: hFor(DRAG_CARD.durationMin) - 4,
+												}}
+											/>
+											{/* Mid-drag card */}
+											<div
+												className="drag-card absolute z-10 rounded-md border border-emerald-400/60 bg-neutral-800 px-2.5 py-1.5 shadow-xl shadow-black/60"
+												style={{
+													top: yFor(DRAG_CARD.startMin) + 16,
+													height: hFor(DRAG_CARD.durationMin) - 4,
+													left: 20,
+													right: -14,
+												}}
+											>
+												<p className="truncate text-[13px] font-medium leading-tight text-neutral-100">
+													{DRAG_CARD.title}
+												</p>
+												<p className="truncate text-[11px] leading-tight text-neutral-400">
+													{DRAG_CARD.start}–{DRAG_CARD.end} ·{" "}
+													{DRAG_CARD.speaker}
+												</p>
+											</div>
+											{/* Conflict banner */}
+											<div
+												className="absolute left-0 z-20 flex w-52 -translate-x-28 items-center gap-1.5 rounded-md border border-red-400/60 bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg shadow-black/40 sm:w-max sm:-translate-x-8 sm:whitespace-nowrap"
+												style={{
+													top:
+														yFor(DRAG_CARD.startMin) +
+														hFor(DRAG_CARD.durationMin) + 18,
+												}}
+											>
+												<WarningIcon />
+												Speaker conflict — Maya Chen is in two rooms
+											</div>
+										</>
+									) : null}
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* Bottom fade into the page */}
+			<div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-neutral-950 to-transparent" />
+		</div>
+	);
+}
 
 export default function Home() {
 	return (
-		<main className="min-h-dvh bg-neutral-50 text-neutral-900">
-			<div className="mx-auto flex max-w-3xl flex-col gap-10 px-4 py-16 sm:py-20">
-				<header className="space-y-4">
-					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-						conference-engine
-					</p>
-					<h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-						Program ops for AI Engineer
-					</h1>
-					<p className="max-w-xl text-pretty text-base text-neutral-600">
-						CFP → review → accept → speaker tasks → schedule → publish. A fast
-						Sessionboard alternative, demoed against the AIE sandbox event.
-					</p>
-					<div className="flex flex-wrap gap-3 pt-1">
+		<div className="min-h-dvh bg-neutral-950 text-neutral-100">
+			{/* Nav */}
+			<header className="sticky top-0 z-40 border-b border-neutral-800/70 bg-neutral-950/80 backdrop-blur">
+				<nav className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
+					<Link href="/" className="flex items-center gap-2">
+						<LogoMark />
+						<span className="text-sm font-semibold tracking-tight">
+							conference-engine
+						</span>
+					</Link>
+					<div className="ml-auto hidden items-center gap-5 text-sm text-neutral-400 sm:flex">
+						<a className="hover:text-neutral-100" href="#pipeline">
+							Features
+						</a>
 						<Link
-							href={`/e/${DEMO_EVENT}/submit/cfp`}
-							className="rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800"
+							className="hover:text-neutral-100"
+							href={`/e/${DEMO_EVENT}/schedule`}
 						>
-							Try the public CFP
+							Schedule
 						</Link>
+						<a
+							className="hover:text-neutral-100"
+							href={`${REPO_URL}#readme`}
+							target="_blank"
+							rel="noreferrer"
+						>
+							Docs
+						</a>
+						<a
+							className="hover:text-neutral-100"
+							href={REPO_URL}
+							target="_blank"
+							rel="noreferrer"
+						>
+							GitHub
+						</a>
+					</div>
+					<Link
+						href="/admin/bypass"
+						className="ml-auto rounded-md bg-emerald-500 px-3.5 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400 sm:ml-0"
+					>
+						Open demo
+					</Link>
+				</nav>
+			</header>
+
+			<main>
+				{/* Headline band */}
+				<section className="mx-auto max-w-7xl px-4 pb-10 pt-14 sm:px-6 sm:pt-16">
+					<h1 className="text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl lg:text-6xl">
+						CFP to stage.{" "}
+						<span className="text-emerald-400">Nothing stalls.</span>
+					</h1>
+					<p className="mt-3 max-w-xl text-pretty text-base text-neutral-400">
+						The self-hosted conference program pipeline — an open-source
+						Sessionboard alternative that runs on Cloudflare.
+					</p>
+					<div className="mt-5 flex flex-wrap items-center gap-6 text-sm font-medium">
 						<Link
 							href="/admin/bypass"
-							className="rounded-md border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-800 hover:bg-neutral-100"
+							className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300"
 						>
-							Organizer sign-in (demo)
+							Open the live demo
+							<ArrowIcon />
 						</Link>
+						<a
+							href="#deploy"
+							className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
+						>
+							Deploy your own
+							<ArrowIcon />
+						</a>
 					</div>
-				</header>
+				</section>
 
-				<section aria-label="Demo journeys" className="space-y-3">
-					<h2 className="text-sm font-medium text-neutral-500">
-						Walk the demo
+				{/* Schedule scene */}
+				<section className="relative pb-6">
+					<ScheduleScene />
+				</section>
+
+				{/* Pipeline */}
+				<section
+					id="pipeline"
+					className="mx-auto max-w-7xl px-4 pb-20 pt-14 sm:px-6 sm:pb-24 sm:pt-16"
+				>
+					<h2 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+						The whole program pipeline, one system
 					</h2>
-					<ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
-						{journeys.map((item) => (
+					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
+						Six stages that usually live in six tools. Each one below links
+						into the live demo event.
+					</p>
+					<ol className="mt-10 border-t border-neutral-800">
+						{PIPELINE.map((item, index) => (
 							<li
-								key={item.href + item.title}
-								className="flex flex-wrap items-start justify-between gap-3 px-4 py-4"
+								key={item.stage}
+								className="grid gap-2 border-b border-neutral-800 py-6 sm:grid-cols-[56px_200px_1fr_auto] sm:items-baseline sm:gap-6"
 							>
-								<div className="min-w-0 max-w-md space-y-1">
-									<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-										{item.role}
-									</p>
-									<p className="font-medium text-neutral-900">{item.title}</p>
-									<p className="text-pretty text-sm text-neutral-600">
-										{item.blurb}
-									</p>
-								</div>
+								<span className="text-sm tabular-nums text-neutral-400">
+									{String(index + 1).padStart(2, "0")}
+								</span>
+								<h3 className="text-lg font-medium text-neutral-100">
+									{item.stage}
+								</h3>
+								<p className="max-w-xl text-pretty text-sm leading-relaxed text-neutral-400">
+									{item.description}
+								</p>
 								<Link
 									href={item.href}
-									className="shrink-0 text-sm font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
+									className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
 								>
-									{item.cta}
+									{item.linkLabel}
+									<ArrowIcon />
 								</Link>
 							</li>
 						))}
-					</ul>
-					<p className="text-xs text-neutral-500">
-						Also:{" "}
-						<Link
-							className="underline underline-offset-2"
-							href={`/admin/events/${DEMO_EVENT}/dashboard`}
-						>
-							live dashboard
-						</Link>
-						{" · "}
-						<Link
-							className="underline underline-offset-2"
-							href={`/admin/events/${DEMO_EVENT}/schedule`}
-						>
-							admin schedule
-						</Link>
-						{" · "}
-						<Link
-							className="underline underline-offset-2"
-							href={`/admin/events/${DEMO_EVENT}/tasks`}
-						>
-							speaker tasks
-						</Link>
-					</p>
+					</ol>
 				</section>
-			</div>
-		</main>
+
+				{/* Live dashboard */}
+				<section className="border-y border-neutral-800 bg-neutral-900/40">
+					<div className="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-2 lg:items-center">
+						<div>
+							<h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+								The dashboard that chases people for you
+							</h2>
+							<p className="mt-3 max-w-lg text-pretty text-neutral-400">
+								Every missing bio, headshot, and slide deck stays on the board
+								until it lands — pushed live over WebSockets, no refresh.
+								Daily reminder emails go out on a cron, or on demand.
+							</p>
+							<Link
+								href="/admin/bypass"
+								className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+							>
+								Watch it live in the demo
+								<ArrowIcon />
+							</Link>
+						</div>
+						<div aria-hidden className="select-none">
+							<div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+								<div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+									<p className="text-sm font-medium text-neutral-200">
+										Outstanding speaker tasks
+									</p>
+									<span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400">
+										<span className="relative flex h-2 w-2">
+											<span className="absolute h-2 w-2 rounded-full bg-emerald-500/60 motion-safe:animate-ping" />
+											<span className="relative h-2 w-2 rounded-full bg-emerald-400" />
+										</span>
+										Live
+									</span>
+								</div>
+								<ul className="divide-y divide-neutral-800/70 text-sm">
+									{[
+										{
+											speaker: "Maya Chen",
+											missing: "slides",
+											count: 1,
+										},
+										{
+											speaker: "Jonas Weber",
+											missing: "headshot · docs",
+											count: 2,
+										},
+										{
+											speaker: "Ines Almeida",
+											missing: "bio · headshot · slides",
+											count: 3,
+										},
+									].map((row) => (
+										<li
+											key={row.speaker}
+											className="flex items-center justify-between py-2.5"
+										>
+											<span className="text-neutral-200">{row.speaker}</span>
+											<span className="text-[13px] text-neutral-400">
+												missing {row.missing}
+											</span>
+										</li>
+									))}
+									<li className="flex items-center justify-between py-2.5">
+										<span className="text-neutral-200">Priya Nair</span>
+										<span className="inline-flex items-center gap-1 text-[13px] text-emerald-400">
+											all tasks complete
+										</span>
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				{/* Deploy */}
+				<section
+					id="deploy"
+					className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24"
+				>
+					<div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+						<div>
+							<h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+								Deploy your own
+							</h2>
+							<p className="mt-3 max-w-lg text-pretty text-neutral-400">
+								One repo, running entirely on your own Cloudflare account: D1
+								for the program data, R2 for speaker uploads, KV for
+								sessions, a Durable Object for realtime. No servers to
+								babysit.
+							</p>
+							<a
+								href={`${REPO_URL}#readme`}
+								target="_blank"
+								rel="noreferrer"
+								className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+							>
+								Full setup in the README
+								<ArrowIcon />
+							</a>
+						</div>
+						<pre className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900 p-5 font-mono text-[13px] leading-relaxed text-neutral-300">
+							{`git clone ${REPO_URL}
+cd conference-engine
+npm install
+npm run deploy`}
+						</pre>
+					</div>
+				</section>
+			</main>
+
+			<footer className="border-t border-neutral-800">
+				<div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-neutral-400 sm:px-6">
+					<div className="flex items-center gap-2">
+						<LogoMark />
+						<span>
+							conference-engine — built for the AI Engineer hackathon
+						</span>
+					</div>
+					<div className="flex items-center gap-5">
+						<a
+							className="hover:text-neutral-100"
+							href={REPO_URL}
+							target="_blank"
+							rel="noreferrer"
+						>
+							GitHub
+						</a>
+						<Link
+							className="hover:text-neutral-100"
+							href={`/e/${DEMO_EVENT}/schedule`}
+						>
+							Public schedule
+						</Link>
+						<Link className="hover:text-neutral-100" href="/admin/bypass">
+							Live demo
+						</Link>
+					</div>
+				</div>
+			</footer>
+		</div>
 	);
 }

@@ -42,7 +42,9 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 
 ## Brand Commitments
 
-None binding. "conference-engine" is an explicit placeholder — the product is open to renaming, and the visual identity is open. Do not treat the current neutral utilitarian look as a commitment. The only volunteered constraint: the public schedule took structural (not stylistic) inspiration from wf2025.ai.engineer/schedule.
+"conference-engine" remains an explicit placeholder name — open to renaming.
+
+**Visual direction (user-chosen, 2026-08-08): the category standard, played straight.** When offered novel visual worlds, the user deliberately chose the conventional developer-tool aesthetic executed at full craft — no irony, no smuggled quirk. The quality bar is the landing/product craft of Linear, Vercel, Resend, Stripe, and PostHog. Convention is the commitment; future visual work should refine within this canon rather than re-litigating the direction. The public schedule took structural (not stylistic) inspiration from wf2025.ai.engineer/schedule.
 
 ## Evidence on Hand
 
