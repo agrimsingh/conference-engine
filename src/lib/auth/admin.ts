@@ -14,15 +14,17 @@ import {
 
 export const ADMIN_BYPASS_COOKIE = "ce_admin_bypass";
 
-export async function isAdminBypass(): Promise<boolean> {
-	const { cookies } = await import("next/headers");
-	const jar = await cookies();
-	return jar.get(ADMIN_BYPASS_COOKIE)?.value === "1";
-}
-
 export async function isAdminBypassEnabled(): Promise<boolean> {
 	const env = await getCloudflareEnv();
 	return env.ADMIN_BYPASS_ENABLED === "1" || env.NEXTJS_ENV === "development";
+}
+
+/** True only when bypass is allowed in this environment AND the cookie is set. */
+export async function isAdminBypass(): Promise<boolean> {
+	if (!(await isAdminBypassEnabled())) return false;
+	const { cookies } = await import("next/headers");
+	const jar = await cookies();
+	return jar.get(ADMIN_BYPASS_COOKIE)?.value === "1";
 }
 
 export async function requireAdminBypass(): Promise<void> {

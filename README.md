@@ -98,8 +98,14 @@ Admin UI: submissions page → **Download CSV** / **Push to Airtable**.
 curl -sS -X POST http://localhost:3000/api/auth/request-link \
   -H 'content-type: application/json' \
   -d '{"email":"organizer@example.com","next":"/admin"}'
+# Open loginUrl → sets ce_organizer_session → /admin
 
-# Or local bypass cookie (dev / ADMIN_BYPASS_ENABLED=1 only)
+# Claim seeded aie-sandbox if it has zero memberships (first claimer wins)
+# Requires organizer session cookie from the magic-link callback:
+curl -sS -b /tmp/ce-org.txt -X POST \
+  http://localhost:3000/api/admin/events/aie-sandbox/claim
+
+# Or local bypass cookie (dev / ADMIN_BYPASS_ENABLED=1 only — ignored in prod)
 curl -sS -c /tmp/ce-admin.txt -b /tmp/ce-admin.txt \
   'http://localhost:3000/admin/bypass?next=/admin/events/aie-sandbox/submissions'
 

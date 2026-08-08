@@ -106,6 +106,71 @@ export async function getEventMembership(
 		.first<EventMembershipRow>();
 }
 
+export async function countEventMemberships(
+	db: D1Database,
+	eventId: string,
+): Promise<number> {
+	const row = await db
+		.prepare(
+			`SELECT COUNT(*) AS count FROM event_memberships WHERE event_id = ?`,
+		)
+		.bind(eventId)
+		.first<{ count: number }>();
+	return row?.count ?? 0;
+}
+
+/** Events with zero memberships — claimable by the first logged-in organizer. */
+export async function listOrphanEvents(db: D1Database): Promise<EventRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT e.*
+       FROM events e
+       WHERE NOT EXISTS (
+         SELECT 1 FROM event_memberships m WHERE m.event_id = e.id
+       )
+       ORDER BY e.name ASC`,
+		)
+		.all<EventRow>();
+	return result.results;
+}
+
+/**
+ * First claimer wins: insert owner membership only when the event has none.
+ * Returns the membership row, or null if already claimed (or insert raced away).
+ */
+export async function claimOrphanEventOwnership(
+	db: D1Database,
+	args: { eventId: string; accountId: string },
+): Promise<EventMembershipRow | null> {
+	const existing = await getEventMembership(db, args.eventId, args.accountId);
+	if (existing) return existing;
+
+	const id = crypto.randomUUID();
+	const now = Date.now();
+	const result = await db
+		.prepare(
+			`INSERT INTO event_memberships (id, event_id, account_id, role, created_at)
+       SELECT ?, ?, ?, 'owner', ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM event_memberships WHERE event_id = ?
+       )`,
+		)
+		.bind(id, args.eventId, args.accountId, now, args.eventId)
+		.run();
+
+	if ((result.meta.changes ?? 0) === 0) {
+		return getEventMembership(db, args.eventId, args.accountId);
+	}
+
+	return {
+		id,
+		event_id: args.eventId,
+		account_id: args.accountId,
+		role: "owner",
+		created_at: now,
+	};
+}
+
 export async function listEventsForAccount(
 	db: D1Database,
 	accountId: string,
