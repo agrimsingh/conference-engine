@@ -1,10 +1,12 @@
 import type {
+	AccountRow,
 	AgendaSlotRow,
 	AgendaSlotWithSubmissionRow,
 	AssetRow,
 	CfpFormRow,
 	EvaluationPlanRow,
 	EvaluationScoreRow,
+	EventMembershipRow,
 	EventRoomRow,
 	EventRow,
 	FormFieldRow,
@@ -32,6 +34,93 @@ export async function getEventById(
 	eventId: string,
 ): Promise<EventRow | null> {
 	return db.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first<EventRow>();
+}
+
+export async function listAllEvents(db: D1Database): Promise<EventRow[]> {
+	const result = await db
+		.prepare(`SELECT * FROM events ORDER BY name ASC`)
+		.all<EventRow>();
+	return result.results;
+}
+
+export async function getAccountById(
+	db: D1Database,
+	accountId: string,
+): Promise<AccountRow | null> {
+	return db
+		.prepare("SELECT * FROM accounts WHERE id = ?")
+		.bind(accountId)
+		.first<AccountRow>();
+}
+
+export async function upsertAccountByEmail(
+	db: D1Database,
+	args: { email: string; name?: string },
+): Promise<AccountRow> {
+	const email = args.email.trim().toLowerCase();
+	const name = args.name?.trim() ?? "";
+	const existing = await db
+		.prepare("SELECT * FROM accounts WHERE email = ?")
+		.bind(email)
+		.first<AccountRow>();
+
+	const now = Date.now();
+	if (existing) {
+		if (name && name !== existing.name) {
+			await db
+				.prepare(
+					`UPDATE accounts SET name = ?, updated_at = ? WHERE id = ?`,
+				)
+				.bind(name, now, existing.id)
+				.run();
+			return { ...existing, name, updated_at: now };
+		}
+		return existing;
+	}
+
+	const id = crypto.randomUUID();
+	await db
+		.prepare(
+			`INSERT INTO accounts (id, email, name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+		)
+		.bind(id, email, name, now, now)
+		.run();
+
+	const created = await getAccountById(db, id);
+	if (!created) throw new Error("Failed to create account");
+	return created;
+}
+
+export async function getEventMembership(
+	db: D1Database,
+	eventId: string,
+	accountId: string,
+): Promise<EventMembershipRow | null> {
+	return db
+		.prepare(
+			`SELECT * FROM event_memberships
+       WHERE event_id = ? AND account_id = ?`,
+		)
+		.bind(eventId, accountId)
+		.first<EventMembershipRow>();
+}
+
+export async function listEventsForAccount(
+	db: D1Database,
+	accountId: string,
+): Promise<EventRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT e.*
+       FROM events e
+       INNER JOIN event_memberships m ON m.event_id = e.id
+       WHERE m.account_id = ?
+       ORDER BY e.name ASC`,
+		)
+		.bind(accountId)
+		.all<EventRow>();
+	return result.results;
 }
 
 export async function getOpenForm(

@@ -1,26 +1,22 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { createForm, listFormsForEvent, updateFormMeta } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug, getFormBySlug } from "@/lib/db/queries";
+import { getFormBySlug } from "@/lib/db/queries";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
+	const { eventSlug } = await context.params;
+	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	const { eventSlug } = await context.params;
-	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) {
-		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
-	}
-
-	const forms = await listFormsForEvent(db, event.id);
+	const forms = await listFormsForEvent(db, access.event.id);
 	return NextResponse.json({
 		ok: true,
 		forms: forms.map((form) => ({
@@ -45,15 +41,11 @@ type PatchBody = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
-
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) {
-		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
 	const body = (await request.json()) as PatchBody;
@@ -66,7 +58,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 		);
 	}
 
-	const form = await getFormBySlug(db, event.id, formSlug);
+	const form = await getFormBySlug(db, access.event.id, formSlug);
 	if (!form) {
 		return NextResponse.json({ ok: false, error: "Form not found" }, { status: 404 });
 	}
@@ -113,15 +105,11 @@ type PostBody = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
-
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) {
-		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
 	const body = (await request.json()) as PostBody;
@@ -135,7 +123,11 @@ export async function POST(request: Request, context: RouteContext) {
 	}
 
 	try {
-		const form = await createForm(db, { eventId: event.id, slug, title });
+		const form = await createForm(db, {
+			eventId: access.event.id,
+			slug,
+			title,
+		});
 		return NextResponse.json({
 			ok: true,
 			form: {

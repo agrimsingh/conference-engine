@@ -7,16 +7,23 @@ import {
 } from "@/lib/db/queries";
 import type { ReviewAssignmentRow } from "@/lib/db/types";
 
-/** committee / zero rows → unfiltered; ≥1 assignment rows → only those submission ids */
+/**
+ * Committee → all submissions.
+ * Reviewer with assignments → only assigned ids.
+ * Reviewer with zero assignments → empty unless emptyMeansAll (board UI compat).
+ */
 export function filterBoardSubmissions<T extends { id: string }>(
 	submissions: T[],
 	args: {
 		mode: "committee" | "reviewer";
 		assignments: ReviewAssignmentRow[];
+		emptyMeansAll?: boolean;
 	},
 ): T[] {
 	if (args.mode === "committee") return submissions;
-	if (args.assignments.length === 0) return submissions;
+	if (args.assignments.length === 0) {
+		return args.emptyMeansAll ? submissions : [];
+	}
 	const allowed = new Set(args.assignments.map((row) => row.submission_id));
 	return submissions.filter((row) => allowed.has(row.id));
 }

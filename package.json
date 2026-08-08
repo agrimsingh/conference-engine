@@ -2,19 +2,20 @@
   "name": "conference-engine",
   "version": "0.1.0",
   "private": true,
-	"scripts": {
-		"dev": "next dev",
-		"build": "next build",
-		"start": "next start",
-		"lint": "eslint src",
-		"deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-		"upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
-		"db:migrate:local": "wrangler d1 migrations apply conference-engine --local",
-		"db:seed:local": "wrangler d1 execute conference-engine --local --file=scripts/seed.sql",
-		"db:reset:local": "npm run db:migrate:local && npm run db:seed:local"
-	},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply conference-engine --local",
+    "db:seed:local": "wrangler d1 execute conference-engine --local --file=scripts/seed.sql",
+    "db:reset:local": "npm run db:migrate:local && npm run db:seed:local",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.9",
     "next": "16.2.11",
@@ -31,6 +32,7 @@
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
     "typescript": "^5.7.4",
+    "vitest": "^4.1.10",
     "wrangler": "^4.120.0"
   }
 }

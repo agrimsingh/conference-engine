@@ -31,7 +31,7 @@ All true with runtime evidence:
 
 ## Tue schedule notes
 
-- Public `/e/[slug]/schedule` shows slots for submissions in `scheduled` **or** `published` (demo visibility; tighten later if organizers need draft-only).
+- Public `/e/[slug]/schedule` shows slots only for submissions in `published` (`scheduled` is organizer-only until explicitly published).
 - Rooms live in `event_rooms` (seeded: Main Stage, Room B, Workshop Lab); slots still store `room_name` text.
 - `EventRoom` HTTP `POST /broadcast` on schedule mutate; soft-fails under plain `next dev` without DO.
 

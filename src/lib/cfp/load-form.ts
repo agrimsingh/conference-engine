@@ -10,6 +10,7 @@ import {
 	getOpenForm,
 	listFormFields,
 } from "@/lib/db/queries";
+import { helpTextFromStoredConfig } from "@/lib/cfp/form-admin";
 import type { CfpFormRow, EventRow } from "@/lib/db/types";
 
 export type LoadedCfpForm = {
@@ -45,6 +46,7 @@ export async function loadCfpForm(
 			position: row.position,
 			visibilityRule: parseVisibilityRule(row.visibility_rule),
 			config: parseFieldConfig(row.field_type, row.config),
+			helpText: helpTextFromStoredConfig(row.config),
 		};
 	});
 

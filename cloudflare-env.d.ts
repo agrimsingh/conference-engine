@@ -13,6 +13,7 @@ interface __BaseEnv_CloudflareEnv {
 	RESEND_FROM_EMAIL: string;
 	AUTH_SECRET: string;
 	PUBLIC_API_KEY: string;
+	ADMIN_BYPASS_ENABLED: string;
 	EVENT_ROOM: DurableObjectNamespace<import("./worker").EventRoom>;
 	WORKER_SELF_REFERENCE: Service<typeof import("./worker").default>;
 }
@@ -28,7 +29,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "APP_NAME" | "NEXTJS_ENV" | "RESEND_API_KEY" | "RESEND_FROM_EMAIL" | "AUTH_SECRET" | "PUBLIC_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "APP_NAME" | "NEXTJS_ENV" | "RESEND_API_KEY" | "RESEND_FROM_EMAIL" | "AUTH_SECRET" | "PUBLIC_API_KEY" | "ADMIN_BYPASS_ENABLED">> {}
 }
 
 // Begin runtime types

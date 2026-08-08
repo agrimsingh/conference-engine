@@ -1,6 +1,7 @@
 import {
 	getAgendaSlotBySubmission,
 	listAgendaSlotsForEvent,
+	listEventRooms,
 	listSpeakersForSubmission,
 	getSubmissionById,
 } from "@/lib/db/queries";
@@ -83,6 +84,18 @@ export async function scheduleSubmission(
 	}
 	if (!isSubmissionStatus(submission.status)) {
 		return { ok: false, error: `Unknown status: ${submission.status}`, status: 500 };
+	}
+
+	const eventRooms = await listEventRooms(db, submission.event_id);
+	if (eventRooms.length > 0) {
+		const knownRooms = new Set(eventRooms.map((r) => r.name.trim()));
+		if (!knownRooms.has(roomName)) {
+			return {
+				ok: false,
+				error: `Unknown room "${roomName}". Use one of: ${[...knownRooms].join(", ")}`,
+				status: 400,
+			};
+		}
 	}
 
 	const candidateSpeakers = await listSpeakersForSubmission(db, submission.id);

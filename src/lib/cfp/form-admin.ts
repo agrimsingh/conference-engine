@@ -7,9 +7,39 @@ import {
 } from "@/lib/domain";
 import type { VisibilityRule } from "@/lib/domain/visibility";
 import type { CfpFormRow, FormFieldRow } from "@/lib/db/types";
+import { getFormBySlug } from "@/lib/db/queries";
 
 function newId(prefix: string): string {
 	return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+}
+
+type StoredFieldConfig = FieldConfig & { helpText?: string };
+
+function serializeConfig(config: FieldConfig, helpText?: string): string {
+	const payload: StoredFieldConfig = helpText?.trim()
+		? { ...config, helpText: helpText.trim() }
+		: config;
+	return JSON.stringify(payload);
+}
+
+function parseStoredConfig(raw: string): { config: FieldConfig; helpText?: string } {
+	const parsed = JSON.parse(raw) as StoredFieldConfig;
+	if (typeof parsed !== "object" || parsed === null || !("kind" in parsed)) {
+		throw new Error("Invalid field config");
+	}
+	const { helpText, ...config } = parsed;
+	return {
+		config: config as FieldConfig,
+		helpText: typeof helpText === "string" && helpText.trim() ? helpText.trim() : undefined,
+	};
+}
+
+export function helpTextFromStoredConfig(raw: string): string | undefined {
+	try {
+		return parseStoredConfig(raw).helpText;
+	} catch {
+		return undefined;
+	}
 }
 
 export async function listFormsForEvent(
@@ -25,6 +55,40 @@ export async function listFormsForEvent(
 		.bind(eventId)
 		.all<CfpFormRow>();
 	return result.results;
+}
+
+export async function createForm(
+	db: D1Database,
+	args: { eventId: string; slug: string; title: string },
+): Promise<CfpFormRow> {
+	const slug = args.slug.trim().toLowerCase();
+	const title = args.title.trim();
+	if (!/^[a-z][a-z0-9-]{0,39}$/.test(slug)) {
+		throw new Error("slug must be lowercase letters, digits, or hyphens");
+	}
+	if (!title) throw new Error("title is required");
+
+	const existing = await getFormBySlug(db, args.eventId, slug);
+	if (existing) throw new Error("A form with this slug already exists");
+
+	const id = newId("form");
+	const now = Date.now();
+	await db
+		.prepare(
+			`INSERT INTO cfp_forms (
+        id, event_id, slug, title, description, status, opens_at, closes_at,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, NULL, 'draft', NULL, NULL, ?, ?)`,
+		)
+		.bind(id, args.eventId, slug, title, now, now)
+		.run();
+
+	const row = await db
+		.prepare("SELECT * FROM cfp_forms WHERE id = ?")
+		.bind(id)
+		.first<CfpFormRow>();
+	if (!row) throw new Error("Failed to create form");
+	return row;
 }
 
 export async function updateFormMeta(
@@ -69,6 +133,7 @@ export type FieldWriteInput = {
 	position: number;
 	visibilityRule: VisibilityRule;
 	config: FieldConfig;
+	helpText?: string;
 };
 
 export function validateFieldWrite(input: unknown): FieldWriteInput | string {
@@ -106,6 +171,9 @@ export function validateFieldWrite(input: unknown): FieldWriteInput | string {
 		config = parsed;
 	}
 
+	const helpText =
+		typeof body.helpText === "string" ? body.helpText.trim() : undefined;
+
 	return {
 		key,
 		label,
@@ -114,6 +182,7 @@ export function validateFieldWrite(input: unknown): FieldWriteInput | string {
 		position,
 		visibilityRule,
 		config,
+		helpText: helpText || undefined,
 	};
 }
 
@@ -179,7 +248,7 @@ export async function insertFormField(
 			input.required ? 1 : 0,
 			input.position,
 			JSON.stringify(input.visibilityRule),
-			JSON.stringify(input.config),
+			serializeConfig(input.config, input.helpText),
 		)
 		.run();
 	await db
@@ -222,7 +291,7 @@ export async function updateFormField(
 			input.required ? 1 : 0,
 			input.position,
 			JSON.stringify(input.visibilityRule),
-			JSON.stringify(input.config),
+			serializeConfig(input.config, input.helpText),
 			fieldId,
 		)
 		.run();
@@ -287,6 +356,7 @@ export function rowToFieldDef(row: FormFieldRow): FormFieldDef {
 	if (!isFieldType(row.field_type)) {
 		throw new Error(`Unknown field_type: ${row.field_type}`);
 	}
+	const { config, helpText } = parseStoredConfig(row.config);
 	return {
 		key: row.key,
 		label: row.label,
@@ -294,6 +364,7 @@ export function rowToFieldDef(row: FormFieldRow): FormFieldDef {
 		required: row.required === 1,
 		position: row.position,
 		visibilityRule: JSON.parse(row.visibility_rule) as VisibilityRule,
-		config: JSON.parse(row.config) as FieldConfig,
+		config,
+		helpText,
 	};
 }

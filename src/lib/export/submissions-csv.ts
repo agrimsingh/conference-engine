@@ -1,7 +1,7 @@
 import {
 	getEventBySlug,
 	listLabelsForEvent,
-	listSpeakersForSubmission,
+	listSpeakersForSubmissions,
 	listSubmissionsForEvent,
 } from "@/lib/db/queries";
 import { displayCategory, titleFromAnswers } from "@/lib/domain";
@@ -56,10 +56,13 @@ export async function loadSubmissionExportRows(
 		labelsBySubmission.set(row.submission_id, list);
 	}
 
+	const submissionIds = submissions.map((s) => s.id);
+	const speakersBySubmission = await listSpeakersForSubmissions(db, submissionIds);
+
 	const rows: SubmissionExportRow[] = [];
 	for (const submission of submissions) {
 		const answers = parseAnswers(submission.answers_json);
-		const speakers = await listSpeakersForSubmission(db, submission.id);
+		const speakers = speakersBySubmission.get(submission.id) ?? [];
 		const speakerNames = speakers
 			.filter((speaker) => speaker.status !== "removed")
 			.map((speaker) => speaker.name);
@@ -90,7 +93,7 @@ export async function loadSubmissionExportForSlug(
 	return { ok: true, eventSlug: event.slug, rows };
 }
 
-function csvEscape(value: string): string {
+export function csvEscape(value: string): string {
 	// Neutralize spreadsheet formula injection from CFP-sourced text.
 	const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 	if (/[",\n\r]/.test(safe)) {

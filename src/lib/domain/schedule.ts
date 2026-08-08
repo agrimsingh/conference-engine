@@ -89,7 +89,7 @@ export function formatScheduleConflicts(conflicts: readonly ScheduleConflict[]):
 		.join("; ");
 }
 
-export const PUBLIC_SCHEDULE_STATUSES = ["scheduled", "published"] as const;
+export const PUBLIC_SCHEDULE_STATUSES = ["published"] as const;
 export type PublicScheduleStatus = (typeof PUBLIC_SCHEDULE_STATUSES)[number];
 
 export function isPublicScheduleStatus(value: string): value is PublicScheduleStatus {

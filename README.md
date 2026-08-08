@@ -34,12 +34,14 @@ npm install
 cp .dev.vars.example .dev.vars   # fill RESEND_API_KEY, AUTH_SECRET, PUBLIC_API_KEY; ADMIN_BYPASS_ENABLED=1 for local bypass
 npm run db:reset:local           # migrate + seed aie-sandbox
 npm run dev                      # http://localhost:3000
+npm test                         # vitest unit tests (assignments, public schedule statuses, CSV escape)
 ```
 
 ### Seeded demo
 
 - Public CFP: `/e/aie-sandbox/submit/cfp`
-- Public schedule: `/e/aie-sandbox/schedule` (list/day; shows `scheduled` + `published`)
+- Public schedule: `/e/aie-sandbox/schedule` (list/day; **`published` only** — `scheduled` stays organizer-only)
+
 - Embed schedule (iframe, no AppNav): `/embed/aie-sandbox/schedule`
 - **Organizer admin:** `/login` (magic link) → `/admin` (event picker + create). Production path.
 - **Local bypass (dev only):** `/admin/bypass` when `ADMIN_BYPASS_ENABLED=1` or `NEXTJS_ENV=development` — sets cookie, then `/admin` lists all events
@@ -191,7 +193,7 @@ Spine: `Event → CFPForm → Submission → Evaluation → Acceptance → Speak
 
 A `Submission` *is* the session once accepted. Status transitions are enforced in `src/lib/domain/submission-status.ts`. Speaker onboarding task types live in `SPEAKER_TASK_TYPE_REGISTRY` (`bio`, `headshot`, `slides`); accept spawns `speaker_tasks` idempotently on `(submission_id, person_id, template_key)`. Form field types and visibility rules live in typed registries under `src/lib/domain/`.
 
-Schedule conflicts are pure in `src/lib/domain/schedule.ts` (`detectConflicts`): room overlap and speaker double-book. Public schedule lists slots whose submission is `scheduled` or `published` (demo choice; document in `DECISIONS.md`).
+Schedule conflicts are pure in `src/lib/domain/schedule.ts` (`detectConflicts`): room overlap and speaker double-book. Public schedule lists slots whose submission is `published` only (`PUBLIC_SCHEDULE_STATUSES`; see `DECISIONS.md`).
 
 Outstanding tasks are grouped by `(submissionId, personId)` in `src/lib/domain/outstanding-tasks.ts`. Live admin UI prefers EventRoom invalidate fanout, with poll fallback for local demo.
 
