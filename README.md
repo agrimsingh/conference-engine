@@ -8,13 +8,15 @@ Built as a Sessionboard Program alternative for the AI Engineer hackathon. Job-t
 
 | Requirement | State |
 |---|---|
-| 1. Conditional CFP forms + category routing | ✅ Local (AIE preset) |
-| 2. Speaker portal (bio, headshot, slides, docs) | ✅ Local (accept → tasks → R2) |
-| 3. Templated email + calendar ICS | ✅ Local Resend+ICS |
-| 4. Evaluation / scoring workflows | ✅ Local basic scoring |
-| 5. DnD schedule + conflict detection | ✅ Local (HTML5 DnD + hard conflicts) |
-| 6. Realtime outstanding-tasks dashboard | ✅ Local (EventRoom WS + 2s poll fallback) |
-| Deploy `conference-engine.65labs.org` | 🚧 secrets + `npm run deploy` |
+| 1. Conditional CFP forms + category routing | ✅ Live |
+| 2. Speaker portal (bio, headshot, slides, docs) | ✅ Live |
+| 3. Templated email + calendar ICS | ✅ Live (Resend `team@65labs.org`) |
+| 4. Evaluation / scoring workflows | ✅ Live |
+| 5. DnD schedule + conflict detection | ✅ Live |
+| 6. Realtime outstanding-tasks dashboard | ✅ Live (EventRoom WS + poll fallback) |
+| Deploy `conference-engine.65labs.org` | ✅ Live |
+
+**Prod:** https://conference-engine.65labs.org · repo https://github.com/agrimsingh/conference-engine
 
 ## Stack
 

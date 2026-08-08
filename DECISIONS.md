@@ -26,6 +26,7 @@ All true with runtime evidence:
 | Mon slice | Eval scores + Resend templates + ICS schedule | 3–4 ✅ locally (pending parent commit) |
 | Tue slice | DnD admin schedule + public schedule + hard conflicts | 5 ✅ locally (pending parent commit) |
 | Wed slice | Outstanding dashboard + public API + deploy prep | 6 ✅ locally (pending parent commit/deploy) |
+| Wed deploy | `4e0e682` + secrets + remote migrate/seed + `npm run deploy` | 6–8 ✅ prod (home/CFP/schedule/dashboard/API; WS upgrade OK) |
 
 ## Tue schedule notes
 
