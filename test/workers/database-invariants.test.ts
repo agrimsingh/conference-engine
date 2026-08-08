@@ -13,6 +13,8 @@ import {
 	reserveEmailDelivery,
 } from "@/lib/email/resend";
 import { sendTaskReminders } from "@/lib/email/reminders";
+import { reorderFormFields, softDeleteFormField, updateFormField } from "@/lib/cfp/form-admin";
+import { upsertAccountByEmail } from "@/lib/db/queries";
 
 const now = 1_780_000_000_000;
 
@@ -36,6 +38,42 @@ describe("D1 runtime invariants", () => {
 		for (const name of ["RESEND_API_KEY", "AIRTABLE_API_KEY", "PUBLIC_API_KEY"]) {
 			expect(bindings[name]).toBeUndefined();
 		}
+	});
+
+	it("cannot mutate or reorder a field outside the route's form", async () => {
+		await seedEvent("field-event-a", "field-event-a");
+		await seedEvent("field-event-b", "field-event-b");
+		await seedForm("field-event-a", "field-form-a", "field-form-a");
+		await seedForm("field-event-b", "field-form-b", "field-form-b");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('field-a', 'field-form-a', 'title', 'Title', 'text', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"text\"}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('field-b', 'field-form-b', 'title', 'Foreign title', 'text', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"text\"}', 0)"),
+		]);
+		const update = {
+			key: "title", label: "Hijacked", fieldType: "text" as const, required: true, position: 0,
+			visibilityRule: { op: "always" as const }, config: { kind: "text" as const },
+		};
+		await expect(updateFormField(env.DB, "field-form-a", "field-b", update)).rejects.toThrow("Field not found");
+		await expect(softDeleteFormField(env.DB, "field-form-a", "field-b")).rejects.toThrow("Field not found");
+		await expect(reorderFormFields(env.DB, "field-form-a", ["field-b"])).rejects.toThrow("do not belong");
+		expect(await env.DB.prepare("SELECT label, soft_deleted, position FROM form_fields WHERE id = 'field-b'").first<{ label: string; soft_deleted: number; position: number }>()).toEqual({ label: "Foreign title", soft_deleted: 0, position: 0 });
+	});
+
+	it("preserves existing account names across public login and invitation upserts", async () => {
+		const existing = await upsertAccountByEmail(env.DB, { email: "known@account.test", name: "Trusted name" });
+		expect((await upsertAccountByEmail(env.DB, { email: "known@account.test", name: "Attacker name" })).name).toBe("Trusted name");
+		expect((await upsertAccountByEmail(env.DB, { email: "new@account.test", name: "New account" })).name).toBe("New account");
+		await seedEvent("account-invite-event", "account-invite-event");
+		await env.DB.prepare("INSERT INTO event_memberships (id, event_id, account_id, role, created_at) VALUES ('account-inviter-member', 'account-invite-event', ?, 'admin', ?)").bind(existing.id, now).run();
+		const event = await env.DB.prepare("SELECT * FROM events WHERE id = 'account-invite-event'").first<import("@/lib/db/types").EventRow>();
+		if (!event) throw new Error("seeded event missing");
+		const invite = await inviteOrganizerToEvent(env.DB, {
+			event, email: "known@account.test", name: "Invite overwrite", origin: "https://conference.example.test", exposeLoginUrl: true,
+			secret: "account-invite-secret", invitedByAccountId: existing.id,
+			sendEmail: async () => ({ ok: false, error: "rejected", failureKind: "confirmed" }),
+		});
+		expect(invite.ok && invite.account.name).toBe("Trusted name");
+		expect(invite.ok && invite.loginUrl).toBeNull();
 	});
 
 	it("applies the production migrations, makes ownership canonical, and fails preflight closed", async () => {

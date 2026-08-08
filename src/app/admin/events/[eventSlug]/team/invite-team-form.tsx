@@ -83,6 +83,13 @@ export function InviteTeamForm({
 			}
 
 			const roleLabel = data.role === "owner" ? "ownership-transfer" : "organizer";
+			if (!data.pendingAcceptance) {
+				setError(`The ${roleLabel} invite to ${data.invitee.email} was not activated because email delivery failed; no access or ownership changed.`);
+				setEmail("");
+				setName("");
+				setRole("admin");
+				return;
+			}
 			const resent = data.pendingAcceptance
 				? `Sent a pending ${roleLabel} invite to ${data.invitee.email}. Access changes after the link is accepted.`
 				: `The ${roleLabel} invite to ${data.invitee.email} was not activated; no access or ownership changed.`;

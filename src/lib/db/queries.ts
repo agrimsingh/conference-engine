@@ -96,7 +96,9 @@ export async function upsertAccountByEmail(
 
 	const now = Date.now();
 	if (existing) {
-		if (name && name !== existing.name) {
+		// Public login and invitation requests are mailbox-unproven. They may
+		// seed an empty legacy account name but can never overwrite a real one.
+		if (name && !existing.name.trim()) {
 			await db
 				.prepare(
 					`UPDATE accounts SET name = ?, updated_at = ? WHERE id = ?`,

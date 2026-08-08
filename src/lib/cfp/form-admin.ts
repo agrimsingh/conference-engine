@@ -300,12 +300,13 @@ export async function insertFormField(
 
 export async function updateFormField(
 	db: D1Database,
+	formId: string,
 	fieldId: string,
 	input: FieldWriteInput,
 ): Promise<FormFieldRow> {
 	const existing = await db
-		.prepare("SELECT * FROM form_fields WHERE id = ? AND soft_deleted = 0")
-		.bind(fieldId)
+		.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ? AND soft_deleted = 0")
+		.bind(fieldId, formId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
 	// Keys are the answers_json contract; renaming would orphan stored answers.
@@ -318,7 +319,7 @@ export async function updateFormField(
 			`UPDATE form_fields
        SET label = ?, field_type = ?, required = ?, position = ?,
            visibility_rule = ?, config = ?
-       WHERE id = ?`,
+		 WHERE id = ? AND form_id = ? AND soft_deleted = 0`,
 		)
 		.bind(
 			input.label,
@@ -328,16 +329,17 @@ export async function updateFormField(
 			JSON.stringify(input.visibilityRule),
 			serializeConfig(input.config, input.helpText),
 			fieldId,
+			formId,
 		)
 		.run();
 	await db
 		.prepare("UPDATE cfp_forms SET updated_at = ? WHERE id = ?")
-		.bind(Date.now(), existing.form_id)
+		.bind(Date.now(), formId)
 		.run();
 
 	const row = await db
-		.prepare("SELECT * FROM form_fields WHERE id = ?")
-		.bind(fieldId)
+		.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ?")
+		.bind(fieldId, formId)
 		.first<FormFieldRow>();
 	if (!row) throw new Error("Failed to update field");
 	return row;
@@ -345,24 +347,25 @@ export async function updateFormField(
 
 export async function softDeleteFormField(
 	db: D1Database,
+	formId: string,
 	fieldId: string,
 ): Promise<void> {
 	const existing = await db
-		.prepare("SELECT * FROM form_fields WHERE id = ?")
-		.bind(fieldId)
+		.prepare("SELECT * FROM form_fields WHERE id = ? AND form_id = ? AND soft_deleted = 0")
+		.bind(fieldId, formId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
 	// Free the UNIQUE(form_id, key) slot so the key can be re-added later.
 	const tombstoneKey = `${existing.key}__deleted__${existing.id}`;
 	await db
 		.prepare(
-			`UPDATE form_fields SET soft_deleted = 1, key = ? WHERE id = ?`,
+			`UPDATE form_fields SET soft_deleted = 1, key = ? WHERE id = ? AND form_id = ? AND soft_deleted = 0`,
 		)
-		.bind(tombstoneKey, fieldId)
+		.bind(tombstoneKey, fieldId, formId)
 		.run();
 	await db
 		.prepare("UPDATE cfp_forms SET updated_at = ? WHERE id = ?")
-		.bind(Date.now(), existing.form_id)
+		.bind(Date.now(), formId)
 		.run();
 }
 
@@ -371,6 +374,18 @@ export async function reorderFormFields(
 	formId: string,
 	orderedIds: string[],
 ): Promise<void> {
+	const uniqueIds = [...new Set(orderedIds)];
+	if (uniqueIds.length !== orderedIds.length) throw new Error("orderedIds must not contain duplicates");
+	if (uniqueIds.length) {
+		const placeholders = uniqueIds.map(() => "?").join(", ");
+		const found = await db.prepare(
+			`SELECT id FROM form_fields
+			 WHERE form_id = ? AND soft_deleted = 0 AND id IN (${placeholders})`,
+		).bind(formId, ...uniqueIds).all<{ id: string }>();
+		if (found.results.length !== uniqueIds.length) {
+			throw new Error("One or more fields do not belong to this form");
+		}
+	}
 	for (let i = 0; i < orderedIds.length; i++) {
 		const id = orderedIds[i]!;
 		await db

@@ -108,8 +108,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 				{ status: 400 },
 			);
 		}
-		await reorderFormFields(loaded.db, loaded.form.id, body.orderedIds);
-		return NextResponse.json({ ok: true });
+		try {
+			await reorderFormFields(loaded.db, loaded.form.id, body.orderedIds);
+			return NextResponse.json({ ok: true });
+		} catch (error) {
+			return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Reorder failed" }, { status: 400 });
+		}
 	}
 
 	const fieldId = typeof body.fieldId === "string" ? body.fieldId : "";
@@ -125,18 +129,19 @@ export async function PATCH(request: Request, context: RouteContext) {
 	}
 
 	try {
-		const row = await updateFormField(loaded.db, fieldId, validated);
+		const row = await updateFormField(loaded.db, loaded.form.id, fieldId, validated);
 		return NextResponse.json({
 			ok: true,
 			field: { id: row.id, ...rowToFieldDef(row) },
 		});
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Update failed";
 		return NextResponse.json(
 			{
 				ok: false,
-				error: error instanceof Error ? error.message : "Update failed",
+				error: message,
 			},
-			{ status: 400 },
+			{ status: message === "Field not found" ? 404 : 400 },
 		);
 	}
 }
@@ -156,15 +161,16 @@ export async function DELETE(request: Request, context: RouteContext) {
 	}
 
 	try {
-		await softDeleteFormField(loaded.db, fieldId);
+		await softDeleteFormField(loaded.db, loaded.form.id, fieldId);
 		return NextResponse.json({ ok: true });
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Delete failed";
 		return NextResponse.json(
 			{
 				ok: false,
-				error: error instanceof Error ? error.message : "Delete failed",
+				error: message,
 			},
-			{ status: 400 },
+			{ status: message === "Field not found" ? 404 : 400 },
 		);
 	}
 }

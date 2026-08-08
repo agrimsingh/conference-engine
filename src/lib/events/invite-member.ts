@@ -99,7 +99,7 @@ export async function inviteOrganizerToEvent(
 				   AND EXISTS (SELECT 1 FROM event_invitations WHERE id = ? AND status = 'failed')`,
 			).bind((emailResult.error ?? "mail delivery failed").slice(0, 1_000), challenge.tokenHash, invitationId),
 		]);
-		return { ok: true, account, invitationId, role, emailStatus: "failed", loginUrl: args.exposeLoginUrl ? loginUrl : null };
+		return { ok: true, account, invitationId, role, emailStatus: "failed", loginUrl: null };
 	}
 	return {
 		ok: true,
