@@ -179,6 +179,71 @@ export async function removeEventMembership(
 	return (result.meta.changes ?? 0) > 0;
 }
 
+export async function setEventMembershipRole(
+	db: D1Database,
+	args: {
+		eventId: string;
+		accountId: string;
+		role: "owner" | "admin";
+	},
+): Promise<EventMembershipRow | null> {
+	const membership = await getEventMembership(db, args.eventId, args.accountId);
+	if (!membership) return null;
+	if (membership.role === args.role) return membership;
+
+	await db
+		.prepare(
+			`UPDATE event_memberships
+       SET role = ?
+       WHERE event_id = ? AND account_id = ?`,
+		)
+		.bind(args.role, args.eventId, args.accountId)
+		.run();
+
+	return {
+		...membership,
+		role: args.role,
+	};
+}
+
+/**
+ * Promote `toAccountId` to owner and demote every current owner to admin.
+ * Target must already be a member.
+ */
+export async function transferEventOwnership(
+	db: D1Database,
+	args: { eventId: string; toAccountId: string },
+): Promise<EventMembershipRow> {
+	const target = await getEventMembership(db, args.eventId, args.toAccountId);
+	if (!target) {
+		throw new Error("Target is not a member of this event");
+	}
+	if (target.role === "owner") {
+		return target;
+	}
+
+	const members = await listEventMembers(db, args.eventId);
+	for (const member of members) {
+		if (member.role === "owner" && member.account_id !== args.toAccountId) {
+			await setEventMembershipRole(db, {
+				eventId: args.eventId,
+				accountId: member.account_id,
+				role: "admin",
+			});
+		}
+	}
+
+	const updated = await setEventMembershipRole(db, {
+		eventId: args.eventId,
+		accountId: args.toAccountId,
+		role: "owner",
+	});
+	if (!updated) {
+		throw new Error("Failed to transfer ownership");
+	}
+	return updated;
+}
+
 export async function countEventMemberships(
 	db: D1Database,
 	eventId: string,

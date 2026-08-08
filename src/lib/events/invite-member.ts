@@ -2,10 +2,13 @@ import { createOrganizerLoginToken } from "@/lib/auth/organizer-session";
 import {
 	addEventMembership,
 	getEventMembership,
+	transferEventOwnership,
 	upsertAccountByEmail,
 } from "@/lib/db/queries";
 import type { AccountRow, EventMembershipRow, EventRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
+
+export type InviteRole = "admin" | "owner";
 
 export type InviteOrganizerResult =
 	| {
@@ -13,6 +16,7 @@ export type InviteOrganizerResult =
 			account: AccountRow;
 			membership: EventMembershipRow;
 			createdMembership: boolean;
+			transferredOwnership: boolean;
 			emailStatus: "sent" | "failed";
 			loginUrl: string | null;
 	  }
@@ -24,6 +28,7 @@ export async function inviteOrganizerToEvent(
 		event: EventRow;
 		email: string;
 		name?: string;
+		role?: InviteRole;
 		origin: string;
 		exposeLoginUrl: boolean;
 	},
@@ -31,6 +36,11 @@ export async function inviteOrganizerToEvent(
 	const email = args.email.trim().toLowerCase();
 	if (!email.includes("@")) {
 		return { ok: false, error: "Valid email required", status: 400 };
+	}
+
+	const role: InviteRole = args.role ?? "admin";
+	if (role !== "admin" && role !== "owner") {
+		return { ok: false, error: "role must be admin or owner", status: 400 };
 	}
 
 	const account = await upsertAccountByEmail(db, {
@@ -41,16 +51,28 @@ export async function inviteOrganizerToEvent(
 	const existing = await getEventMembership(db, args.event.id, account.id);
 	let membership: EventMembershipRow;
 	let createdMembership = false;
+	let transferredOwnership = false;
 
 	if (existing) {
 		membership = existing;
 	} else {
+		// Always insert as admin first; owner invites promote via transfer below.
 		membership = await addEventMembership(db, {
 			eventId: args.event.id,
 			accountId: account.id,
 			role: "admin",
 		});
 		createdMembership = true;
+	}
+
+	if (role === "owner") {
+		if (membership.role !== "owner") {
+			membership = await transferEventOwnership(db, {
+				eventId: args.event.id,
+				toAccountId: account.id,
+			});
+			transferredOwnership = true;
+		}
 	}
 
 	const { token } = await createOrganizerLoginToken({
@@ -82,6 +104,7 @@ export async function inviteOrganizerToEvent(
 		account,
 		membership,
 		createdMembership,
+		transferredOwnership,
 		emailStatus: emailResult.ok ? "sent" : "failed",
 		loginUrl: args.exposeLoginUrl ? loginUrl : null,
 	};

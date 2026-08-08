@@ -9,11 +9,20 @@ import {
 	listEventMembers,
 	removeEventMembership,
 } from "@/lib/db/queries";
-import { inviteOrganizerToEvent } from "@/lib/events/invite-member";
+import {
+	inviteOrganizerToEvent,
+	type InviteRole,
+} from "@/lib/events/invite-member";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
 };
+
+function parseInviteRole(raw: unknown): InviteRole | null {
+	if (raw === undefined || raw === null) return "admin";
+	if (raw === "admin" || raw === "owner") return raw;
+	return null;
+}
 
 export async function GET(_request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
@@ -44,21 +53,42 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	let body: { email?: unknown; name?: unknown };
+	let body: { email?: unknown; name?: unknown; role?: unknown };
 	try {
-		body = (await request.json()) as { email?: unknown; name?: unknown };
+		body = (await request.json()) as {
+			email?: unknown;
+			name?: unknown;
+			role?: unknown;
+		};
 	} catch {
 		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
 	}
 
 	const email = typeof body.email === "string" ? body.email : "";
 	const name = typeof body.name === "string" ? body.name : undefined;
+	const role = parseInviteRole(body.role);
+	if (!role) {
+		return NextResponse.json(
+			{ ok: false, error: "role must be admin or owner" },
+			{ status: 400 },
+		);
+	}
+
+	const bypass = await isAdminBypass();
+	if (role === "owner" && access.membership?.role !== "owner" && !bypass) {
+		return NextResponse.json(
+			{ ok: false, error: "Only the event owner can invite as owner" },
+			{ status: 403 },
+		);
+	}
+
 	const exposeLoginUrl = await shouldExposeDevLoginUrl();
 
 	const result = await inviteOrganizerToEvent(db, {
 		event: access.event,
 		email,
 		name,
+		role,
 		origin: new URL(request.url).origin,
 		exposeLoginUrl,
 	});
@@ -73,6 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
 	return NextResponse.json({
 		ok: true,
 		createdMembership: result.createdMembership,
+		transferredOwnership: result.transferredOwnership,
 		emailStatus: result.emailStatus,
 		loginUrl: result.loginUrl,
 		member: {

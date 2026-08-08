@@ -73,6 +73,140 @@ function parseClosesAtInput(value: string): number | null {
 	return Number.isFinite(ms) ? ms : null;
 }
 
+type VisibilityOp = "always" | "eq";
+
+type VisibilityDraft = {
+	visibilityOp: VisibilityOp;
+	visibilityFieldKey: string;
+	visibilityValue: string;
+};
+
+function buildVisibilityRule(draft: VisibilityDraft): {
+	op: "always";
+} | {
+	op: "eq";
+	fieldKey: string;
+	value: string;
+} {
+	if (
+		draft.visibilityOp === "eq" &&
+		draft.visibilityFieldKey.trim() &&
+		draft.visibilityValue.trim()
+	) {
+		return {
+			op: "eq",
+			fieldKey: draft.visibilityFieldKey.trim(),
+			value: draft.visibilityValue.trim(),
+		};
+	}
+	return { op: "always" };
+}
+
+function visibilitySummary(rule: FieldRow["visibilityRule"]): string {
+	if (rule.op === "eq" && rule.fieldKey && rule.value != null) {
+		return `visible when ${rule.fieldKey} = ${rule.value}`;
+	}
+	if (rule.op === "in" && rule.fieldKey && rule.values?.length) {
+		return `visible when ${rule.fieldKey} in [${rule.values.join(", ")}]`;
+	}
+	if (rule.op === "always") return "always visible";
+	return `visible when ${rule.op}`;
+}
+
+function VisibilityFields({
+	op,
+	fieldKey,
+	value,
+	siblingKeys,
+	onChange,
+}: {
+	op: VisibilityOp;
+	fieldKey: string;
+	value: string;
+	siblingKeys: string[];
+	onChange: (next: VisibilityDraft) => void;
+}) {
+	return (
+		<>
+			<label className="block text-xs text-neutral-400">
+				Visibility
+				<select
+					className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+					value={op}
+					onChange={(e) =>
+						onChange({
+							visibilityOp: e.target.value as VisibilityOp,
+							visibilityFieldKey: fieldKey,
+							visibilityValue: value,
+						})
+					}
+				>
+					<option value="always">Always</option>
+					<option value="eq">Equals</option>
+				</select>
+			</label>
+			{op === "eq" ? (
+				<div className="grid gap-2 sm:grid-cols-2">
+					<label className="block text-xs text-neutral-400">
+						Field key
+						{siblingKeys.length > 0 ? (
+							<select
+								className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+								value={fieldKey}
+								onChange={(e) =>
+									onChange({
+										visibilityOp: op,
+										visibilityFieldKey: e.target.value,
+										visibilityValue: value,
+									})
+								}
+							>
+								<option value="">Select field…</option>
+								{fieldKey && !siblingKeys.includes(fieldKey) ? (
+									<option value={fieldKey}>{fieldKey}</option>
+								) : null}
+								{siblingKeys.map((key) => (
+									<option key={key} value={key}>
+										{key}
+									</option>
+								))}
+							</select>
+						) : (
+							<input
+								className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+								placeholder="field key"
+								value={fieldKey}
+								onChange={(e) =>
+									onChange({
+										visibilityOp: op,
+										visibilityFieldKey: e.target.value,
+										visibilityValue: value,
+									})
+								}
+							/>
+						)}
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Value
+						<input
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							placeholder="value"
+							value={value}
+							onChange={(e) =>
+								onChange({
+									visibilityOp: op,
+									visibilityFieldKey: fieldKey,
+									visibilityValue: e.target.value,
+								})
+							}
+						/>
+					</label>
+				</div>
+			) : null}
+		</>
+	);
+}
+
 export function FormBuilder({
 	eventSlug,
 	formSlug,
@@ -108,10 +242,14 @@ export function FormBuilder({
 		fieldType: "text" as FieldType,
 		required: false,
 		helpText: "",
+		visibilityOp: "always" as VisibilityOp,
+		visibilityFieldKey: "",
+		visibilityValue: "",
 		options: defaultSelectOptions(),
 	});
 
 	const base = `/api/admin/events/${eventSlug}/forms/${formSlug}/fields`;
+	const siblingKeysForAdd = fields.map((f) => f.key);
 
 	async function saveMeta() {
 		setBusy(true);
@@ -141,6 +279,7 @@ export function FormBuilder({
 		setError(null);
 		const position = fields.length;
 		const config = buildFieldConfig(draft.fieldType, draft.options);
+		const visibilityRule = buildVisibilityRule(draft);
 
 		const res = await fetch(base, {
 			method: "POST",
@@ -151,7 +290,7 @@ export function FormBuilder({
 				fieldType: draft.fieldType,
 				required: draft.required,
 				position,
-				visibilityRule: { op: "always" },
+				visibilityRule,
 				config,
 				helpText: draft.helpText.trim() || undefined,
 			}),
@@ -173,6 +312,9 @@ export function FormBuilder({
 			fieldType: "text",
 			required: false,
 			helpText: "",
+			visibilityOp: "always",
+			visibilityFieldKey: "",
+			visibilityValue: "",
 			options: defaultSelectOptions(),
 		});
 		router.refresh();
@@ -210,16 +352,7 @@ export function FormBuilder({
 		if (!editDraft) return;
 		setBusy(true);
 		setError(null);
-		const visibilityRule =
-			editDraft.visibilityOp === "eq" &&
-			editDraft.visibilityFieldKey.trim() &&
-			editDraft.visibilityValue.trim()
-				? {
-						op: "eq" as const,
-						fieldKey: editDraft.visibilityFieldKey.trim(),
-						value: editDraft.visibilityValue.trim(),
-					}
-				: { op: "always" as const };
+		const visibilityRule = buildVisibilityRule(editDraft);
 
 		const res = await fetch(base, {
 			method: "PATCH",
@@ -396,52 +529,17 @@ export function FormBuilder({
 										/>
 										Required
 									</label>
-									<label className="block text-xs text-neutral-400">
-										Visibility
-										<select
-											className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-											value={editDraft.visibilityOp}
-											onChange={(e) =>
-												setEditDraft((d) =>
-													d
-														? {
-																...d,
-																visibilityOp: e.target.value as "always" | "eq",
-															}
-														: d,
-												)
-											}
-										>
-											<option value="always">Always</option>
-											<option value="eq">When field equals</option>
-										</select>
-									</label>
-									{editDraft.visibilityOp === "eq" ? (
-										<div className="grid gap-2 sm:grid-cols-2">
-											<input
-												className="rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-												placeholder="field key"
-												value={editDraft.visibilityFieldKey}
-												onChange={(e) =>
-													setEditDraft((d) =>
-														d
-															? { ...d, visibilityFieldKey: e.target.value }
-															: d,
-													)
-												}
-											/>
-											<input
-												className="rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-												placeholder="value"
-												value={editDraft.visibilityValue}
-												onChange={(e) =>
-													setEditDraft((d) =>
-														d ? { ...d, visibilityValue: e.target.value } : d,
-													)
-												}
-											/>
-										</div>
-									) : null}
+									<VisibilityFields
+										op={editDraft.visibilityOp}
+										fieldKey={editDraft.visibilityFieldKey}
+										value={editDraft.visibilityValue}
+										siblingKeys={fields
+											.filter((f) => f.id !== field.id)
+											.map((f) => f.key)}
+										onChange={(next) =>
+											setEditDraft((d) => (d ? { ...d, ...next } : d))
+										}
+									/>
 									{field.fieldType === "select" ||
 									field.fieldType === "multiselect" ? (
 										<OptionsEditor
@@ -479,9 +577,8 @@ export function FormBuilder({
 											{field.key} · {field.fieldType}
 											{field.required ? " · required" : ""}
 											{field.helpText ? " · has help" : ""}
-											{field.visibilityRule.op !== "always"
-												? ` · visible when ${field.visibilityRule.op}`
-												: ""}
+											{" · "}
+											{visibilitySummary(field.visibilityRule)}
 										</p>
 									</div>
 									<div className="flex items-center gap-2">
@@ -587,6 +684,15 @@ export function FormBuilder({
 							}
 						/>
 					</label>
+					<div className="space-y-2 sm:col-span-2">
+						<VisibilityFields
+							op={draft.visibilityOp}
+							fieldKey={draft.visibilityFieldKey}
+							value={draft.visibilityValue}
+							siblingKeys={siblingKeysForAdd}
+							onChange={(next) => setDraft((d) => ({ ...d, ...next }))}
+						/>
+					</div>
 				</div>
 				{draft.fieldType === "select" || draft.fieldType === "multiselect" ? (
 					<OptionsEditor

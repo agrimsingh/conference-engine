@@ -12,25 +12,45 @@ type Member = {
 	createdAt: number;
 };
 
+type InviteRole = "admin" | "owner";
+
 type Props = {
 	eventSlug: string;
 	initialMembers: Member[];
 	canRemove: boolean;
+	canTransfer: boolean;
+	canInviteAsOwner: boolean;
+	currentAccountId: string | null;
+	currentRole: "owner" | "admin" | null;
 };
+
+function sortMembers(rows: Member[]): Member[] {
+	return [...rows].sort((a, b) => {
+		if (a.role === b.role) return a.email.localeCompare(b.email);
+		return a.role === "owner" ? -1 : 1;
+	});
+}
 
 export function InviteTeamForm({
 	eventSlug,
 	initialMembers,
 	canRemove,
+	canTransfer,
+	canInviteAsOwner,
+	currentAccountId,
+	currentRole,
 }: Props) {
 	const router = useRouter();
 	const [members, setMembers] = useState(initialMembers);
 	const [email, setEmail] = useState("");
 	const [name, setName] = useState("");
+	const [role, setRole] = useState<InviteRole>("admin");
 	const [error, setError] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 	const [devLoginUrl, setDevLoginUrl] = useState<string | null>(null);
+
+	const canLeave = currentRole === "admin" && currentAccountId !== null;
 
 	async function onInvite(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -42,12 +62,17 @@ export function InviteTeamForm({
 			const response = await fetch(`/api/admin/events/${eventSlug}/members`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ email, name: name || undefined }),
+				body: JSON.stringify({
+					email,
+					name: name || undefined,
+					role: canInviteAsOwner ? role : "admin",
+				}),
 			});
 			const data = (await response.json()) as {
 				ok?: boolean;
 				error?: string;
 				createdMembership?: boolean;
+				transferredOwnership?: boolean;
 				emailStatus?: string;
 				loginUrl?: string | null;
 				member?: Member;
@@ -61,8 +86,12 @@ export function InviteTeamForm({
 				const without = prev.filter(
 					(row) => row.accountId !== data.member!.accountId,
 				);
-				return [
-					...without,
+				const next = [
+					...without.map((row) =>
+						data.transferredOwnership && row.role === "owner"
+							? { ...row, role: "admin" as const }
+							: row,
+					),
 					{
 						accountId: data.member!.accountId,
 						email: data.member!.email,
@@ -70,15 +99,17 @@ export function InviteTeamForm({
 						role: data.member!.role,
 						createdAt: Date.now(),
 					},
-				].sort((a, b) => {
-					if (a.role === b.role) return a.email.localeCompare(b.email);
-					return a.role === "owner" ? -1 : 1;
-				});
+				];
+				return sortMembers(next);
 			});
 
 			const resent = data.createdMembership
-				? "Invited as organizer."
-				: "Already a member — resent sign-in link.";
+				? data.transferredOwnership
+					? "Invited as owner (ownership transferred)."
+					: "Invited as organizer."
+				: data.transferredOwnership
+					? "Member promoted to owner."
+					: "Already a member — resent sign-in link.";
 			const emailBit =
 				data.emailStatus === "sent"
 					? " Magic link emailed."
@@ -87,6 +118,7 @@ export function InviteTeamForm({
 			if (data.loginUrl) setDevLoginUrl(data.loginUrl);
 			setEmail("");
 			setName("");
+			setRole("admin");
 			router.refresh();
 		} catch {
 			setError("Network error");
@@ -117,12 +149,76 @@ export function InviteTeamForm({
 		}
 	}
 
+	async function onTransfer(accountId: string) {
+		setError(null);
+		setNotice(null);
+		setPending(true);
+		try {
+			const response = await fetch(
+				`/api/admin/events/${eventSlug}/members/transfer`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ accountId }),
+				},
+			);
+			const data = (await response.json()) as { ok?: boolean; error?: string };
+			if (!response.ok || !data.ok) {
+				setError(data.error ?? "Could not transfer ownership");
+				return;
+			}
+			setMembers((prev) =>
+				sortMembers(
+					prev.map((row) => {
+						if (row.accountId === accountId) {
+							return { ...row, role: "owner" as const };
+						}
+						if (row.role === "owner") {
+							return { ...row, role: "admin" as const };
+						}
+						return row;
+					}),
+				),
+			);
+			setNotice("Ownership transferred.");
+			router.refresh();
+		} catch {
+			setError("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
+	async function onLeave() {
+		setError(null);
+		setNotice(null);
+		setPending(true);
+		try {
+			const response = await fetch(
+				`/api/admin/events/${eventSlug}/members/leave`,
+				{ method: "POST" },
+			);
+			const data = (await response.json()) as { ok?: boolean; error?: string };
+			if (!response.ok || !data.ok) {
+				setError(data.error ?? "Could not leave team");
+				return;
+			}
+			router.push("/admin");
+			router.refresh();
+		} catch {
+			setError("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
 	return (
 		<div className="space-y-8">
 			<form onSubmit={onInvite} className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
 				<p className="text-sm text-neutral-400">
-					Invite by email. They get an <code className="text-neutral-300">admin</code>{" "}
-					seat and a magic-link sign-in to this event.
+					Invite by email. Default role is{" "}
+					<code className="text-neutral-300">admin</code>. Inviting as{" "}
+					<code className="text-neutral-300">owner</code> transfers ownership.
 				</p>
 				<div className="grid gap-3 sm:grid-cols-2">
 					<label className="block text-xs text-neutral-400">
@@ -146,6 +242,19 @@ export function InviteTeamForm({
 							placeholder="Ada Lovelace"
 						/>
 					</label>
+					{canInviteAsOwner ? (
+						<label className="block text-xs text-neutral-400 sm:col-span-2">
+							Role
+							<select
+								value={role}
+								onChange={(e) => setRole(e.target.value as InviteRole)}
+								className={`mt-1 ${INPUT_CLASSES}`}
+							>
+								<option value="admin">admin</option>
+								<option value="owner">owner (transfers ownership)</option>
+							</select>
+						</label>
+					) : null}
 				</div>
 				<button
 					type="submit"
@@ -155,6 +264,28 @@ export function InviteTeamForm({
 					{pending ? "Sending…" : "Send invite"}
 				</button>
 			</form>
+
+			{canLeave ? (
+				<div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+					<p className="mb-3 text-sm text-neutral-400">
+						You are an admin on this event. Leaving removes your access.
+					</p>
+					<button
+						type="button"
+						disabled={pending}
+						onClick={() => void onLeave()}
+						className={buttonClasses("secondary")}
+					>
+						Leave team
+					</button>
+				</div>
+			) : null}
+
+			{currentRole === "owner" ? (
+				<p className="text-xs text-neutral-500">
+					As owner you must transfer ownership before you can leave.
+				</p>
+			) : null}
 
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			{notice ? <p className={noticeClasses("positive")}>{notice}</p> : null}
@@ -168,30 +299,49 @@ export function InviteTeamForm({
 			) : null}
 
 			<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
-				{members.map((member) => (
-					<li
-						key={member.accountId}
-						className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-					>
-						<div>
-							<p className="text-sm text-neutral-100">
-								{member.name.trim() || member.email}
-							</p>
-							<p className="text-xs text-neutral-500">
-								{member.email} · {member.role}
-							</p>
-						</div>
-						{canRemove && member.role !== "owner" ? (
-							<button
-								type="button"
-								onClick={() => void onRemove(member.accountId)}
-								className={buttonClasses("secondary", "sm")}
-							>
-								Remove
-							</button>
-						) : null}
-					</li>
-				))}
+				{members.map((member) => {
+					const isSelf = member.accountId === currentAccountId;
+					return (
+						<li
+							key={member.accountId}
+							className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+						>
+							<div>
+								<p className="text-sm text-neutral-100">
+									{member.name.trim() || member.email}
+									{isSelf ? (
+										<span className="ml-2 text-xs text-neutral-500">(you)</span>
+									) : null}
+								</p>
+								<p className="text-xs text-neutral-500">
+									{member.email} · {member.role}
+								</p>
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								{canTransfer && member.role === "admin" ? (
+									<button
+										type="button"
+										disabled={pending}
+										onClick={() => void onTransfer(member.accountId)}
+										className={buttonClasses("secondary", "sm")}
+									>
+										Transfer ownership
+									</button>
+								) : null}
+								{canRemove && member.role !== "owner" ? (
+									<button
+										type="button"
+										disabled={pending}
+										onClick={() => void onRemove(member.accountId)}
+										className={buttonClasses("secondary", "sm")}
+									>
+										Remove
+									</button>
+								) : null}
+							</div>
+						</li>
+					);
+				})}
 				{members.length === 0 ? (
 					<li className="px-4 py-6 text-sm text-neutral-500">No members yet.</li>
 				) : null}
