@@ -5,6 +5,7 @@ import { getSubmissionById } from "@/lib/db/queries";
 import { notifyCalendarInvite } from "@/lib/email/notify";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
+import { readScheduleJson } from "@/lib/schedule/request";
 
 type RouteContext = { params: Promise<{ eventSlug: string; submissionId: string }> };
 
@@ -18,17 +19,16 @@ function parseTime(value: unknown): number | null {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-	const { eventSlug, submissionId } = await context.params;
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
-	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+	const authorized = await authorizeSchedule(context);
+	if (!authorized.ok) return authorized.response;
+	const { db, access, submissionId } = authorized;
+	const parsed = await readScheduleJson(request);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	const body = parsed.body;
 	const startsAtMs = parseTime(body.startsAt);
 	const endsAtMs = parseTime(body.endsAt);
 	const roomName = typeof body.roomName === "string" ? body.roomName : "";
 	if (startsAtMs === null || endsAtMs === null) return NextResponse.json({ ok: false, error: "startsAt and endsAt required (ISO or ms)" }, { status: 400 });
-	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	const boundsError = validateEventScheduleBounds(access.event, startsAtMs, endsAtMs);
 	if (boundsError) return NextResponse.json({ ok: false, error: boundsError }, { status: 400 });
 	const submission = await getSubmissionById(db, submissionId);
@@ -69,19 +69,24 @@ export async function DELETE(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
-	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+	const authorized = await authorizeSchedule(context);
+	if (!authorized.ok) return authorized.response;
+	const parsed = await readScheduleJson(request);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	const body = parsed.body;
 	const action = body.action;
 	if (!isScheduleAction(action) || action === "unplace") return NextResponse.json({ ok: false, error: "action must be publish or unpublish" }, { status: 400 });
-	return mutateAction(action, context);
+	return mutateAction(action, context, authorized);
 }
 
-async function mutateAction(action: ScheduleAction, context: RouteContext): Promise<NextResponse> {
-	const { eventSlug, submissionId } = await context.params;
-	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+async function mutateAction(
+	action: ScheduleAction,
+	context: RouteContext,
+	authorized?: Extract<Awaited<ReturnType<typeof authorizeSchedule>>, { ok: true }>,
+): Promise<NextResponse> {
+	const resolved = authorized ?? await authorizeSchedule(context);
+	if (!resolved.ok) return resolved.response;
+	const { db, access, submissionId } = resolved;
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission || submission.event_id !== access.event.id) return NextResponse.json({ ok: false, error: "Submission not found" }, { status: 404 });
 	const env = await getCloudflareEnv();
@@ -96,4 +101,15 @@ async function mutateAction(action: ScheduleAction, context: RouteContext): Prom
 	const result = value as Record<string, unknown>;
 	if (result.ok !== true) return NextResponse.json({ ok: false, error: typeof result.error === "string" ? result.error : "Schedule mutation failed" }, { status: response.status });
 	return NextResponse.json({ ok: true, status: result.status, broadcasted: true });
+}
+
+async function authorizeSchedule(context: RouteContext): Promise<
+	| { ok: true; db: D1Database; access: NonNullable<Awaited<ReturnType<typeof authorizeEventAdminApi>>>; submissionId: string }
+	| { ok: false; response: NextResponse }
+> {
+	const { eventSlug, submissionId } = await context.params;
+	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) return { ok: false, response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }) };
+	return { ok: true, db, access, submissionId };
 }

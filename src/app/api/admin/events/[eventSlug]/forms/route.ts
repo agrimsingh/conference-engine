@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { createForm, listFormsForEvent, updateFormMeta } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
@@ -55,7 +56,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	const body = (await request.json()) as PatchBody;
+	const parsed = await readBoundedJson(request, 64 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as PatchBody;
 	const formSlug =
 		typeof body.formSlug === "string" ? body.formSlug.trim() : "";
 	if (!formSlug) {
@@ -145,7 +149,10 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	const body = (await request.json()) as PostBody;
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as PostBody;
 	const slug = typeof body.slug === "string" ? body.slug.trim() : "";
 	const title = typeof body.title === "string" ? body.title.trim() : "";
 	if (!slug || !title) {

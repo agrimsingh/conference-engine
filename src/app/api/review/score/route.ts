@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -16,12 +17,10 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-	let body: Body;
-	try {
-		body = (await request.json()) as Body;
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as Body;
 
 	const submissionId =
 		typeof body.submissionId === "string" ? body.submissionId : "";

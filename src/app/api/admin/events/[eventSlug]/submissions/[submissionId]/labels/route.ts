@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -61,12 +62,9 @@ export async function POST(request: Request, context: RouteContext) {
 	const resolved = await resolveSubmission(eventSlug, submissionId);
 	if (!resolved.ok) return resolved.response;
 
-	let raw: unknown;
-	try {
-		raw = await request.json();
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	const raw = parsed.value;
 
 	const label = normalizeLabel(raw);
 	if (!label) {
@@ -85,12 +83,9 @@ export async function DELETE(request: Request, context: RouteContext) {
 	const resolved = await resolveSubmission(eventSlug, submissionId);
 	if (!resolved.ok) return resolved.response;
 
-	let raw: unknown;
-	try {
-		raw = await request.json();
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	const raw = parsed.value;
 
 	const label = normalizeLabel(raw);
 	if (!label) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
@@ -45,25 +46,6 @@ function parseBody(raw: unknown): ParsedBody | null {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-	let raw: unknown;
-	try {
-		raw = await request.json();
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
-
-	const parsed = parseBody(raw);
-	if (!parsed) {
-		return NextResponse.json(
-			{
-				ok: false,
-				error:
-					"Expected { action: accept|waitlist|reject, email: { send, subject?, text? } }",
-			},
-			{ status: 400 },
-		);
-	}
-
 	const { eventSlug, submissionId } = await context.params;
 	const db = await getDb();
 	const access = await authorizeEventAdminApi(db, eventSlug);
@@ -71,6 +53,15 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 	const event = access.event;
+	const json = await readBoundedJson(request, 64 * 1024);
+	if (!json.ok) return NextResponse.json({ ok: false, error: json.error }, { status: json.status });
+	const parsed = parseBody(json.value);
+	if (!parsed) {
+		return NextResponse.json(
+			{ ok: false, error: "Expected { action: accept|waitlist|reject, email: { send, subject?, text? } }" },
+			{ status: 400 },
+		);
+	}
 
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission || submission.event_id !== event.id) {

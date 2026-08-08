@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import {
 	authorizeEventAdminApi,
 	isAdminBypass,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/db/queries";
 import {
 	inviteOrganizerToEvent,
+	hasPendingInvitationAcceptance,
 	type InviteRole,
 } from "@/lib/events/invite-member";
 
@@ -53,16 +55,10 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	let body: { email?: unknown; name?: unknown; role?: unknown };
-	try {
-		body = (await request.json()) as {
-			email?: unknown;
-			name?: unknown;
-			role?: unknown;
-		};
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as { email?: unknown; name?: unknown; role?: unknown };
 
 	const email = typeof body.email === "string" ? body.email : "";
 	const name = typeof body.name === "string" ? body.name : undefined;
@@ -105,7 +101,7 @@ export async function POST(request: Request, context: RouteContext) {
 	return NextResponse.json({
 		ok: true,
 		invitationId: result.invitationId,
-		pendingAcceptance: true,
+		pendingAcceptance: hasPendingInvitationAcceptance(result.emailStatus),
 		role: result.role,
 		emailStatus: result.emailStatus,
 		loginUrl: result.loginUrl,
@@ -129,12 +125,10 @@ export async function DELETE(request: Request, context: RouteContext) {
 		);
 	}
 
-	let body: { accountId?: unknown };
-	try {
-		body = (await request.json()) as { accountId?: unknown };
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 16 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as { accountId?: unknown };
 
 	const accountId =
 		typeof body.accountId === "string" ? body.accountId.trim() : "";

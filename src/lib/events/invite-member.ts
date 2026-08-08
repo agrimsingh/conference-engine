@@ -4,6 +4,11 @@ import type { AccountRow, EventRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
 
 export type InviteRole = "admin" | "owner";
+export type InvitationEmailStatus = "sent" | "uncertain" | "failed";
+
+export function hasPendingInvitationAcceptance(status: InvitationEmailStatus): boolean {
+	return status !== "failed";
+}
 
 export type InviteOrganizerResult =
 	| {
@@ -11,7 +16,7 @@ export type InviteOrganizerResult =
 			account: AccountRow;
 			invitationId: string;
 			role: InviteRole;
-			emailStatus: "sent" | "uncertain" | "failed";
+			emailStatus: InvitationEmailStatus;
 			loginUrl: string | null;
 		  }
 	| { ok: false; error: string; status: number };

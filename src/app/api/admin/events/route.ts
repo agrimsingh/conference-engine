@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import {
 	getCurrentOrganizerAccount,
 	isAdminBypass,
@@ -25,12 +26,10 @@ export async function POST(request: Request) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	let body: Body;
-	try {
-		body = (await request.json()) as Body;
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const parsed = await readBoundedJson(request, 64 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as Body;
 
 	const name = typeof body.name === "string" ? body.name.trim() : "";
 	const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -61,12 +62,9 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
-	let raw: unknown;
-	try {
-		raw = await request.json();
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
+	const json = await readBoundedJson(request, 16 * 1024);
+	if (!json.ok) return NextResponse.json({ ok: false, error: json.error }, { status: json.status });
+	const raw = json.value;
 
 	const parsed = parseAction(raw);
 	if (!parsed) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import {
 	insertFormField,
@@ -56,7 +57,10 @@ export async function POST(request: Request, context: RouteContext) {
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;
 
-	const body: unknown = await request.json();
+	const parsed = await readBoundedJson(request, 64 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body: unknown = parsed.value;
 	const validated = validateFieldWrite(body);
 	if (typeof validated === "string") {
 		return NextResponse.json({ ok: false, error: validated }, { status: 400 });
@@ -84,7 +88,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;
 
-	const body = (await request.json()) as {
+	const parsed = await readBoundedJson(request, 64 * 1024);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	const body = parsed.value as {
 		action?: unknown;
 		fieldId?: unknown;
 		orderedIds?: unknown;
