@@ -40,6 +40,7 @@ npm run dev                      # http://localhost:3000
 
 - Public CFP: `/e/aie-sandbox/submit/cfp`
 - Public schedule: `/e/aie-sandbox/schedule` (list/day; shows `scheduled` + `published`)
+- Embed schedule (iframe, no AppNav): `/embed/aie-sandbox/schedule`
 - Admin bypass (local): `/admin/bypass` → `/admin/events/aie-sandbox/submissions`
 - Admin schedule (DnD): `/admin/events/aie-sandbox/schedule`
 - Outstanding tasks (live): `/admin/events/aie-sandbox/dashboard`
@@ -76,6 +77,26 @@ curl -sS http://localhost:3000/api/v1/events/aie-sandbox/schedule \
 | `GET` | `/api/v1/events/[eventSlug]/schedule` | Rooms + public slots |
 
 Unauthorized requests return `401`. Missing secret returns `503`.
+
+## Export
+
+One-way export from D1. Airtable is never read back into the database.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Always available with admin session. CSV columns: `id,title,status,category,speakers,submitted_at,labels` |
+| `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Pushes the same rows via Airtable REST when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` with a clear JSON error (use CSV instead) |
+
+Admin UI: submissions page → **Download CSV** / **Push to Airtable**.
+
+```bash
+# Cookie jar from /admin/bypass first
+curl -sS -b /tmp/ce-admin.txt \
+  http://localhost:3000/api/admin/events/aie-sandbox/export/submissions.csv | head
+
+curl -sS -b /tmp/ce-admin.txt -X POST \
+  http://localhost:3000/api/admin/events/aie-sandbox/export/airtable
+```
 
 ### API smoke
 

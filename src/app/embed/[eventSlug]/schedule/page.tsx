@@ -5,6 +5,6 @@ type Props = {
 	searchParams: Promise<{ day?: string; view?: string; room?: string }>;
 };
 
-export default function PublicSchedulePage(props: Props) {
-	return <PublicSchedule {...props} basePath="/e" />;
+export default function EmbedSchedulePage(props: Props) {
+	return <PublicSchedule {...props} basePath="/embed" />;
 }
