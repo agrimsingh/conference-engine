@@ -35,9 +35,11 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 
 - Stack (fixed): Next.js App Router via OpenNext on Cloudflare Workers; D1 as system of record; R2 for uploads; KV for sessions; `EventRoom` Durable Object for realtime; Resend for email (from team@65labs.org). Deployed at conference-engine.65labs.org; public repo github.com/agrimsingh/conference-engine.
 - Domain spine: `Event → CFPForm → Submission → Evaluation → Acceptance → SpeakerTask → AgendaSlot`. A submission becomes the session on acceptance. Category (routed from the format answer) doubles as the schedule track.
-- Forms render generically from DB rows. Admin form-builder edits those rows (no seed-SQL edits required). Explicitly wanted by the customer ("this is just a very fancy form builder").
+- Forms render generically from DB rows. Admin form-builder at `/admin/events/[slug]/forms` edits those rows (no seed-SQL edits required).
 - English-only; no payments; no CRM/marketing/CMS scope. AI-assisted review explicitly optional/struck.
-- Airtable: one-way export only (their team uses Airtable); never the system of record.
+- Airtable: one-way CSV download plus optional Airtable REST push; never the system of record.
+- Reviewer assignment: organizers assign named reviewers to specific submissions; personal review links honor the roster (zero assignments keeps the full board for backward compatibility).
+- Public embed: `/embed/[slug]/schedule` is the iframe-friendly schedule (no app chrome).
 - Licensing: MIT open source. No paid SKU and no per-event pricing track.
 - Undecided product facts: product name (see Brand Commitments), multi-event/multi-tenant story.
 

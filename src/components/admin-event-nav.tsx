@@ -10,6 +10,7 @@ type Props = {
 
 const LINKS = [
 	{ segment: "submissions", label: "Submissions" },
+	{ segment: "forms", label: "Forms" },
 	{ segment: "schedule", label: "Schedule" },
 	{ segment: "dashboard", label: "Dashboard" },
 	{ segment: "tasks", label: "Tasks" },

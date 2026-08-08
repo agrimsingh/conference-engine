@@ -42,6 +42,7 @@ npm run dev                      # http://localhost:3000
 - Public schedule: `/e/aie-sandbox/schedule` (list/day; shows `scheduled` + `published`)
 - Embed schedule (iframe, no AppNav): `/embed/aie-sandbox/schedule`
 - Admin bypass (local): `/admin/bypass` → `/admin/events/aie-sandbox/submissions`
+- Admin form builder: `/admin/events/aie-sandbox/forms` (edit CFP fields without touching seed SQL)
 - Admin schedule (DnD): `/admin/events/aie-sandbox/schedule`
 - Outstanding tasks (live): `/admin/events/aie-sandbox/dashboard`
 - Speaker portal: `/portal` (email + KV token)
