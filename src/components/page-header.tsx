@@ -9,15 +9,15 @@ type Props = {
 
 export function PageHeader({ eyebrow, title, description, children }: Props) {
 	return (
-		<header className="mb-8 space-y-2 border-b border-neutral-200 pb-5">
+		<header className="mb-8 space-y-2 border-b border-neutral-800 pb-5">
 			<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 				{eyebrow}
 			</p>
-			<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-900">
+			<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 				{title}
 			</h1>
 			{description ? (
-				<div className="max-w-2xl text-pretty text-sm text-neutral-600">
+				<div className="max-w-2xl text-pretty text-sm text-neutral-400">
 					{description}
 				</div>
 			) : null}
