@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { Chip, EmptyState, StatusPill, submissionStatusTone } from "@/components/ui";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
-	getEventBySlug,
 	getPersonById,
 	listAssignmentsForPlan,
 	listLabelsForEvent,
@@ -38,13 +36,8 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	const { eventSlug } = await params;
 	const { category: categoryParam, label: labelParam } = await searchParams;
 
-	if (!(await isAdminBypass())) {
-		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/submissions`);
-	}
-
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
 	const categoryFilter = categoryParam?.trim() || "all";

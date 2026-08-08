@@ -1,3 +1,19 @@
+export type AccountRow = {
+	id: string;
+	email: string;
+	name: string;
+	created_at: number;
+	updated_at: number;
+};
+
+export type EventMembershipRow = {
+	id: string;
+	event_id: string;
+	account_id: string;
+	role: "owner" | "admin";
+	created_at: number;
+};
+
 export type EventRow = {
 	id: string;
 	slug: string;

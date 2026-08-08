@@ -31,7 +31,7 @@ Built as a Sessionboard Program alternative for the AI Engineer hackathon. Job-t
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars   # fill RESEND_API_KEY, AUTH_SECRET, PUBLIC_API_KEY
+cp .dev.vars.example .dev.vars   # fill RESEND_API_KEY, AUTH_SECRET, PUBLIC_API_KEY; ADMIN_BYPASS_ENABLED=1 for local bypass
 npm run db:reset:local           # migrate + seed aie-sandbox
 npm run dev                      # http://localhost:3000
 ```
@@ -41,7 +41,8 @@ npm run dev                      # http://localhost:3000
 - Public CFP: `/e/aie-sandbox/submit/cfp`
 - Public schedule: `/e/aie-sandbox/schedule` (list/day; shows `scheduled` + `published`)
 - Embed schedule (iframe, no AppNav): `/embed/aie-sandbox/schedule`
-- Admin bypass (local): `/admin/bypass` → `/admin/events/aie-sandbox/submissions`
+- **Organizer admin:** `/login` (magic link) → `/admin` (event picker + create). Production path.
+- **Local bypass (dev only):** `/admin/bypass` when `ADMIN_BYPASS_ENABLED=1` or `NEXTJS_ENV=development` — sets cookie, then `/admin` lists all events
 - Admin form builder: `/admin/events/aie-sandbox/forms` (edit CFP fields without touching seed SQL)
 - Admin schedule (DnD): `/admin/events/aie-sandbox/schedule`
 - Outstanding tasks (live): `/admin/events/aie-sandbox/dashboard`
@@ -85,18 +86,23 @@ One-way export from D1. Airtable is never read back into the database.
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Always available with admin session. CSV columns: `id,title,status,category,speakers,submitted_at,labels` |
+| `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Organizer session or bypass. CSV columns: `id,title,status,category,speakers,submitted_at,labels` |
 | `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Upserts the same rows via Airtable REST (`performUpsert` on field `id`) when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` (use CSV instead). Table needs a unique text field named `id`. |
 
 Admin UI: submissions page → **Download CSV** / **Push to Airtable**.
 
 ```bash
-# Cookie jar from /admin/bypass first
+# Organizer magic link (dev returns loginUrl in JSON)
+curl -sS -X POST http://localhost:3000/api/auth/request-link \
+  -H 'content-type: application/json' \
+  -d '{"email":"organizer@example.com","next":"/admin"}'
+
+# Or local bypass cookie (dev / ADMIN_BYPASS_ENABLED=1 only)
+curl -sS -c /tmp/ce-admin.txt -b /tmp/ce-admin.txt \
+  'http://localhost:3000/admin/bypass?next=/admin/events/aie-sandbox/submissions'
+
 curl -sS -b /tmp/ce-admin.txt \
   http://localhost:3000/api/admin/events/aie-sandbox/export/submissions.csv | head
-
-curl -sS -b /tmp/ce-admin.txt -X POST \
-  http://localhost:3000/api/admin/events/aie-sandbox/export/airtable
 ```
 
 ### API smoke
@@ -119,7 +125,7 @@ curl -sS -X POST http://localhost:3000/api/e/aie-sandbox/submit/cfp \
 
 # 2) Admin bypass + activate evaluation plan
 curl -sS -c /tmp/ce-admin.txt -b /tmp/ce-admin.txt \
-  http://localhost:3000/admin/bypass
+  'http://localhost:3000/admin/bypass?next=/admin/events/aie-sandbox/submissions'
 curl -sS -b /tmp/ce-admin.txt -X POST \
   http://localhost:3000/api/admin/events/aie-sandbox/evaluation/activate \
   -H 'content-type: application/json' \

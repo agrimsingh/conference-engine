@@ -1,11 +1,9 @@
-import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
-	getEventBySlug,
 	listAgendaSlotsForEvent,
 	listEventRooms,
 	listSchedulableSubmissions,
@@ -46,13 +44,8 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	const { eventSlug } = await params;
 	const { day: dayParam } = await searchParams;
 
-	if (!(await isAdminBypass())) {
-		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/schedule`);
-	}
-
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 
 	const dayKey = parseDayKey(dayParam) ?? DEMO_SCHEDULE_DAY;
 	const [rooms, submissions, slots] = await Promise.all([

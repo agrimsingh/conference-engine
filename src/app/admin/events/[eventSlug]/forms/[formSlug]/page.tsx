@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { rowToFieldDef } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug, getFormBySlug, listFormFields } from "@/lib/db/queries";
+import { getFormBySlug, listFormFields } from "@/lib/db/queries";
 import { FormBuilder } from "./form-builder";
 
 type Props = {
@@ -13,21 +13,21 @@ type Props = {
 };
 
 export default async function AdminFormBuilderPage({ params }: Props) {
-	if (!(await isAdminBypass())) redirect("/admin/bypass");
-
 	const { eventSlug, formSlug } = await params;
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 	const form = await getFormBySlug(db, event.id, formSlug);
 	if (!form) notFound();
 
 	const rows = await listFormFields(db, form.id);
-	const fields = rows.map((row) => ({
-		id: row.id,
-		...rowToFieldDef(row),
-		config: JSON.parse(row.config) as Record<string, unknown>,
-	}));
+	const fields = rows.map((row) => {
+		const def = rowToFieldDef(row);
+		return {
+			id: row.id,
+			...def,
+			config: def.config as Record<string, unknown>,
+		};
+	});
 
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -58,7 +58,9 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 						eventSlug={eventSlug}
 						formSlug={formSlug}
 						initialTitle={form.title}
+						initialDescription={form.description ?? ""}
 						initialStatus={form.status}
+						initialClosesAt={form.closes_at}
 						initialFields={fields}
 					/>
 				</div>

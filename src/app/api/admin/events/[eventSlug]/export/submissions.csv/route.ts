@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	loadSubmissionExportForSlug,
@@ -11,12 +11,13 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
+	const { eventSlug } = await context.params;
+	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
-	const { eventSlug } = await context.params;
-	const db = await getDb();
 	const loaded = await loadSubmissionExportForSlug(db, eventSlug);
 	if (!loaded.ok) {
 		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });

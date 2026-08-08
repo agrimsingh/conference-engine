@@ -191,6 +191,49 @@ export async function sendTemplatedEmail(
 	}
 }
 
+export async function sendAuthEmail(args: {
+	toEmail: string;
+	templateKey: Extract<MessageTemplateKey, "organizer_magic_link" | "portal_magic_link">;
+	context: MessageTemplateContext;
+}): Promise<{ ok: boolean; error?: string }> {
+	const toEmail = args.toEmail.trim().toLowerCase();
+	const rendered = renderMessageTemplate(args.templateKey, args.context);
+
+	const env = await getCloudflareEnv();
+	const apiKey = env.RESEND_API_KEY;
+	const fromEmail = env.RESEND_FROM_EMAIL || "team@65labs.org";
+
+	if (!apiKey) {
+		return { ok: false, error: "RESEND_API_KEY missing" };
+	}
+
+	try {
+		const response = await fetch("https://api.resend.com/emails", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				from: fromEmail,
+				to: [toEmail],
+				subject: rendered.subject,
+				text: rendered.text,
+			}),
+		});
+
+		if (!response.ok) {
+			const bodyText = await response.text();
+			return { ok: false, error: bodyText || `Resend HTTP ${response.status}` };
+		}
+
+		return { ok: true };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "send failed";
+		return { ok: false, error: message };
+	}
+}
+
 function utf8ToBase64(text: string): string {
 	const bytes = new TextEncoder().encode(text);
 	let binary = "";

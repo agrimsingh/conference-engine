@@ -1,9 +1,7 @@
-import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug } from "@/lib/db/queries";
 import { loadOutstandingTasksSnapshot } from "@/lib/tasks/outstanding";
 import { OutstandingDashboard } from "./outstanding-dashboard";
 
@@ -14,13 +12,8 @@ type Props = {
 export default async function AdminDashboardPage({ params }: Props) {
 	const { eventSlug } = await params;
 
-	if (!(await isAdminBypass())) {
-		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/dashboard`);
-	}
-
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 
 	const snapshot = await loadOutstandingTasksSnapshot(db, event);
 

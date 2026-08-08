@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import {
 	insertFormField,
 	reorderFormFields,
@@ -9,7 +9,7 @@ import {
 	validateFieldWrite,
 } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug, getFormBySlug, listFormFields } from "@/lib/db/queries";
+import { getFormBySlug, listFormFields } from "@/lib/db/queries";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -17,17 +17,20 @@ type RouteContext = {
 
 async function loadForm(eventSlug: string, formSlug: string) {
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) return { error: NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 }) };
-	const form = await getFormBySlug(db, event.id, formSlug);
-	if (!form) return { error: NextResponse.json({ ok: false, error: "Form not found" }, { status: 404 }) };
-	return { db, event, form };
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
+		return {
+			error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
+		};
+	}
+	const form = await getFormBySlug(db, access.event.id, formSlug);
+	if (!form) {
+		return { error: NextResponse.json({ ok: false, error: "Form not found" }, { status: 404 }) };
+	}
+	return { db, event: access.event, form };
 }
 
 export async function GET(_request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;
@@ -49,9 +52,6 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;
@@ -80,9 +80,6 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;
@@ -138,9 +135,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadForm(eventSlug, formSlug);
 	if ("error" in loaded) return loaded.error;

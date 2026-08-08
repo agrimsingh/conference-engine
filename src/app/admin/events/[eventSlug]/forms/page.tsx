@@ -1,23 +1,19 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { listFormsForEvent } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
-import { getEventBySlug } from "@/lib/db/queries";
+import { CreateFormButton } from "./create-form-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
 };
 
 export default async function AdminFormsPage({ params }: Props) {
-	if (!(await isAdminBypass())) redirect("/admin/bypass");
-
 	const { eventSlug } = await params;
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 
 	const forms = await listFormsForEvent(db, event.id);
 
@@ -30,6 +26,7 @@ export default async function AdminFormsPage({ params }: Props) {
 					title="Forms"
 					description="Edit field definitions for each call for papers. Changes apply to new submissions immediately."
 				/>
+				<CreateFormButton eventSlug={eventSlug} />
 				<ul className="mt-8 divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 					{forms.map((form) => (
 						<li key={form.id}>

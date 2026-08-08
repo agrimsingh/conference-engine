@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import {
 	AIRTABLE_NOT_CONFIGURED_ERROR,
@@ -13,10 +13,6 @@ type RouteContext = {
 };
 
 export async function POST(_request: Request, context: RouteContext) {
-	if (!(await isAdminBypass())) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
-
 	const env = await getCloudflareEnv();
 	const config = resolveAirtableConfig(env);
 	if (!config) {
@@ -28,6 +24,11 @@ export async function POST(_request: Request, context: RouteContext) {
 
 	const { eventSlug } = await context.params;
 	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+	}
+
 	const loaded = await loadSubmissionExportForSlug(db, eventSlug);
 	if (!loaded.ok) {
 		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });

@@ -26,7 +26,7 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 ## Operating Context
 
 - The full lifecycle is: public CFP submission (conditional fields by session format) → category routing → evaluation plan with named reviewers → accept/reject with templated email → auto-spawned speaker tasks → magic-link speaker portal with file uploads → drag-and-drop scheduling with hard room/speaker conflict detection → calendar invites (.ics) → public schedule.
-- Organizers work in an admin area (cookie-gated demo sign-in today); a realtime dashboard shows outstanding speaker tasks via WebSocket with poll fallback.
+- Organizers work in an admin area (magic-link sign-in via `accounts` + `event_memberships`; optional cookie bypass in dev). A realtime dashboard shows outstanding speaker tasks via WebSocket with poll fallback.
 - Daily cron sends task reminder emails; an admin endpoint triggers them on demand.
 - A keyed public API (`/api/v1/...`) exposes submissions and schedule for downstream tooling; Sessionboard parity feature.
 - Reference public-schedule structure: wf2025.ai.engineer/schedule (structure inspiration only, own style).
@@ -39,9 +39,10 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 - English-only; no payments; no CRM/marketing/CMS scope. AI-assisted review explicitly optional/struck.
 - Airtable: one-way CSV download plus optional Airtable REST push; never the system of record.
 - Reviewer assignment: organizers assign named reviewers to specific submissions; personal review links honor the roster (zero assignments keeps the full board for backward compatibility).
+- Multi-event: organizer accounts (`accounts`) hold email identity; `event_memberships` (owner/admin) scope admin access per event. Magic-link login is the production auth path.
 - Public embed: `/embed/[slug]/schedule` is the iframe-friendly schedule (no app chrome).
 - Licensing: MIT open source. No paid SKU and no per-event pricing track.
-- Undecided product facts: product name (see Brand Commitments), multi-event/multi-tenant story.
+- Undecided product facts: product name (see Brand Commitments).
 
 ## Brand Commitments
 

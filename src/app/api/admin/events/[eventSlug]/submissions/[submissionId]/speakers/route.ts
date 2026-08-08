@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
-	getEventBySlug,
 	getSubmissionById,
 	getSubmissionSpeakerById,
 } from "@/lib/db/queries";
@@ -47,15 +46,12 @@ function parseAction(raw: unknown): SpeakerAction | null {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, submissionId } = await context.params;
 
-	if (!(await isAdminBypass())) {
+	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
-
-	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) {
-		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
-	}
+	const event = access.event;
 
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission || submission.event_id !== event.id) {

@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, StatusPill } from "@/components/ui";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
-	getEventBySlug,
 	getPersonById,
 	getSubmissionById,
 	listPendingCoSpeakersForEvent,
@@ -21,13 +19,8 @@ type Props = {
 export default async function AdminTasksPage({ params }: Props) {
 	const { eventSlug } = await params;
 
-	if (!(await isAdminBypass())) {
-		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/tasks`);
-	}
-
 	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) notFound();
+	const { event } = await assertCanManageEvent(db, eventSlug);
 
 	const tasks = await listTasksForEvent(db, event.id);
 	const labels = new Map<string, string>();

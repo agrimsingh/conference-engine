@@ -164,7 +164,7 @@ const PIPELINE: {
 		stage: "Accept",
 		description:
 			"Decisions send templated email with a calendar invite attached — acceptance, rejection, and reminders all from one template registry.",
-		href: "/admin/bypass",
+		href: "/admin",
 		linkLabel: "See it in the organizer demo",
 	},
 	{
@@ -178,7 +178,7 @@ const PIPELINE: {
 		stage: "Schedule",
 		description:
 			"Drag talks onto the grid. Room clashes and double-booked speakers flag themselves before you drop.",
-		href: "/admin/bypass",
+		href: "/admin",
 		linkLabel: "Try it in the organizer demo",
 	},
 	{
@@ -498,7 +498,7 @@ export default function Home() {
 						</a>
 					</div>
 					<Link
-						href="/admin/bypass"
+						href="/admin"
 						className="ml-auto rounded-md bg-emerald-500 px-3.5 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400 sm:ml-0"
 					>
 						Open demo
@@ -519,7 +519,7 @@ export default function Home() {
 					</p>
 					<div className="mt-5 flex flex-wrap items-center gap-6 text-sm font-medium">
 						<Link
-							href="/admin/bypass"
+							href="/admin"
 							className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300"
 						>
 							Open the live demo
@@ -592,7 +592,7 @@ export default function Home() {
 								Daily reminder emails go out on a cron, or on demand.
 							</p>
 							<Link
-								href="/admin/bypass"
+								href="/admin"
 								className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
 							>
 								Watch it live in the demo
@@ -712,8 +712,8 @@ npm run deploy`}
 						>
 							Public schedule
 						</Link>
-						<Link className="hover:text-neutral-100" href="/admin/bypass">
-							Live demo
+						<Link className="hover:text-neutral-100" href="/admin">
+							Organizer admin
 						</Link>
 					</div>
 				</div>

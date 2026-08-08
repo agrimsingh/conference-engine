@@ -42,6 +42,13 @@ export function AdminEventNav({ eventSlug }: Props) {
 			})}
 			<span className="mx-1 hidden h-4 w-px bg-neutral-800 sm:inline" aria-hidden />
 			<Link
+				href="/admin"
+				className="rounded-md px-2.5 py-1 text-xs font-medium text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
+			>
+				All events
+			</Link>
+			<span className="mx-1 hidden h-4 w-px bg-neutral-800 sm:inline" aria-hidden />
+			<Link
 				href={`/e/${eventSlug}/schedule`}
 				className="rounded-md px-2.5 py-1 text-xs font-medium text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
 			>

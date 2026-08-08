@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { authorizeEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
-	getEventBySlug,
 	getSubmissionById,
 	listReviewersForPlan,
 } from "@/lib/db/queries";
@@ -23,7 +22,9 @@ type Body = {
 };
 
 async function resolveContext(eventSlug: string, submissionId: string) {
-	if (!(await isAdminBypass())) {
+	const db = await getDb();
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
 		return {
 			ok: false as const,
 			response: NextResponse.json(
@@ -33,18 +34,7 @@ async function resolveContext(eventSlug: string, submissionId: string) {
 		};
 	}
 
-	const db = await getDb();
-	const event = await getEventBySlug(db, eventSlug);
-	if (!event) {
-		return {
-			ok: false as const,
-			response: NextResponse.json(
-				{ ok: false, error: "Event not found" },
-				{ status: 404 },
-			),
-		};
-	}
-
+	const event = access.event;
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission || submission.event_id !== event.id) {
 		return {

@@ -114,6 +114,36 @@ export async function listSpeakersForSubmission(
 	return result.results;
 }
 
+const SPEAKERS_IN_CHUNK = 100;
+
+export async function listSpeakersForSubmissions(
+	db: D1Database,
+	submissionIds: string[],
+): Promise<Map<string, SubmissionSpeakerRow[]>> {
+	const bySubmission = new Map<string, SubmissionSpeakerRow[]>();
+	if (submissionIds.length === 0) return bySubmission;
+
+	const uniqueIds = [...new Set(submissionIds)];
+	for (let i = 0; i < uniqueIds.length; i += SPEAKERS_IN_CHUNK) {
+		const chunk = uniqueIds.slice(i, i + SPEAKERS_IN_CHUNK);
+		const placeholders = chunk.map(() => "?").join(", ");
+		const result = await db
+			.prepare(
+				`SELECT * FROM submission_speakers
+         WHERE submission_id IN (${placeholders})
+         ORDER BY submission_id ASC, position ASC`,
+			)
+			.bind(...chunk)
+			.all<SubmissionSpeakerRow>();
+		for (const row of result.results) {
+			const list = bySubmission.get(row.submission_id) ?? [];
+			list.push(row);
+			bySubmission.set(row.submission_id, list);
+		}
+	}
+	return bySubmission;
+}
+
 export async function getSubmissionSpeakerById(
 	db: D1Database,
 	speakerId: string,

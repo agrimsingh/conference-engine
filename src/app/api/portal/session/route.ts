@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminBypass } from "@/lib/auth/admin";
+import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventById,
@@ -78,8 +78,8 @@ export async function POST(request: Request) {
 		force: true,
 	});
 
-	const admin = await isAdminBypass();
-	if (admin) {
+	const exposeDevUrl = await shouldExposeDevLoginUrl();
+	if (exposeDevUrl) {
 		return NextResponse.json({
 			ok: true,
 			sent: sendResult.ok,
