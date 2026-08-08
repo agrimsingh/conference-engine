@@ -18,3 +18,4 @@ All true with runtime evidence:
 | When | Change | Predicate move |
 |---|---|---|
 | start | Goal armed; repo + Sat baseline next | 1 already true locally |
+| Sat commit | Public repo + CFP baseline pushed | 1 ✅; 8 partial (repo exists) |
