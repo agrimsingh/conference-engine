@@ -13,6 +13,7 @@ import type {
 	ReviewerRow,
 	SpeakerProfileRow,
 	SpeakerTaskRow,
+	SubmissionLabelRow,
 	SubmissionRow,
 	SubmissionSpeakerRow,
 	TaskTemplateRow,
@@ -110,6 +111,50 @@ export async function listSpeakersForSubmission(
 		.bind(submissionId)
 		.all<SubmissionSpeakerRow>();
 	return result.results;
+}
+
+export async function listLabelsForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<SubmissionLabelRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT sl.* FROM submission_labels sl
+       JOIN submissions s ON s.id = sl.submission_id
+       WHERE s.event_id = ?
+       ORDER BY sl.label ASC`,
+		)
+		.bind(eventId)
+		.all<SubmissionLabelRow>();
+	return result.results;
+}
+
+export async function addSubmissionLabel(
+	db: D1Database,
+	submissionId: string,
+	label: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`INSERT OR IGNORE INTO submission_labels (id, submission_id, label, created_at)
+       VALUES (?, ?, ?, ?)`,
+		)
+		.bind(crypto.randomUUID(), submissionId, label, Date.now())
+		.run();
+}
+
+export async function removeSubmissionLabel(
+	db: D1Database,
+	submissionId: string,
+	label: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`DELETE FROM submission_labels
+       WHERE submission_id = ? AND label = ? COLLATE NOCASE`,
+		)
+		.bind(submissionId, label)
+		.run();
 }
 
 export async function getPersonByEmail(

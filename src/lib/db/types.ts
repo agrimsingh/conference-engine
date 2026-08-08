@@ -140,6 +140,13 @@ export type ReviewerRow = {
 	created_at: number;
 };
 
+export type SubmissionLabelRow = {
+	id: string;
+	submission_id: string;
+	label: string;
+	created_at: number;
+};
+
 export type OutboundMessageRow = {
 	id: string;
 	event_id: string;

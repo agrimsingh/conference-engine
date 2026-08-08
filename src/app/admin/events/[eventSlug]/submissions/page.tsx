@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
 	getPersonById,
+	listLabelsForEvent,
 	listSubmissionsForEvent,
 	listTasksForSubmission,
 } from "@/lib/db/queries";
@@ -19,15 +20,16 @@ import {
 } from "@/lib/domain";
 import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
+import { SubmissionLabels } from "./submission-labels";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
-	searchParams: Promise<{ category?: string }>;
+	searchParams: Promise<{ category?: string; label?: string }>;
 };
 
 export default async function AdminSubmissionsPage({ params, searchParams }: Props) {
 	const { eventSlug } = await params;
-	const { category: categoryParam } = await searchParams;
+	const { category: categoryParam, label: labelParam } = await searchParams;
 
 	if (!(await isAdminBypass())) {
 		redirect(`/admin/bypass?next=/admin/events/${eventSlug}/submissions`);
@@ -39,6 +41,17 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
 	const categoryFilter = categoryParam?.trim() || "all";
+	const labelFilter = labelParam?.trim() || "all";
+
+	const labelRows = await listLabelsForEvent(db, event.id);
+	const labelsBySubmission = new Map<string, string[]>();
+	const labelCounts = new Map<string, number>();
+	for (const row of labelRows) {
+		const list = labelsBySubmission.get(row.submission_id) ?? [];
+		list.push(row.label);
+		labelsBySubmission.set(row.submission_id, list);
+		labelCounts.set(row.label, (labelCounts.get(row.label) ?? 0) + 1);
+	}
 
 	const categoryCounts = new Map<string, number>();
 	for (const row of submissions) {
@@ -56,12 +69,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		UNCATEGORIZED_CATEGORY,
 	];
 
-	const filtered =
-		categoryFilter === "all"
-			? submissions
-			: submissions.filter(
-					(row) => displayCategory(row.category) === categoryFilter,
-				);
+	const filtered = submissions.filter(
+		(row) =>
+			(categoryFilter === "all" ||
+				displayCategory(row.category) === categoryFilter) &&
+			(labelFilter === "all" ||
+				(labelsBySubmission.get(row.id) ?? []).includes(labelFilter)),
+	);
 
 	const tasksBySubmission = new Map<
 		string,
@@ -84,6 +98,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	}
 
 	const baseHref = `/admin/events/${event.slug}/submissions`;
+	const filterHref = (category: string, label: string) => {
+		const params = new URLSearchParams();
+		if (category !== "all") params.set("category", category);
+		if (label !== "all") params.set("label", label);
+		const query = params.toString();
+		return query ? `${baseHref}?${query}` : baseHref;
+	};
 
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -109,7 +130,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					<div className="flex flex-wrap gap-1.5 pt-2">
 						<CategoryChip
 							active={categoryFilter === "all"}
-							href={baseHref}
+							href={filterHref("all", labelFilter)}
 							label={`All (${submissions.length})`}
 						/>
 						{chipLabels.map((label) => {
@@ -118,12 +139,32 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 								<CategoryChip
 									key={label}
 									active={categoryFilter === label}
-									href={`${baseHref}?category=${encodeURIComponent(label)}`}
+									href={filterHref(label, labelFilter)}
 									label={`${label} (${count})`}
 								/>
 							);
 						})}
 					</div>
+					{labelCounts.size > 0 ? (
+						<div className="flex flex-wrap items-center gap-1.5 pt-2">
+							<span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+								Labels
+							</span>
+							<CategoryChip
+								active={labelFilter === "all"}
+								href={filterHref(categoryFilter, "all")}
+								label="All"
+							/>
+							{[...labelCounts.entries()].map(([label, count]) => (
+								<CategoryChip
+									key={label}
+									active={labelFilter === label}
+									href={filterHref(categoryFilter, label)}
+									label={`${label} (${count})`}
+								/>
+							))}
+						</div>
+					) : null}
 					<div className="pt-3">
 						<ActivatePlanButton eventSlug={event.slug} />
 					</div>
@@ -177,6 +218,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 												{row.status.replaceAll("_", " ")}
 											</StatusPill>
 										</div>
+									</div>
+									<div className="mt-2">
+										<SubmissionLabels
+											eventSlug={event.slug}
+											submissionId={row.id}
+											labels={labelsBySubmission.get(row.id) ?? []}
+										/>
 									</div>
 									<div className="mt-3">
 										<DecisionButtons

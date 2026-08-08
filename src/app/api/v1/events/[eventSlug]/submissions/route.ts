@@ -3,6 +3,7 @@ import { requirePublicApiKey } from "@/lib/auth/public-api";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
+	listLabelsForEvent,
 	listSpeakersForSubmission,
 	listSubmissionsForEvent,
 } from "@/lib/db/queries";
@@ -36,6 +37,14 @@ export async function GET(request: Request, context: RouteContext) {
 	}
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
+	const labelRows = await listLabelsForEvent(db, event.id);
+	const labelsBySubmission = new Map<string, string[]>();
+	for (const row of labelRows) {
+		const list = labelsBySubmission.get(row.submission_id) ?? [];
+		list.push(row.label);
+		labelsBySubmission.set(row.submission_id, list);
+	}
+
 	const items = [];
 	for (const submission of submissions) {
 		const answers = parseAnswers(submission.answers_json);
@@ -48,6 +57,7 @@ export async function GET(request: Request, context: RouteContext) {
 			submitterEmail: submission.submitter_email,
 			submittedAt: submission.submitted_at,
 			updatedAt: submission.updated_at,
+			labels: labelsBySubmission.get(submission.id) ?? [],
 			speakers: speakers.map((speaker) => ({
 				name: speaker.name,
 				email: speaker.email,
