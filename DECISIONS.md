@@ -27,6 +27,7 @@ All true with runtime evidence:
 | Tue slice | DnD admin schedule + public schedule + hard conflicts | 5 ✅ locally (pending parent commit) |
 | Wed slice | Outstanding dashboard + public API + deploy prep | 6 ✅ locally (pending parent commit/deploy) |
 | Wed deploy | `4e0e682` + secrets + remote migrate/seed + `npm run deploy` | 6–8 ✅ prod (home/CFP/schedule/dashboard/API; WS upgrade OK) |
+| Gap burn-down | `6e4a548` category routing + reminders cron + docs task + named reviewers; `fb0f74d` UX unification (admin nav, landing, journey polish) | 1,3,4 halves closed; prod re-audit green (category persisted, docs spawned, reminders sent, named score recorded, 5 views 200, no portal token leak) |
 
 ## Tue schedule notes
 
