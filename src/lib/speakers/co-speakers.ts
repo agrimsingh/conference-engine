@@ -1,5 +1,6 @@
 import {
 	getEventById,
+	getPersonById,
 	getSpeakerByConfirmTokenHash,
 	getSubmissionById,
 	getSubmissionSpeakerById,
@@ -324,23 +325,29 @@ export async function addCoSpeaker(
 
 /**
  * Completing any portal task proves the person is real — implicitly confirm
- * their pending co-speaker rows (matched by person or email).
+ * their pending co-speaker rows in the same event (matched by person or
+ * email). Goes through confirmCoSpeaker so post-acceptance confirmations
+ * spawn onboarding tasks too.
  */
 export async function implicitlyConfirmByTaskCompletion(
 	db: D1Database,
 	args: { submissionId: string; personId: string },
 ): Promise<void> {
-	await db
+	const person = await getPersonById(db, args.personId);
+	if (!person) return;
+
+	const pendingRows = await db
 		.prepare(
-			`UPDATE submission_speakers
-       SET status = 'confirmed', confirmed_at = ?, person_id = ?
-       WHERE submission_id = ?
-         AND status = 'pending'
-         AND (
-           person_id = ?
-           OR email = (SELECT email FROM people WHERE id = ?)
-         )`,
+			`SELECT ss.id FROM submission_speakers ss
+       JOIN submissions s ON s.id = ss.submission_id
+       WHERE ss.status = 'pending'
+         AND s.event_id = (SELECT event_id FROM submissions WHERE id = ?)
+         AND (ss.person_id = ? OR ss.email = ?)`,
 		)
-		.bind(Date.now(), args.personId, args.submissionId, args.personId, args.personId)
-		.run();
+		.bind(args.submissionId, args.personId, person.email)
+		.all<{ id: string }>();
+
+	for (const row of pendingRows.results) {
+		await confirmCoSpeaker(db, row.id);
+	}
 }
