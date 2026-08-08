@@ -57,6 +57,13 @@ export default async function AdminTasksPage({ params }: Props) {
 					{completed}/{tasks.length} tasks complete.{" "}
 					<Link
 						className="underline"
+						href={`/admin/events/${event.slug}/dashboard`}
+					>
+						Live outstanding dashboard
+					</Link>
+					{" · "}
+					<Link
+						className="underline"
 						href={`/admin/events/${event.slug}/submissions`}
 					>
 						Back to submissions

@@ -80,3 +80,15 @@ export {
 	type ScheduleConflict,
 	type ScheduleInterval,
 } from "./schedule";
+
+export {
+	groupOutstandingTasks,
+	outstandingGroupKey,
+	parseInvalidateMessage,
+	shouldRefetchOnInvalidate,
+	type EventInvalidateMessage,
+	type LiveSyncTransport,
+	type OutstandingTaskGroup,
+	type OutstandingTaskRow,
+	type OutstandingTasksSnapshot,
+} from "./outstanding-tasks";

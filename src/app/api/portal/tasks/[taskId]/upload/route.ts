@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb, getFilesBucket } from "@/lib/db/cloudflare";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { completeFileTask } from "@/lib/speakers/complete-task";
 import { readPortalSession } from "@/lib/speakers/portal-session";
 
@@ -44,9 +45,15 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
+	const broadcasted = await broadcastEventInvalidate(
+		result.task.event_id,
+		"tasks.upload",
+	);
+
 	return NextResponse.json({
 		ok: true,
 		task: result.task,
 		asset: result.asset,
+		broadcasted,
 	});
 }

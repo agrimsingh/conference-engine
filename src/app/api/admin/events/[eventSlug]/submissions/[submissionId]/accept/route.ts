@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getEventBySlug, getSubmissionById } from "@/lib/db/queries";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { acceptSubmission } from "@/lib/speakers/accept";
 
 type RouteContext = {
@@ -33,5 +34,6 @@ export async function POST(_request: Request, context: RouteContext) {
 		);
 	}
 
-	return NextResponse.json(result);
+	const broadcasted = await broadcastEventInvalidate(event.id, "tasks.accept");
+	return NextResponse.json({ ...result, broadcasted });
 }

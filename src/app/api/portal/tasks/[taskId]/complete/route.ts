@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/cloudflare";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { completeTextTask } from "@/lib/speakers/complete-task";
 import { readPortalSession } from "@/lib/speakers/portal-session";
 
@@ -42,5 +43,10 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
-	return NextResponse.json({ ok: true, task: result.task });
+	const broadcasted = await broadcastEventInvalidate(
+		result.task.event_id,
+		"tasks.complete",
+	);
+
+	return NextResponse.json({ ok: true, task: result.task, broadcasted });
 }

@@ -1,0 +1,78 @@
+import {
+	groupOutstandingTasks,
+	titleFromAnswers,
+	type OutstandingTaskRow,
+	type OutstandingTasksSnapshot,
+} from "@/lib/domain";
+import {
+	getPersonById,
+	getSubmissionById,
+	listTasksForEvent,
+} from "@/lib/db/queries";
+import type { EventRow } from "@/lib/db/types";
+
+function parseAnswers(raw: string): Record<string, unknown> {
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+			return parsed as Record<string, unknown>;
+		}
+	} catch {
+		// ignore
+	}
+	return {};
+}
+
+export async function loadOutstandingTasksSnapshot(
+	db: D1Database,
+	event: EventRow,
+): Promise<OutstandingTasksSnapshot> {
+	const tasks = await listTasksForEvent(db, event.id);
+	const pending = tasks.filter((task) => task.status === "pending");
+
+	const personCache = new Map<
+		string,
+		{ email: string; name: string | null }
+	>();
+	const submissionTitleCache = new Map<string, string>();
+
+	const rows: OutstandingTaskRow[] = [];
+	for (const task of pending) {
+		if (!personCache.has(task.person_id)) {
+			const person = await getPersonById(db, task.person_id);
+			personCache.set(task.person_id, {
+				email: person?.email ?? task.person_id,
+				name: person?.name ?? null,
+			});
+		}
+		if (!submissionTitleCache.has(task.submission_id)) {
+			const submission = await getSubmissionById(db, task.submission_id);
+			const title = submission
+				? titleFromAnswers(parseAnswers(submission.answers_json))
+				: task.submission_id;
+			submissionTitleCache.set(task.submission_id, title);
+		}
+
+		const person = personCache.get(task.person_id)!;
+		rows.push({
+			id: task.id,
+			templateKey: task.template_key,
+			status: "pending" as const,
+			personId: task.person_id,
+			personEmail: person.email,
+			personName: person.name,
+			submissionId: task.submission_id,
+			submissionTitle: submissionTitleCache.get(task.submission_id)!,
+			updatedAt: task.updated_at,
+		});
+	}
+
+	const groups = groupOutstandingTasks(rows);
+	return {
+		eventId: event.id,
+		eventSlug: event.slug,
+		incompleteCount: rows.length,
+		groups,
+		fetchedAt: Date.now(),
+	};
+}

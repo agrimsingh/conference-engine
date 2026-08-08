@@ -72,6 +72,10 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 						Schedule
 					</Link>
 					{" · "}
+					<Link className="underline" href={`/admin/events/${event.slug}/dashboard`}>
+						Outstanding dashboard
+					</Link>
+					{" · "}
 					<Link className="underline" href={`/admin/events/${event.slug}/tasks`}>
 						Speaker tasks
 					</Link>
