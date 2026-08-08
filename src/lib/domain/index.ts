@@ -109,6 +109,7 @@ export {
 	isPublicScheduleStatus,
 	isSchedulableStatus,
 	normalizeSpeakerKey,
+	resolveRoom,
 	titleFromAnswers,
 	type PublicScheduleStatus,
 	type SchedulableStatus,

@@ -32,7 +32,7 @@ type AirtableCreateResponse = {
 };
 
 export type AirtablePushResult =
-	| { ok: true; created: number }
+	| { ok: true; upserted: number }
 	| { ok: false; error: string; status: number };
 
 export async function pushSubmissionsToAirtable(
@@ -40,7 +40,7 @@ export async function pushSubmissionsToAirtable(
 	rows: SubmissionExportRow[],
 ): Promise<AirtablePushResult> {
 	const url = `https://api.airtable.com/v0/${encodeURIComponent(config.baseId)}/${encodeURIComponent(config.tableName)}`;
-	let created = 0;
+	let upserted = 0;
 
 	for (let i = 0; i < rows.length; i += BATCH_SIZE) {
 		const batch = rows.slice(i, i + BATCH_SIZE);
@@ -89,10 +89,10 @@ export async function pushSubmissionsToAirtable(
 				return { ok: false, error: message, status: 502 };
 			}
 
-			created += body.records?.length ?? batch.length;
+			upserted += body.records?.length ?? batch.length;
 			break;
 		}
 	}
 
-	return { ok: true, created };
+	return { ok: true, upserted };
 }

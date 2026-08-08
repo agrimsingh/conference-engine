@@ -89,7 +89,7 @@ One-way export from D1. Airtable is never read back into the database.
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Organizer session or bypass. CSV columns: `id,title,status,category,speakers,submitted_at,labels` |
-| `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Upserts the same rows via Airtable REST (`performUpsert` on field `id`) when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` (use CSV instead). Table needs a unique text field named `id`. |
+| `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Upserts the same rows via Airtable REST (`performUpsert` on field `id`) when `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, and `AIRTABLE_TABLE_NAME` are set; otherwise `503` (use CSV instead). Table needs a unique text field named `id`. Success JSON: `{ ok, upserted, total }`. |
 
 Admin UI: submissions page → **Download CSV** / **Push to Airtable**.
 
@@ -192,6 +192,56 @@ Optional local production-shaped check (no deploy):
 npx opennextjs-cloudflare build
 # or: npm run preview   # build + wrangler preview
 ```
+
+## Self-host on Cloudflare
+
+Fork or clone this repo and run your own Worker + D1/R2/KV/DO bindings.
+
+```bash
+git clone <your-fork-or-this-repo>
+cd conference-engine   # or your folder name
+npm install
+npx wrangler login
+```
+
+### Bindings
+
+Create Cloudflare resources, then point `wrangler.jsonc` at them (see the existing `d1_databases`, `r2_buckets`, `kv_namespaces`, and `durable_objects` blocks):
+
+| Binding | Type | Notes |
+|---|---|---|
+| `DB` | D1 | `database_name` / `database_id`; `migrations_dir: "migrations"` |
+| `FILES` | R2 | uploads (headshots, slides, …) |
+| `SESSIONS` | KV | magic-link + portal session tokens |
+| `EVENT_ROOM` | Durable Object | class `EventRoom` (see `migrations` / `new_sqlite_classes` in wrangler) |
+
+Update `name`, service self-reference, and optional `routes` / custom domain for your account. Non-secret vars (`RESEND_FROM_EMAIL`, `APP_NAME`, optional `AIRTABLE_BASE_ID` / `AIRTABLE_TABLE_NAME`) can stay under `vars`.
+
+### Migrations + secrets
+
+```bash
+npx wrangler d1 migrations apply conference-engine --remote
+# optional demo data:
+# npx wrangler d1 execute conference-engine --remote --file=scripts/seed.sql
+
+npx wrangler secret put AUTH_SECRET
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put PUBLIC_API_KEY
+# optional one-way Airtable export:
+# npx wrangler secret put AIRTABLE_API_KEY
+```
+
+**Never** set `ADMIN_BYPASS_ENABLED` in production — bypass is for local/dev only.
+
+### Deploy + first user
+
+```bash
+npm run deploy
+```
+
+1. Open `/login`, request a magic link (Resend must be configured).
+2. From `/admin`, create an event **or** claim an orphan seeded event (`POST /api/admin/events/[slug]/claim` when it has zero memberships).
+3. Optional custom domain: add a `routes` entry with `"custom_domain": true` in `wrangler.jsonc` (same pattern as `conference-engine.65labs.org`), then redeploy.
 
 ## Domain model (short)
 

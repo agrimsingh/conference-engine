@@ -23,14 +23,14 @@ export function ExportButtons({ eventSlug }: Props) {
 			const data = (await response.json()) as {
 				ok?: boolean;
 				error?: string;
-				created?: number;
+				upserted?: number;
 				total?: number;
 			};
 			if (!response.ok || !data.ok) {
 				setError(data.error ?? "Airtable push failed");
 				return;
 			}
-			setMessage(`Pushed ${data.created ?? 0} of ${data.total ?? 0} rows to Airtable.`);
+			setMessage(`Pushed ${data.upserted ?? 0} of ${data.total ?? 0} rows to Airtable.`);
 		} catch {
 			setError("Network error");
 		} finally {

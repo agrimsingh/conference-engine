@@ -96,6 +96,29 @@ export function isPublicScheduleStatus(value: string): value is PublicScheduleSt
 	return (PUBLIC_SCHEDULE_STATUSES as readonly string[]).includes(value);
 }
 
+/** Match a trimmed room name against configured rooms (empty catalog = free-form ok). */
+export function resolveRoom<T extends { id: string; name: string }>(
+	rooms: readonly T[],
+	name: string,
+): { ok: true; room: T | null } | { ok: false; error: string } {
+	const roomName = name.trim();
+	if (!roomName) {
+		return { ok: false, error: "roomName required" };
+	}
+	if (rooms.length === 0) {
+		return { ok: true, room: null };
+	}
+	const matched = rooms.find((room) => room.name.trim() === roomName);
+	if (!matched) {
+		const known = rooms.map((room) => room.name.trim()).join(", ");
+		return {
+			ok: false,
+			error: `Unknown room "${roomName}". Use one of: ${known}`,
+		};
+	}
+	return { ok: true, room: matched };
+}
+
 export const SCHEDULABLE_STATUSES = ["accepted", "scheduled", "published"] as const;
 export type SchedulableStatus = (typeof SCHEDULABLE_STATUSES)[number];
 

@@ -44,7 +44,7 @@ export async function POST(_request: Request, context: RouteContext) {
 
 	return NextResponse.json({
 		ok: true,
-		created: result.created,
+		upserted: result.upserted,
 		total: loaded.rows.length,
 	});
 }

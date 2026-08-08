@@ -37,6 +37,23 @@ describe("filterBoardSubmissions", () => {
 		).toEqual([]);
 	});
 
+	it("defaults emptyMeansAll to fail-closed for reviewers", () => {
+		expect(
+			filterBoardSubmissions(submissions, {
+				mode: "reviewer",
+				assignments: [],
+				emptyMeansAll: false,
+			}),
+		).toEqual([]);
+		expect(
+			filterBoardSubmissions(submissions, {
+				mode: "reviewer",
+				assignments: [],
+				emptyMeansAll: undefined,
+			}),
+		).toEqual([]);
+	});
+
 	// Flag still supported for explicit callers; board must not pass it.
 	it("returns all for reviewer with zero assignments when emptyMeansAll", () => {
 		expect(
@@ -58,5 +75,14 @@ describe("filterBoardSubmissions", () => {
 			{ id: "sub-b", title: "B" },
 			{ id: "sub-c", title: "C" },
 		]);
+	});
+
+	it("ignores assignments for ids not in the submission list", () => {
+		expect(
+			filterBoardSubmissions(submissions, {
+				mode: "reviewer",
+				assignments: [assignment("missing"), assignment("sub-a")],
+			}),
+		).toEqual([{ id: "sub-a", title: "A" }]);
 	});
 });
