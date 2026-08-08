@@ -4,14 +4,15 @@ import {
 	getSpeakerByConfirmTokenHash,
 	getSubmissionById,
 	getSubmissionSpeakerById,
-	hasSuccessfulOutboundDelivery,
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
 import type { SubmissionSpeakerRow } from "@/lib/db/types";
 import { isPostAcceptance, MAX_CO_SPEAKERS } from "@/lib/domain";
+import { renderMessageTemplate } from "@/lib/domain/message-templates";
 import { titleFromAnswersJson } from "@/lib/email/notify";
-import { sendTemplatedEmail, type OutboundSendResult } from "@/lib/email/resend";
-import { shouldSendPendingCoSpeakerInvite } from "@/lib/cfp/delivery";
+import { deterministicDeliveryKey, sendTemplatedEmail, type EmailDeliveryRuntime, type OutboundSendResult } from "@/lib/email/resend";
+import { getAuthSecret } from "@/lib/db/cloudflare";
+import { hmacHash } from "@/lib/security/crypto";
 import {
 	ensureTaskTemplates,
 	materializeAcceptedSpeaker,
@@ -21,8 +22,9 @@ import {
  * Co-speaker invites and confirmation.
  *
  * The raw token only ever lives in the invite email; we store its SHA-256
- * hash. Losing a token never drops the co-speaker row — the row stays
- * pending and admin can resend a fresh link.
+ * hash. The token is deterministically derived from AUTH_SECRET plus a
+ * non-secret claim generation, so recovery uses the same live link unless a
+ * provider has explicitly rejected the prior delivery.
  */
 
 export type CoSpeakerActionResult =
@@ -47,10 +49,6 @@ function bufferToBase64Url(bytes: Uint8Array): string {
 	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function mintToken(): string {
-	return bufferToBase64Url(crypto.getRandomValues(new Uint8Array(24)));
-}
-
 export async function hashConfirmToken(token: string): Promise<string> {
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
@@ -70,12 +68,13 @@ export function coSpeakerLinkUrls(
 }
 
 /**
- * Mint a fresh token and email the confirm/decline links. Resending to a
- * declined co-speaker re-opens the invitation (back to pending).
+ * Claim a stable token and email the confirm/decline links. Repairs reuse the
+ * same generation; only a confirmed provider failure or explicit admin resend
+ * rotates it.
  */
 export async function inviteCoSpeaker(
 	db: D1Database,
-	args: { speakerId: string; origin: string },
+	args: { speakerId: string; origin: string; runtime?: EmailDeliveryRuntime; mode?: "initial" | "repair" | "resend" },
 ): Promise<InviteResult> {
 	const speaker = await getSubmissionSpeakerById(db, args.speakerId);
 	if (!speaker) {
@@ -87,6 +86,10 @@ export async function inviteCoSpeaker(
 	if (speaker.status === "confirmed") {
 		return { ok: false, error: "Speaker already confirmed", status: 409 };
 	}
+	if (args.mode !== "resend" && speaker.confirm_token_hash) {
+		const claimed = await db.prepare("SELECT 1 FROM co_speaker_invitation_claims WHERE speaker_id = ?").bind(speaker.id).first<{ 1: number }>();
+		if (!claimed) return { ok: false, error: "Existing invitation is already active", status: 409 };
+	}
 
 	const submission = await getSubmissionById(db, speaker.submission_id);
 	if (!submission) {
@@ -97,17 +100,36 @@ export async function inviteCoSpeaker(
 		return { ok: false, error: "Event not found", status: 404 };
 	}
 
-	const token = mintToken();
+	const authSecret = args.runtime?.authSecret ?? await getAuthSecret();
+	if (!authSecret) {
+		return { ok: false, error: "AUTH_SECRET missing", status: 500 };
+	}
+	const claim = await claimCoSpeakerInvitation(db, {
+		speaker,
+		eventId: event.id,
+		submissionId: submission.id,
+		eventName: event.name,
+		title: titleFromAnswersJson(submission.answers_json),
+		origin: args.origin,
+		secret: authSecret,
+		mode: args.mode ?? "repair",
+	});
+	if (!claim) return { ok: false, error: "Invitation was updated concurrently; retry", status: 409 };
+	const { token, rendered, deliveryKey } = claim;
 	const tokenHash = await hashConfirmToken(token);
 	const now = Date.now();
 
 	await db
 		.prepare(
 			`UPDATE submission_speakers
-       SET status = 'pending', confirm_token_hash = ?, invited_at = ?
-       WHERE id = ?`,
+	       SET status = 'pending', confirm_token_hash = ?, invited_at = COALESCE(invited_at, ?)
+	       WHERE id = ?
+	         AND EXISTS (
+	           SELECT 1 FROM co_speaker_invitation_claims
+	           WHERE speaker_id = submission_speakers.id AND generation = ? AND delivery_key = ?
+	         )`,
 		)
-		.bind(tokenHash, now, speaker.id)
+		.bind(tokenHash, now, speaker.id, claim.generation, deliveryKey)
 		.run();
 
 	const { confirmUrl, declineUrl } = coSpeakerLinkUrls(args.origin, token);
@@ -117,13 +139,10 @@ export async function inviteCoSpeaker(
 		submissionId: submission.id,
 		templateKey: "co_speaker_invite",
 		toEmail: speaker.email,
-		context: {
-			eventName: event.name,
-			submitterName: speaker.name || "there",
-			title: titleFromAnswersJson(submission.answers_json),
-			confirmUrl,
-			declineUrl,
-		},
+		context: claim.context,
+		override: rendered,
+		deliveryKey,
+		runtime: args.runtime,
 		force: true,
 	});
 
@@ -139,15 +158,117 @@ export async function sendPendingInvitesForSubmission(
 	const results: InviteResult[] = [];
 	for (const speaker of speakers) {
 		if (speaker.status !== "pending") continue;
-		const delivered = await hasSuccessfulOutboundDelivery(db, {
-			submissionId: args.submissionId,
-			toEmail: speaker.email,
-			templateKey: "co_speaker_invite",
-		});
-		if (!shouldSendPendingCoSpeakerInvite(delivered)) continue;
-		results.push(await inviteCoSpeaker(db, { speakerId: speaker.id, origin: args.origin }));
+		// 0014 has no raw token for historical rows. Leave their already-issued
+		// legacy link intact; an organizer can deliberately resend to rotate it.
+		if (speaker.confirm_token_hash) {
+			const claim = await db.prepare("SELECT 1 FROM co_speaker_invitation_claims WHERE speaker_id = ?").bind(speaker.id).first<{ 1: number }>();
+			if (!claim) continue;
+		}
+		results.push(await inviteCoSpeaker(db, { speakerId: speaker.id, origin: args.origin, mode: "repair" }));
 	}
 	return results;
+}
+
+type CoSpeakerClaim = {
+	generation: number;
+	deliveryKey: string;
+	token: string;
+	rendered: ReturnType<typeof renderMessageTemplate>;
+	context: { eventName: string; submitterName: string; title: string; confirmUrl: string; declineUrl: string };
+};
+
+async function claimCoSpeakerInvitation(
+	db: D1Database,
+	args: {
+		speaker: SubmissionSpeakerRow;
+		eventId: string;
+		submissionId: string;
+		eventName: string;
+		title: string;
+		origin: string;
+		secret: string;
+		mode: "initial" | "repair" | "resend";
+	},
+): Promise<CoSpeakerClaim | null> {
+	for (let attempt = 0; attempt < 4; attempt += 1) {
+		const existing = await db.prepare(
+			`SELECT c.generation, c.delivery_key, d.status AS delivery_status, d.failure_kind
+			 FROM co_speaker_invitation_claims c
+			 LEFT JOIN email_deliveries d ON d.delivery_key = c.delivery_key
+			 WHERE c.speaker_id = ?`,
+		).bind(args.speaker.id).first<{ generation: number; delivery_key: string; delivery_status: string | null; failure_kind: string | null }>();
+		if (existing) {
+			if ((existing.delivery_status === "failed" && existing.failure_kind === "confirmed") || (args.mode === "resend" && existing.delivery_status === "sent")) {
+				const next = await buildCoSpeakerClaim(args, existing.generation + 1);
+				const tokenHash = await hashConfirmToken(next.token);
+				const changed = await db.batch([
+					db.prepare(
+					`UPDATE co_speaker_invitation_claims
+					 SET generation = ?, delivery_key = ?, updated_at = ?
+					 WHERE speaker_id = ? AND generation = ? AND delivery_key = ?
+					   AND EXISTS (
+					     SELECT 1 FROM email_deliveries
+					     WHERE delivery_key = co_speaker_invitation_claims.delivery_key
+					       AND ((status = 'failed' AND failure_kind = 'confirmed') OR (? = 1 AND status = 'sent'))
+					   )`,
+					).bind(next.generation, next.deliveryKey, Date.now(), args.speaker.id, existing.generation, existing.delivery_key, args.mode === "resend" ? 1 : 0),
+					db.prepare(
+						`UPDATE submission_speakers
+						 SET status = 'pending', confirm_token_hash = ?, invited_at = ?
+						 WHERE id = ?
+						   AND EXISTS (
+						     SELECT 1 FROM co_speaker_invitation_claims
+						     WHERE speaker_id = submission_speakers.id AND generation = ? AND delivery_key = ?
+						   )`,
+					).bind(tokenHash, Date.now(), args.speaker.id, next.generation, next.deliveryKey),
+				]);
+				if ((changed[0]?.meta.changes ?? 0) === 1) return next;
+				continue;
+			}
+			return buildCoSpeakerClaim(args, existing.generation, existing.delivery_key);
+		}
+
+		const first = await buildCoSpeakerClaim(args, 1);
+		const inserted = await db.prepare(
+			`INSERT INTO co_speaker_invitation_claims (speaker_id, generation, delivery_key, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?) ON CONFLICT(speaker_id) DO NOTHING`,
+		).bind(args.speaker.id, first.generation, first.deliveryKey, Date.now(), Date.now()).run();
+		if ((inserted.meta.changes ?? 0) === 1) return first;
+	}
+	return null;
+}
+
+async function buildCoSpeakerClaim(
+	args: {
+		speaker: SubmissionSpeakerRow; eventId: string; submissionId: string; eventName: string; title: string; origin: string; secret: string; mode: "initial" | "repair" | "resend";
+	},
+	generation: number,
+	existingDeliveryKey?: string,
+): Promise<CoSpeakerClaim> {
+	const token = `co1.${generation}.${await hmacHash(args.secret, `co-speaker:${args.speaker.id}:${generation}`)}`;
+	const { confirmUrl, declineUrl } = coSpeakerLinkUrls(args.origin, token);
+	const context = {
+		eventName: args.eventName,
+		submitterName: args.speaker.name || "there",
+		title: args.title,
+		confirmUrl,
+		declineUrl,
+	};
+	const rendered = renderMessageTemplate("co_speaker_invite", context);
+	return {
+		generation,
+		token,
+		context,
+		rendered,
+		deliveryKey: existingDeliveryKey ?? await deterministicDeliveryKey(args.secret, {
+			eventId: args.eventId,
+			submissionId: args.submissionId,
+			templateKey: "co_speaker_invite",
+			toEmail: args.speaker.email,
+			subject: rendered.subject,
+			text: rendered.text,
+		}),
+	};
 }
 
 export async function getSpeakerByConfirmToken(

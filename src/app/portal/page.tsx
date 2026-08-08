@@ -95,7 +95,7 @@ export default async function PortalPage({ searchParams }: Props) {
 												{submissionTasks.length === 0 ? (
 													<p className="text-neutral-500">Materials are being prepared by the organizers.</p>
 												) : (
-													<TaskChecklist token="" compact tasks={submissionTasks.map((task) => {
+											<TaskChecklist compact tasks={submissionTasks.map((task) => {
 														const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
 														return { id: task.id, key: task.template_key, label: meta?.label ?? task.template_key, kind: meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id };
 														})} />

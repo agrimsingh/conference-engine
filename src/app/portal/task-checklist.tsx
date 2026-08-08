@@ -21,12 +21,11 @@ type TaskView = {
 };
 
 type Props = {
-	token: string;
 	tasks: TaskView[];
 	compact?: boolean;
 };
 
-export function TaskChecklist({ token, tasks, compact = false }: Props) {
+export function TaskChecklist({ tasks, compact = false }: Props) {
 	const router = useRouter();
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -40,7 +39,7 @@ export function TaskChecklist({ token, tasks, compact = false }: Props) {
 			const response = await fetch(`/api/portal/tasks/${taskId}/complete`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ token, text }),
+				body: JSON.stringify({ text }),
 			});
 			const data = (await response.json()) as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) {
@@ -62,7 +61,6 @@ export function TaskChecklist({ token, tasks, compact = false }: Props) {
 		setMessage(null);
 		try {
 			const form = new FormData();
-			form.set("token", token);
 			form.set("file", file);
 			const response = await fetch(`/api/portal/tasks/${taskId}/upload`, {
 				method: "POST",
@@ -115,6 +113,7 @@ export function TaskChecklist({ token, tasks, compact = false }: Props) {
 										name="text"
 										required
 										minLength={20}
+										maxLength={10000}
 										rows={4}
 										className={`w-full ${INPUT_CLASSES}`}
 											placeholder={`Write your ${task.label.toLowerCase()} (20+ characters)`}

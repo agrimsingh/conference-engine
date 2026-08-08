@@ -105,6 +105,7 @@ export async function POST(request: Request, context: RouteContext) {
 			const invite = await inviteCoSpeaker(db, {
 				speakerId: added.speaker.id,
 				origin,
+				mode: "initial",
 			});
 			return NextResponse.json({
 				ok: true,
@@ -144,6 +145,7 @@ export async function POST(request: Request, context: RouteContext) {
 			const invite = await inviteCoSpeaker(db, {
 				speakerId: parsed.speakerId,
 				origin,
+				mode: "resend",
 			});
 			if (!invite.ok) {
 				return NextResponse.json(

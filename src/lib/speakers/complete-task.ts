@@ -15,6 +15,8 @@ export type CompleteFileResult =
 	| { ok: true; task: SpeakerTaskRow; asset: AssetRow }
 	| { ok: false; error: string; status: number };
 
+export const MAX_SPEAKER_BIO_LENGTH = 10_000;
+
 export async function completeTextTask(
 	db: D1Database,
 	args: { taskId: string; personId: string; text: string },
@@ -34,6 +36,9 @@ export async function completeTextTask(
 	}
 
 	const text = args.text.trim();
+	if (text.length > MAX_SPEAKER_BIO_LENGTH) {
+		return { ok: false, error: "Bio is too long (max 10000 characters)", status: 400 };
+	}
 	if (text.length < 20) {
 		return { ok: false, error: "Bio must be at least 20 characters", status: 400 };
 	}
@@ -136,16 +141,20 @@ export async function completeFileTask(
 		db.prepare(
 			`INSERT INTO assets (
         id, event_id, r2_key, content_type, filename, uploaded_by_person_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			) SELECT ?, ?, ?, ?, ?, ?, ?
+			  WHERE EXISTS (
+			    SELECT 1 FROM speaker_tasks
+			    WHERE id = ? AND asset_id IS ?
+			  )`,
 		)
-		.bind(assetId, task.event_id, r2Key, contentType, safeName, task.person_id, now)
+			.bind(assetId, task.event_id, r2Key, contentType, safeName, task.person_id, now, task.id, supersededAssetId)
 		,
 		db.prepare(
 			`UPDATE speaker_tasks
        SET status = 'completed', asset_id = ?, completed_at = ?, updated_at = ?
-       WHERE id = ?`,
+			WHERE id = ? AND asset_id IS ?`,
 		)
-		.bind(assetId, now, now, task.id)
+			.bind(assetId, now, now, task.id, supersededAssetId)
 		,
 	];
 
@@ -153,13 +162,20 @@ export async function completeFileTask(
 		statements.push(db.prepare(
 				`UPDATE speaker_profiles
          SET headshot_asset_id = ?, updated_at = ?
-         WHERE event_id = ? AND person_id = ?`,
+			 WHERE event_id = ? AND person_id = ?
+			   AND EXISTS (SELECT 1 FROM speaker_tasks WHERE id = ? AND asset_id = ?)`,
 			)
-			.bind(assetId, now, task.event_id, task.person_id)
+			.bind(assetId, now, task.event_id, task.person_id, task.id, assetId)
 		);
 	}
 	try {
-		await db.batch(statements);
+		const results = await db.batch(statements);
+		if ((results[1]?.meta.changes ?? 0) === 0) {
+			// Someone completed/replaced the task after our initial read. This
+			// attempt never inserted its asset row, so remove only its R2 object.
+			try { await files.delete(r2Key); } catch { /* best-effort compensation */ }
+			return { ok: false, error: "Task was updated by another upload", status: 409 };
+		}
 	} catch (error) {
 		// R2 has no cross-service transaction with D1. Remove only the object we
 		// just wrote, then preserve the database error for the caller.

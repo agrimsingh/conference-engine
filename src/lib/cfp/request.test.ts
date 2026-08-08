@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_CFP_REQUEST_BYTES } from "./submit";
-import { readBoundedCfpJson } from "./request";
+import { isJsonObject, readBoundedCfpJson } from "./request";
 
 describe("bounded CFP JSON", () => {
 	it("rejects oversized bodies before parsing, including unknown top-level data", async () => {
@@ -18,5 +18,12 @@ describe("bounded CFP JSON", () => {
 			body: "{}",
 		});
 		await expect(readBoundedCfpJson(request)).resolves.toEqual({ ok: false, status: 413, error: "Request payload is too large" });
+	});
+
+	it("treats scalar, null, and array JSON as non-object CFP payloads", () => {
+		expect(isJsonObject(null)).toBe(false);
+		expect(isJsonObject("not an object")).toBe(false);
+		expect(isJsonObject(["answer"])).toBe(false);
+		expect(isJsonObject({ answers: {} })).toBe(true);
 	});
 });

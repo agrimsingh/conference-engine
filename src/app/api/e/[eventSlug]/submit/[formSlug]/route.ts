@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
 import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
-import { readBoundedCfpJson } from "@/lib/cfp/request";
+import { isJsonObject, readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -24,6 +24,9 @@ export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, formSlug } = await context.params;
 	const parsed = await readBoundedCfpJson(request);
 	if (!parsed.ok) return NextResponse.json({ ok: false, errors: [parsed.error] }, { status: parsed.status });
+	if (!isJsonObject(parsed.value)) {
+		return NextResponse.json({ ok: false, errors: ["Expected JSON object"] }, { status: 400 });
+	}
 	const body = parsed.value as Body;
 
 	const identity = validateSubmitterIdentity({

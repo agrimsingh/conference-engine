@@ -122,6 +122,11 @@ export async function acceptEventInvitation(
            WHERE token_hash = ? AND kind = 'event_invite'
              AND state = 'active' AND expires_at >= ?
          )
+         AND EXISTS (
+           SELECT 1 FROM event_memberships
+           WHERE event_id = event_invitations.event_id
+             AND account_id = event_invitations.invited_by_account_id
+         )
          AND (
            role != 'owner' OR EXISTS (
              SELECT 1 FROM event_ownership
@@ -150,26 +155,37 @@ export async function acceptEventInvitation(
 		db.prepare(
 			`UPDATE auth_challenges
        SET state = 'consumed', consumed_at = ?
-       WHERE token_hash = ? AND kind = 'event_invite' AND state = 'active' AND expires_at >= ?`,
-		).bind(now, tokenHash, now),
+			 WHERE token_hash = ? AND kind = 'event_invite' AND state = 'active' AND expires_at >= ?
+			   AND EXISTS (
+			     SELECT 1 FROM event_invitations
+			     WHERE id = ? AND status = 'accepted' AND accepted_at = ?
+			   )`,
+		).bind(now, tokenHash, now, invitation.id, now),
 	]);
 	if ((result[0]?.meta.changes ?? 0) === 0) {
-		// An older owner invite can no longer take ownership after the inviter
-		// has transferred it away. Record that terminal state for support/UI.
+		// A removed inviter (and, for owner invitations, a former owner) cannot
+		// grant access later. Record that terminal state for support/UI.
 		await db.batch([
 			db.prepare(
 				`UPDATE event_invitations
        SET status = 'failed', updated_at = ?
-       WHERE id = ? AND status = 'delivered' AND role = 'owner'
-         AND NOT EXISTS (
-           SELECT 1 FROM event_ownership
-           WHERE event_id = event_invitations.event_id
-             AND account_id = event_invitations.invited_by_account_id
-				)`,
+				WHERE id = ? AND status = 'delivered'
+				  AND (
+				    NOT EXISTS (
+				      SELECT 1 FROM event_memberships
+				      WHERE event_id = event_invitations.event_id
+				        AND account_id = event_invitations.invited_by_account_id
+				    )
+				    OR (role = 'owner' AND NOT EXISTS (
+				      SELECT 1 FROM event_ownership
+				      WHERE event_id = event_invitations.event_id
+				        AND account_id = event_invitations.invited_by_account_id
+				    ))
+				  )`,
 			).bind(Date.now(), invitation.id),
 			db.prepare(
 				`UPDATE auth_challenges
-         SET state = 'failed', failure_reason = 'inviter no longer owns this event'
+         SET state = 'failed', failure_reason = 'inviter no longer has event access'
          WHERE token_hash = ? AND state = 'active'
            AND EXISTS (SELECT 1 FROM event_invitations WHERE id = ? AND status = 'failed')`,
 			).bind(tokenHash, invitation.id),

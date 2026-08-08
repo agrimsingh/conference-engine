@@ -2,28 +2,34 @@ import { NextResponse } from "next/server";
 import { getAuthSecret, getDb, getFilesBucket } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { completeFileTask } from "@/lib/speakers/complete-task";
-import { readPortalSession, readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
+import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
 type RouteContext = {
 	params: Promise<{ taskId: string }>;
 };
 
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024 + 512 * 1024;
+
 export async function POST(request: Request, context: RouteContext) {
 	const { taskId } = await context.params;
+	const session = await readPortalSessionFromCookie();
+	if (!session) {
+		return NextResponse.json({ ok: false, error: "Invalid or expired token" }, { status: 401 });
+	}
+	const declaredLength = Number(request.headers.get("content-length"));
+	if (Number.isFinite(declaredLength) && declaredLength > MAX_UPLOAD_BYTES) {
+		return NextResponse.json({ ok: false, error: "Upload too large (max 25MB)" }, { status: 413 });
+	}
 
 	let form: FormData;
 	try {
-		form = await request.formData();
-	} catch {
+		form = await boundedMultipartRequest(request, MAX_UPLOAD_BYTES).formData();
+	} catch (error) {
+		if (error instanceof Error && error.message === "Upload too large") {
+			return NextResponse.json({ ok: false, error: "Upload too large (max 25MB)" }, { status: 413 });
+		}
 		return NextResponse.json({ ok: false, error: "Expected multipart form" }, { status: 400 });
-	}
-
-	const tokenValue = form.get("token");
-	const token = typeof tokenValue === "string" ? tokenValue : "";
-	const session = await readPortalSessionFromCookie() ?? await readPortalSession(token);
-	if (!session) {
-		return NextResponse.json({ ok: false, error: "Invalid or expired token" }, { status: 401 });
 	}
 
 	const fileValue = form.get("file");
@@ -66,4 +72,33 @@ export async function POST(request: Request, context: RouteContext) {
 		asset: result.asset,
 		broadcasted,
 	});
+}
+
+function boundedMultipartRequest(request: Request, maxBytes: number): Request {
+	if (!request.body) throw new Error("Missing multipart body");
+	const reader = request.body.getReader();
+	let seen = 0;
+	const body = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			const { done, value } = await reader.read();
+			if (done) {
+				controller.close();
+				reader.releaseLock();
+				return;
+			}
+			seen += value.byteLength;
+			if (seen > maxBytes) {
+				await reader.cancel();
+				reader.releaseLock();
+				controller.error(new Error("Upload too large"));
+				return;
+			}
+			controller.enqueue(value);
+		},
+		async cancel() {
+			await reader.cancel();
+			reader.releaseLock();
+		},
+	});
+	return new Request(request, { body });
 }

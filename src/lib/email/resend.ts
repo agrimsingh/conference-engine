@@ -11,7 +11,7 @@ import {
 
 export type OutboundSendResult =
 	| { ok: true; status: "sent" | "skipped"; providerId: string | null; messageId: string }
-	| { ok: false; status: "failed"; error: string; messageId: string };
+	| { ok: false; status: "failed"; error: string; messageId: string; failureKind: "confirmed" | "ambiguous" };
 
 export type Attachment = {
 	filename: string;
@@ -130,7 +130,7 @@ export async function reserveEmailDelivery(
 
 	const claimed = await db.prepare(
 		`UPDATE email_deliveries
-       SET status = 'sending', attempt_count = attempt_count + 1, error = NULL,
+       SET status = 'sending', attempt_count = attempt_count + 1, error = NULL, failure_kind = NULL,
            lease_expires_at = ?, updated_at = ?
        WHERE delivery_key = ?
          AND (status IN ('reserved', 'failed') OR (status = 'sending' AND COALESCE(lease_expires_at, 0) <= ?))
@@ -146,9 +146,22 @@ export async function markEmailDeliveryFailed(
 ): Promise<void> {
 	const now = args.now ?? Date.now();
 	await db.prepare(
-		`UPDATE email_deliveries
-     SET status = 'failed', error = ?, lease_expires_at = NULL, updated_at = ?
+	`UPDATE email_deliveries
+     SET status = 'failed', error = ?, failure_kind = 'confirmed', lease_expires_at = NULL, updated_at = ?
      WHERE delivery_key = ? AND status = 'sending'`,
+	).bind(args.error.slice(0, 1_000), now, args.deliveryKey).run();
+}
+
+/** Keep a provider-ambiguous attempt claimed so a retry reuses its key. */
+export async function markEmailDeliveryAmbiguous(
+	db: D1Database,
+	args: { deliveryKey: string; error: string; now?: number },
+): Promise<void> {
+	const now = args.now ?? Date.now();
+	await db.prepare(
+		`UPDATE email_deliveries
+     SET error = ?, updated_at = ?
+     WHERE delivery_key = ? AND status IN ('sending', 'provider_accepted')`,
 	).bind(args.error.slice(0, 1_000), now, args.deliveryKey).run();
 }
 
@@ -191,6 +204,8 @@ export async function sendTemplatedEmail(
 		deliveryScope?: string;
 		/** Supply Worker bindings directly for cron-safe callers. */
 		runtime?: EmailDeliveryRuntime;
+		/** A caller that has atomically claimed a domain-specific send can supply its durable key. */
+		deliveryKey?: string;
 		/** Kept for callers; payload-specific delivery keys still dedupe retries. */
 		force?: boolean;
 	},
@@ -208,9 +223,9 @@ export async function sendTemplatedEmail(
 	}
 	const runtime = args.runtime ?? await loadDeliveryRuntime();
 	if (!runtime.authSecret) {
-		return { ok: false, status: "failed", error: "AUTH_SECRET missing", messageId: "unreserved" };
+		return { ok: false, status: "failed", error: "AUTH_SECRET missing", messageId: "unreserved", failureKind: "confirmed" };
 	}
-	const deliveryKey = await deterministicDeliveryKey(runtime.authSecret, {
+	const deliveryKey = args.deliveryKey ?? await deterministicDeliveryKey(runtime.authSecret, {
 		eventId: args.eventId,
 		submissionId: args.submissionId,
 		templateKey: args.templateKey,
@@ -238,7 +253,7 @@ export async function sendTemplatedEmail(
 	if (!apiKey) {
 		const error = "RESEND_API_KEY missing";
 		await markEmailDeliveryFailed(db, { deliveryKey, error });
-		return { ok: false, status: "failed", error, messageId: deliveryKey };
+		return { ok: false, status: "failed", error, messageId: deliveryKey, failureKind: "confirmed" };
 	}
 
 	const payload: Record<string, unknown> = {
@@ -255,8 +270,9 @@ export async function sendTemplatedEmail(
 		}));
 	}
 
+	let response: Response;
 	try {
-		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
+		response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
@@ -265,19 +281,25 @@ export async function sendTemplatedEmail(
 			},
 			body: JSON.stringify(payload),
 		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "send failed";
+		await markEmailDeliveryAmbiguous(db, { deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "ambiguous" };
+	}
+	try {
 		const bodyText = await response.text();
 		const parsed = parseProviderResponse(bodyText, response.status);
 		if (!response.ok) {
 			await markEmailDeliveryFailed(db, { deliveryKey, error: parsed.error });
-			return { ok: false, status: "failed", error: parsed.error, messageId: deliveryKey };
+			return { ok: false, status: "failed", error: parsed.error, messageId: deliveryKey, failureKind: "confirmed" };
 		}
 		await markEmailDeliveryAccepted(db, { deliveryKey, providerId: parsed.providerId });
 		await finalizeEmailDelivery(db, { deliveryKey });
 		return { ok: true, status: "sent", providerId: parsed.providerId, messageId: deliveryKey };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : "send failed";
-		await markEmailDeliveryFailed(db, { deliveryKey, error: message });
-		return { ok: false, status: "failed", error: message, messageId: deliveryKey };
+		const message = error instanceof Error ? error.message : "delivery finalization failed";
+		await markEmailDeliveryAmbiguous(db, { deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "ambiguous" };
 	}
 }
 

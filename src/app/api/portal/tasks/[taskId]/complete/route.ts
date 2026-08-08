@@ -1,33 +1,32 @@
 import { NextResponse } from "next/server";
+import { readBoundedJson } from "@/lib/cfp/request";
 import { getDb } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { completeTextTask } from "@/lib/speakers/complete-task";
-import { readPortalSession, readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
+import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 
 type RouteContext = {
 	params: Promise<{ taskId: string }>;
 };
 
 type Body = {
-	token?: unknown;
 	text?: unknown;
 };
 
+const MAX_PORTAL_TEXT_REQUEST_BYTES = 64 * 1024;
+
 export async function POST(request: Request, context: RouteContext) {
 	const { taskId } = await context.params;
-	let body: Body;
-	try {
-		body = (await request.json()) as Body;
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
-
-	const token = typeof body.token === "string" ? body.token : "";
-	const text = typeof body.text === "string" ? body.text : "";
-	const session = await readPortalSessionFromCookie() ?? await readPortalSession(token);
+	const session = await readPortalSessionFromCookie();
 	if (!session) {
 		return NextResponse.json({ ok: false, error: "Invalid or expired token" }, { status: 401 });
 	}
+	const parsed = await readBoundedJson(request, MAX_PORTAL_TEXT_REQUEST_BYTES);
+	if (!parsed.ok || typeof parsed.value !== "object" || parsed.value === null || Array.isArray(parsed.value)) {
+		return NextResponse.json({ ok: false, error: parsed.ok ? "Expected JSON object" : parsed.error }, { status: parsed.ok ? 400 : parsed.status });
+	}
+	const body = parsed.value as Body;
+	const text = typeof body.text === "string" ? body.text : "";
 
 	const db = await getDb();
 	const result = await completeTextTask(db, {
