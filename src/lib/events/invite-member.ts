@@ -1,5 +1,4 @@
 import { createAuthChallenge, hashAuthChallengeToken } from "@/lib/auth/challenges";
-import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
 import { upsertAccountByEmail } from "@/lib/db/queries";
 import type { AccountRow, EventRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
@@ -12,7 +11,7 @@ export type InviteOrganizerResult =
 			account: AccountRow;
 			invitationId: string;
 			role: InviteRole;
-			emailStatus: "sent" | "failed";
+			emailStatus: "sent" | "uncertain" | "failed";
 			loginUrl: string | null;
 		  }
 	| { ok: false; error: string; status: number };
@@ -52,8 +51,8 @@ export async function inviteOrganizerToEvent(
 	await db.prepare(
 		`INSERT INTO event_invitations (
        id, event_id, account_id, email, name, role, token_hash, status,
-       invited_by_account_id, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+		invited_by_account_id, created_at, updated_at, delivered_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, 'delivered', ?, ?, ?, ?)`,
 	).bind(
 		invitationId,
 		args.event.id,
@@ -65,7 +64,10 @@ export async function inviteOrganizerToEvent(
 		args.invitedByAccountId ?? null,
 		now,
 		now,
+		now,
 	).run();
+	// The acceptance gate is durable before provider I/O. If the provider
+	// accepts and a worker later dies, the emailed one-time link still works.
 
 	const callbackUrl = new URL("/auth/callback", args.origin);
 	callbackUrl.searchParams.set("token", challenge.token);
@@ -83,21 +85,25 @@ export async function inviteOrganizerToEvent(
 		idempotencyKey: challenge.tokenHash,
 	});
 
-	if (!emailResult.ok && await failOneTimeLinkChallengeIfConfirmed(db, {
-		tokenHash: challenge.tokenHash,
-		result: emailResult,
-		reason: emailResult.error ?? "mail delivery failed",
-	})) {
+	if (!emailResult.ok && emailResult.failureKind === "confirmed") {
 		await db.batch([
-			db.prepare("UPDATE event_invitations SET status = 'failed', updated_at = ? WHERE id = ? AND status = 'pending'").bind(Date.now(), invitationId),
+			db.prepare("UPDATE event_invitations SET status = 'failed', updated_at = ? WHERE id = ? AND status = 'delivered'").bind(Date.now(), invitationId),
+			db.prepare(
+				`UPDATE auth_challenges SET state = 'failed', failure_reason = ?
+				 WHERE token_hash = ? AND state = 'active'
+				   AND EXISTS (SELECT 1 FROM event_invitations WHERE id = ? AND status = 'failed')`,
+			).bind((emailResult.error ?? "mail delivery failed").slice(0, 1_000), challenge.tokenHash, invitationId),
 		]);
 		return { ok: true, account, invitationId, role, emailStatus: "failed", loginUrl: args.exposeLoginUrl ? loginUrl : null };
 	}
-
-	await db.prepare(
-		"UPDATE event_invitations SET status = 'delivered', delivered_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
-	).bind(Date.now(), Date.now(), invitationId).run();
-	return { ok: true, account, invitationId, role, emailStatus: "sent", loginUrl: args.exposeLoginUrl ? loginUrl : null };
+	return {
+		ok: true,
+		account,
+		invitationId,
+		role,
+		emailStatus: emailResult.ok ? "sent" : "uncertain",
+		loginUrl: args.exposeLoginUrl ? loginUrl : null,
+	};
 }
 
 /**

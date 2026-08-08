@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
 import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
 import { createAuthChallenge } from "@/lib/auth/challenges";
@@ -9,14 +10,16 @@ import { hasPortalEligibility } from "@/lib/speakers/portal-session";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
+const MAX_PORTAL_LINK_REQUEST_BYTES = 16 * 1024;
+
 function accepted(extra: Record<string, unknown> = {}): NextResponse {
 	return NextResponse.json({ ok: true, ...extra }, { status: 202 });
 }
 
 export async function POST(request: Request) {
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return accepted(); }
-	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+	const parsed = await readBoundedJson(request, MAX_PORTAL_LINK_REQUEST_BYTES);
+	if (!parsed.ok || !isJsonObject(parsed.value)) return accepted();
+	const body = parsed.value;
 	const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
 	const db = await getDb();
 	const secret = await getAuthSecret();

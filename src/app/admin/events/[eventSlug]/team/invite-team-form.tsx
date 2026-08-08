@@ -84,9 +84,10 @@ export function InviteTeamForm({
 
 			const roleLabel = data.role === "owner" ? "ownership-transfer" : "organizer";
 			const resent = `Sent a pending ${roleLabel} invite to ${data.invitee.email}. Access changes after the link is accepted.`;
-			const emailBit =
-				data.emailStatus === "sent"
-					? " Magic link emailed."
+			const emailBit = data.emailStatus === "sent"
+				? " Magic link emailed."
+				: data.emailStatus === "uncertain"
+					? " Email delivery is uncertain; the invitation link remains valid if it arrived."
 					: " Email failed to send; no access or ownership changed.";
 			setNotice(`${resent}${emailBit}`);
 			if (data.loginUrl) setDevLoginUrl(data.loginUrl);

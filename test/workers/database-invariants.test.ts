@@ -318,7 +318,7 @@ describe("D1 runtime invariants", () => {
 		expect(await consumeAuthChallenge(env.DB, { secret: "delivery-link-secret", token: "organizer-rejected", kind: "organizer_login", now })).toBeNull();
 	});
 
-	it("marks an ambiguously sent event invitation delivered so its link can be accepted", async () => {
+		it("keeps an uncertain event invitation acceptance-compatible after a post-send D1 failure", async () => {
 		await seedEvent("ambiguous-invite-event", "ambiguous-invite-event");
 		await env.DB.batch([
 			env.DB.prepare("INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('ambiguous-inviter', 'inviter@ambiguous.test', 'Inviter', ?, ?)").bind(now, now),
@@ -327,6 +327,7 @@ describe("D1 runtime invariants", () => {
 		const event = await env.DB.prepare("SELECT * FROM events WHERE id = 'ambiguous-invite-event'").first<import("@/lib/db/types").EventRow>();
 		if (!event) throw new Error("seeded event missing");
 		let rawToken = "";
+		let acceptedDuringSend: { accountId: string; eventId: string } | null = null;
 		const result = await inviteOrganizerToEvent(env.DB, {
 			event,
 			email: "invitee@ambiguous.test",
@@ -337,12 +338,17 @@ describe("D1 runtime invariants", () => {
 			invitedByAccountId: "ambiguous-inviter",
 			sendEmail: async (message) => {
 				rawToken = new URL(message.context.loginUrl ?? "").searchParams.get("token") ?? "";
+				acceptedDuringSend = await acceptEventInvitation(env.DB, { secret: "ambiguous-invite-secret", token: rawToken, now });
+				// The provider accepted the message, then a non-essential local write
+				// failed. The invitation was already acceptance-compatible.
+				try { await env.DB.prepare("INSERT INTO missing_post_send_table VALUES (1)").run(); } catch { /* simulated D1 failure */ }
 				return { ok: false, error: "connection lost", failureKind: "ambiguous" };
 			},
 		});
-		expect(result.ok && result.emailStatus).toBe("sent");
+		expect(result.ok && result.emailStatus).toBe("uncertain");
 		expect(rawToken).not.toBe("");
-		expect(await acceptEventInvitation(env.DB, { secret: "ambiguous-invite-secret", token: rawToken, now })).not.toBeNull();
+		expect(acceptedDuringSend).not.toBeNull();
+		expect(await env.DB.prepare("SELECT status FROM event_invitations WHERE id = ?").bind(result.ok ? result.invitationId : "").first<{ status: string }>()).toEqual({ status: "accepted" });
 	});
 
 	it("allows only one concurrent draft finalization when the form limit is one", async () => {

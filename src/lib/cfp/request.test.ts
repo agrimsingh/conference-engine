@@ -26,4 +26,21 @@ describe("bounded CFP JSON", () => {
 		expect(isJsonObject(["answer"])).toBe(false);
 		expect(isJsonObject({ answers: {} })).toBe(true);
 	});
+
+	it("cancels an oversized chunked JSON body before reading subsequent chunks", async () => {
+		let pulls = 0;
+		const requestInit = {
+			method: "POST",
+			duplex: "half",
+			body: new ReadableStream<Uint8Array>({
+				pull(controller) {
+					pulls += 1;
+					controller.enqueue(new TextEncoder().encode("x".repeat(MAX_CFP_REQUEST_BYTES + 1)));
+				},
+			}),
+		} as RequestInit & { duplex: "half" };
+		const request = new Request("https://example.test/cfp", requestInit);
+		await expect(readBoundedCfpJson(request)).resolves.toEqual({ ok: false, status: 413, error: "Request payload is too large" });
+		expect(pulls).toBe(1);
+	});
 });
