@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition, type DragEvent } from "react";
+import { noticeClasses, SegmentedControl } from "@/components/ui";
 import {
 	detectConflicts,
 	formatScheduleConflicts,
@@ -225,29 +226,22 @@ export function ScheduleBoard({
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
-				<div className="inline-flex rounded border border-neutral-300 bg-white p-0.5 text-sm">
-					<button
-						type="button"
-						className={`px-3 py-1 ${view === "day" ? "bg-neutral-900 text-white" : ""}`}
-						onClick={() => setView("day")}
-					>
-						Day
-					</button>
-					<button
-						type="button"
-						className={`px-3 py-1 ${view === "list" ? "bg-neutral-900 text-white" : ""}`}
-						onClick={() => setView("list")}
-					>
-						List
-					</button>
-				</div>
-				<p className="text-sm text-neutral-600">
+				<SegmentedControl
+					label="Schedule view"
+					value={view}
+					options={[
+						{ value: "day", label: "Day" },
+						{ value: "list", label: "List" },
+					]}
+					onChange={setView}
+				/>
+				<p className="text-sm text-neutral-400">
 					{formatDayLabel(dayKey, timeZone)} · {timeZone}
 				</p>
-				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-700">
+				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-300">
 					Room
 					<select
-						className="rounded border border-neutral-300 bg-white px-2 py-1"
+						className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-neutral-100"
 						value={roomFilter}
 						onChange={(event) => setRoomFilter(event.target.value)}
 					>
@@ -264,21 +258,17 @@ export function ScheduleBoard({
 			{error ? (
 				<p
 					role="alert"
-					className="rounded-md border-2 border-red-500 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-900"
+					className="rounded-md border border-red-400/60 bg-red-600 px-3 py-2.5 text-sm font-semibold text-white shadow-lg"
 				>
 					Conflict: {error}
 				</p>
 			) : null}
-			{message ? (
-				<p className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-					{message}
-				</p>
-			) : null}
+			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
 			{pending ? (
 				<p className="text-sm text-neutral-500">Saving…</p>
 			) : null}
 
-			<section className="rounded border border-neutral-200 bg-white p-3">
+			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
 				<h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
 					Unplaced / other days
 				</h2>
@@ -306,10 +296,10 @@ export function ScheduleBoard({
 											prev === session.id ? null : session.id,
 										)
 									}
-									className={`max-w-xs rounded border px-3 py-2 text-left text-sm ${
+									className={`max-w-xs rounded-md border px-3 py-2 text-left text-sm ${
 										selectedId === session.id
-											? "border-neutral-900 bg-neutral-900 text-white"
-											: "border-neutral-300 bg-neutral-50"
+											? "border-emerald-500/60 bg-neutral-800 text-neutral-100"
+											: "border-neutral-700 bg-neutral-950/60 text-neutral-200 hover:border-neutral-500"
 									}`}
 								>
 									<p className="font-medium">{session.title}</p>
@@ -330,11 +320,11 @@ export function ScheduleBoard({
 			</section>
 
 			{view === "day" ? (
-				<div className="overflow-x-auto rounded border border-neutral-200 bg-white">
+				<div className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
 					<table className="min-w-full border-collapse text-sm">
 						<thead>
-							<tr className="border-b border-neutral-200 bg-neutral-50">
-								<th className="sticky left-0 bg-neutral-50 px-2 py-2 text-left font-medium">
+							<tr className="border-b border-neutral-800 bg-neutral-950/60">
+								<th className="sticky left-0 bg-neutral-900 px-2 py-2 text-left font-medium text-neutral-300">
 									Time
 								</th>
 								{rooms
@@ -342,7 +332,7 @@ export function ScheduleBoard({
 									.map((room) => (
 										<th
 											key={room}
-											className="min-w-40 px-2 py-2 text-left font-medium"
+											className="min-w-40 px-2 py-2 text-left font-medium text-neutral-300"
 										>
 											{room}
 										</th>
@@ -358,9 +348,9 @@ export function ScheduleBoard({
 								return (
 									<tr
 										key={startMinutes}
-										className="border-b border-neutral-100"
+										className="border-b border-dotted border-neutral-800"
 									>
-										<td className="sticky left-0 bg-white px-2 py-1 font-mono text-xs text-neutral-600">
+										<td className="sticky left-0 bg-neutral-900 px-2 py-1 font-mono text-xs tabular-nums text-neutral-500">
 											{formatClock(labelMs, timeZone)}
 										</td>
 										{visibleRooms.map((room) => {
@@ -375,7 +365,7 @@ export function ScheduleBoard({
 											return (
 												<td key={room} className="p-0 align-top">
 													{occupant && !isStart ? (
-														<div className="h-10 border-l border-neutral-100 bg-neutral-100/60" />
+														<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
 													) : occupant && isStart ? (
 														<div
 															draggable
@@ -387,7 +377,7 @@ export function ScheduleBoard({
 																event.dataTransfer.effectAllowed = "move";
 																setSelectedId(occupant.id);
 															}}
-															className="m-0.5 cursor-grab rounded bg-neutral-900 px-2 py-1 text-xs text-white"
+															className="m-0.5 cursor-grab rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100"
 															style={{
 																minHeight: `${Math.max(
 																	1,
@@ -399,7 +389,7 @@ export function ScheduleBoard({
 															}}
 														>
 															<p className="font-medium">{occupant.title}</p>
-															<p className="opacity-80">
+															<p className="font-mono tabular-nums opacity-80">
 																{formatClock(
 																	occupant.slot!.startsAtMs,
 																	timeZone,
@@ -414,7 +404,7 @@ export function ScheduleBoard({
 													) : (
 														<button
 															type="button"
-															className="flex h-10 w-full items-stretch border border-transparent hover:border-neutral-400 hover:bg-neutral-50"
+															className="flex h-10 w-full items-stretch border border-transparent hover:border-neutral-600 hover:bg-neutral-800/40"
 															onDragOver={(event) => event.preventDefault()}
 															onDrop={(event) =>
 																onDropCell(event, room, startMinutes)
@@ -433,20 +423,22 @@ export function ScheduleBoard({
 					</table>
 				</div>
 			) : (
-				<ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
+				<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 					{listSessions.length === 0 ? (
-						<li className="px-4 py-8 text-center text-sm text-neutral-600">
-							<p className="font-medium text-neutral-900">No sessions on this day</p>
+						<li className="px-4 py-8 text-center text-sm text-neutral-400">
+							<p className="font-medium text-neutral-100">No sessions on this day</p>
 							<p className="mt-1">Drag a talk from the pool onto the day grid.</p>
 						</li>
 					) : (
 						listSessions.map((session) => (
 							<li key={session.id} className="px-4 py-3 text-sm">
-								<p className="font-medium">{session.title}</p>
-								<p className="mt-1 text-neutral-600">
-									{formatClock(session.slot!.startsAtMs, timeZone)}–
-									{formatClock(session.slot!.endsAtMs, timeZone)} ·{" "}
-									{session.slot!.roomName}
+								<p className="font-medium text-neutral-100">{session.title}</p>
+								<p className="mt-1 text-neutral-400">
+									<span className="font-mono text-xs tabular-nums">
+										{formatClock(session.slot!.startsAtMs, timeZone)}–
+										{formatClock(session.slot!.endsAtMs, timeZone)}
+									</span>{" "}
+									· {session.slot!.roomName}
 									{session.speakerLabels.length
 										? ` · ${session.speakerLabels.join(", ")}`
 										: ""}

@@ -56,6 +56,11 @@ export type SubmissionSpeakerRow = {
 	email: string;
 	bio: string | null;
 	position: number;
+	status: "pending" | "confirmed" | "declined" | "removed";
+	invited_at: number | null;
+	confirmed_at: number | null;
+	added_after_acceptance: number;
+	confirm_token_hash: string | null;
 };
 
 export type PersonRow = {
@@ -137,6 +142,13 @@ export type ReviewerRow = {
 	plan_id: string;
 	name: string;
 	token: string;
+	created_at: number;
+};
+
+export type SubmissionLabelRow = {
+	id: string;
+	submission_id: string;
+	label: string;
 	created_at: number;
 };
 

@@ -2,7 +2,7 @@ import {
 	getEventById,
 	getSubmissionById,
 } from "@/lib/db/queries";
-import type { MessageTemplateKey } from "@/lib/domain";
+import type { MessageTemplateKey, RenderedMessage } from "@/lib/domain";
 import { sendTemplatedEmail, type OutboundSendResult } from "./resend";
 import { buildIcsInvite, type IcsEventInput } from "./ics";
 
@@ -29,9 +29,12 @@ export async function notifySubmissionLifecycle(
 		submissionId: string;
 		templateKey: Extract<
 			MessageTemplateKey,
-			"submission_received" | "acceptance" | "rejection"
+			"submission_received" | "acceptance" | "rejection" | "waitlist"
 		>;
 		portalHint?: string;
+		/** Organizer-edited subject/body for this send. */
+		override?: RenderedMessage;
+		force?: boolean;
 	},
 ): Promise<OutboundSendResult | null> {
 	const submission = await getSubmissionById(db, args.submissionId);
@@ -51,6 +54,8 @@ export async function notifySubmissionLifecycle(
 			title: titleFromAnswersJson(submission.answers_json),
 			portalHint: args.portalHint,
 		},
+		override: args.override,
+		force: args.force,
 	});
 }
 

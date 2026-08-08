@@ -5,6 +5,7 @@ import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { notifySubmissionLifecycle } from "@/lib/email/notify";
+import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -82,5 +83,19 @@ export async function POST(request: Request, context: RouteContext) {
 		templateKey: "submission_received",
 	});
 
-	return NextResponse.json({ ok: true, submissionId, email });
+	const coSpeakerInvites = await sendPendingInvitesForSubmission(db, {
+		submissionId,
+		origin: new URL(request.url).origin,
+	});
+
+	return NextResponse.json({
+		ok: true,
+		submissionId,
+		email,
+		coSpeakerInvites: coSpeakerInvites.map((invite) =>
+			invite.ok
+				? { ok: true, speakerId: invite.speakerId, emailStatus: invite.email.status }
+				: { ok: false, error: invite.error },
+		),
+	});
 }

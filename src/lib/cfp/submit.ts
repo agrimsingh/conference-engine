@@ -83,22 +83,30 @@ export async function insertSubmission(
 		)
 		.run();
 
-	const stmts = args.speakers.map((speaker, index) =>
-		db
+	const submitterEmail = args.submitterEmail.trim().toLowerCase();
+	const stmts = args.speakers.map((speaker, index) => {
+		const email = speaker.email.trim().toLowerCase();
+		// The primary submitter is confirmed by the act of submitting;
+		// everyone else starts pending until they confirm via invite link.
+		const status = index === 0 || email === submitterEmail ? "confirmed" : "pending";
+		return db
 			.prepare(
 				`INSERT INTO submission_speakers (
-          id, submission_id, person_id, name, email, bio, position
-        ) VALUES (?, ?, NULL, ?, ?, ?, ?)`,
+          id, submission_id, person_id, name, email, bio, position,
+          status, invited_at, confirmed_at, added_after_acceptance, confirm_token_hash
+        ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, 0, NULL)`,
 			)
 			.bind(
 				crypto.randomUUID(),
 				submissionId,
 				speaker.name.trim(),
-				speaker.email.trim().toLowerCase(),
+				email,
 				speaker.bio?.trim() ?? null,
 				index,
-			),
-	);
+				status,
+				status === "confirmed" ? now : null,
+			);
+	});
 
 	if (stmts.length) {
 		await db.batch(stmts);

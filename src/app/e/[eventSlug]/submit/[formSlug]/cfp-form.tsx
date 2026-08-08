@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
 import {
 	evaluateVisibilityRule,
 	type AnswerMap,
@@ -40,16 +41,17 @@ export function CfpForm({
 
 	if (submissionId) {
 		return (
-			<div className="mx-auto w-full max-w-2xl space-y-5 rounded-lg border border-emerald-200 bg-white px-5 py-8">
-				<p className="text-xs font-medium uppercase tracking-wide text-emerald-800">
+			<div className="mx-auto w-full max-w-2xl space-y-5 rounded-lg border border-neutral-800 bg-neutral-900 px-5 py-8">
+				<p className="text-xs font-medium uppercase tracking-wide text-emerald-400">
 					{eventName}
 				</p>
-				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-900">
+				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					Thanks — your talk is in
 				</h1>
-				<div className="space-y-3 text-pretty text-sm text-neutral-700">
+				<div className="space-y-3 text-pretty text-sm text-neutral-400">
 					<p>
-						We received your proposal for <span className="font-medium">{formTitle}</span>.
+						We received your proposal for{" "}
+						<span className="font-medium text-neutral-200">{formTitle}</span>.
 						The program committee will review it over the next few weeks.
 					</p>
 					<p>
@@ -58,7 +60,7 @@ export function CfpForm({
 					</p>
 					<p className="text-neutral-500">
 						Reference:{" "}
-						<code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700">
+						<code className="rounded-md bg-neutral-950/60 px-1.5 py-0.5 text-xs text-neutral-300">
 							{submissionId}
 						</code>
 					</p>
@@ -89,17 +91,17 @@ export function CfpForm({
 				});
 			}}
 		>
-			<header className="space-y-2 border-b border-neutral-200 pb-5">
+			<header className="space-y-2 border-b border-neutral-800 pb-5">
 				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 					{eventName} · Call for proposals
 				</p>
-				<h1 className="text-balance text-3xl font-semibold tracking-tight">
+				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					{formTitle}
 				</h1>
 				{formDescription ? (
-					<p className="text-pretty text-sm text-neutral-600">{formDescription}</p>
+					<p className="text-pretty text-sm text-neutral-400">{formDescription}</p>
 				) : (
-					<p className="text-pretty text-sm text-neutral-600">
+					<p className="text-pretty text-sm text-neutral-400">
 						Pick a format — the form adapts. Submit when you&apos;re ready; we&apos;ll
 						confirm what happens next.
 					</p>
@@ -108,20 +110,20 @@ export function CfpForm({
 
 			<section className="grid gap-4 sm:grid-cols-2">
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="font-medium">Your name</span>
+					<span className="font-medium text-neutral-200">Your name</span>
 					<input
 						required
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						value={submitterName}
 						onChange={(e) => setSubmitterName(e.target.value)}
 					/>
 				</label>
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="font-medium">Your email</span>
+					<span className="font-medium text-neutral-200">Your email</span>
 					<input
 						required
 						type="email"
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						value={submitterEmail}
 						onChange={(e) => setSubmitterEmail(e.target.value)}
 					/>
@@ -143,7 +145,7 @@ export function CfpForm({
 			))}
 
 			{errors.length > 0 ? (
-				<ul className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+				<ul className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
 					{errors.map((err) => (
 						<li key={err}>{err}</li>
 					))}
@@ -153,7 +155,7 @@ export function CfpForm({
 			<button
 				type="submit"
 				disabled={pending}
-				className="rounded bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+				className={`self-start ${buttonClasses("primary")}`}
 			>
 				{pending ? "Submitting…" : "Submit proposal"}
 			</button>
@@ -209,7 +211,7 @@ function FieldInput({
 									? "url"
 									: "text"
 						}
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						placeholder={field.config.placeholder}
 						value={typeof value === "string" ? value : ""}
 						onChange={(e) => onChange(e.target.value)}
@@ -221,7 +223,7 @@ function FieldInput({
 				<label className="flex flex-col gap-1 text-sm">
 					{label}
 					<textarea
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						rows={field.config.rows ?? 4}
 						placeholder={field.config.placeholder}
 						value={typeof value === "string" ? value : ""}
@@ -238,7 +240,7 @@ function FieldInput({
 					) : null}
 					<input
 						type="number"
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						min={field.config.min}
 						max={field.config.max}
 						step={field.config.step}
@@ -258,7 +260,7 @@ function FieldInput({
 						<span className="text-xs text-neutral-500">{field.helpText}</span>
 					) : null}
 					<select
-						className="rounded border border-neutral-300 px-3 py-2"
+						className={INPUT_CLASSES}
 						value={typeof value === "string" ? value : ""}
 						onChange={(e) => onChange(e.target.value)}
 					>
@@ -300,15 +302,22 @@ function FieldInput({
 			return (
 				<fieldset className="flex flex-col gap-3 text-sm">
 					<legend className="font-medium">{field.label} *</legend>
+					<p className="text-xs text-neutral-500">
+						The first speaker is the primary contact. Co-speakers are listed
+						immediately and get an email to confirm their participation.
+					</p>
 					{speakers.map((speaker, index) => (
 						<div
 							key={index}
-							className="grid gap-2 rounded border border-neutral-200 p-3 sm:grid-cols-2"
+							className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-900 p-3 sm:grid-cols-2"
 						>
+							<p className="col-span-full text-xs font-medium uppercase tracking-wide text-neutral-500">
+								{index === 0 ? "Primary speaker" : `Co-speaker ${index}`}
+							</p>
 							<label className="flex flex-col gap-1">
 								<span>Name</span>
 								<input
-									className="rounded border border-neutral-300 px-3 py-2"
+									className={INPUT_CLASSES}
 									value={speaker.name}
 									onChange={(e) => {
 										const next = [...speakers];
@@ -321,7 +330,7 @@ function FieldInput({
 								<span>Email</span>
 								<input
 									type="email"
-									className="rounded border border-neutral-300 px-3 py-2"
+									className={INPUT_CLASSES}
 									value={speaker.email}
 									onChange={(e) => {
 										const next = [...speakers];
@@ -333,7 +342,7 @@ function FieldInput({
 							<label className="col-span-full flex flex-col gap-1">
 								<span>Bio</span>
 								<textarea
-									className="rounded border border-neutral-300 px-3 py-2"
+									className={INPUT_CLASSES}
 									rows={2}
 									value={speaker.bio ?? ""}
 									onChange={(e) => {
@@ -348,12 +357,12 @@ function FieldInput({
 					{speakers.length < max ? (
 						<button
 							type="button"
-							className="self-start text-sm text-neutral-700 underline"
+							className="self-start text-sm text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
 							onClick={() =>
 								onChange([...speakers, { name: "", email: "", bio: "" }])
 							}
 						>
-							Add speaker
+							Add co-speaker
 						</button>
 					) : null}
 				</fieldset>

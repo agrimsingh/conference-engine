@@ -46,19 +46,22 @@ export function ActivatePlanButton({ eventSlug }: Props) {
 				type="button"
 				onClick={() => void onClick()}
 				disabled={pending}
-				className="font-medium text-neutral-800 underline underline-offset-2 disabled:opacity-40"
+				className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
 			>
 				{pending ? "Opening review…" : "Open review board"}
 			</button>
 			{reviewPath ? (
-				<p className="text-neutral-600">
+				<p className="text-neutral-400">
 					Share with reviewers:{" "}
-					<a className="font-medium underline underline-offset-2" href={reviewPath}>
+					<a
+						className="font-medium text-neutral-200 underline underline-offset-2"
+						href={reviewPath}
+					>
 						{reviewPath}
 					</a>
 				</p>
 			) : null}
-			{error ? <p className="text-xs text-red-700">{error}</p> : null}
+			{error ? <p className="text-xs text-red-400">{error}</p> : null}
 		</div>
 	);
 }

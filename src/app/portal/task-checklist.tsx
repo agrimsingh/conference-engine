@@ -2,6 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+	buttonClasses,
+	INPUT_CLASSES,
+	noticeClasses,
+	StatusPill,
+} from "@/components/ui";
 
 type TaskView = {
 	id: string;
@@ -77,43 +83,25 @@ export function TaskChecklist({ token, tasks }: Props) {
 
 	return (
 		<div className="space-y-4">
-			{message ? (
-				<p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-					{message}
-				</p>
-			) : null}
-			{error ? (
-				<p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-					{error}
-				</p>
-			) : null}
+			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
+			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			<ul className="space-y-3">
 				{tasks.map((task) => {
 					const done = task.status === "completed";
 					return (
 						<li
 							key={task.id}
-							className={
-								done
-									? "rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm"
-									: "rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm"
-							}
+							className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
 						>
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
-								<p className="font-medium text-neutral-900">{task.label}</p>
-								<span
-									className={
-										done
-											? "rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-900"
-											: "rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-900"
-									}
-								>
+								<p className="font-medium text-neutral-100">{task.label}</p>
+								<StatusPill tone={done ? "positive" : "warning"}>
 									{done ? "Done" : "To do"}
-								</span>
+								</StatusPill>
 							</div>
 
 							{done ? (
-								<p className="mt-2 text-neutral-700">
+								<p className="mt-2 text-neutral-400">
 									{task.kind === "text"
 										? (task.textValue ?? "Completed")
 										: "File uploaded — thanks."}
@@ -133,13 +121,13 @@ export function TaskChecklist({ token, tasks }: Props) {
 										required
 										minLength={20}
 										rows={4}
-										className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2"
+										className={`w-full ${INPUT_CLASSES}`}
 										placeholder={`Write your ${task.label.toLowerCase()} (20+ characters)`}
 									/>
 									<button
 										type="submit"
 										disabled={busyId === task.id}
-										className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+										className={buttonClasses("secondary")}
 									>
 										{busyId === task.id ? "Saving…" : `Save ${task.label}`}
 									</button>
@@ -156,8 +144,8 @@ export function TaskChecklist({ token, tasks }: Props) {
 										}
 									}}
 								>
-									<label className="flex cursor-pointer flex-col gap-1 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-sm hover:border-neutral-400">
-										<span className="font-medium text-neutral-800">
+									<label className="flex cursor-pointer flex-col gap-1 rounded-md border border-dashed border-neutral-700 bg-neutral-950/60 px-3 py-4 text-sm hover:border-neutral-500">
+										<span className="font-medium text-neutral-200">
 											Choose a file to upload
 										</span>
 										<span className="text-xs text-neutral-500">
@@ -170,13 +158,13 @@ export function TaskChecklist({ token, tasks }: Props) {
 											name="file"
 											required
 											accept={task.accept.join(",")}
-											className="mt-1 block w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+											className="mt-1 block w-full text-sm text-neutral-400 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-neutral-100"
 										/>
 									</label>
 									<button
 										type="submit"
 										disabled={busyId === task.id}
-										className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+										className={buttonClasses("secondary")}
 									>
 										{busyId === task.id ? "Uploading…" : "Upload"}
 									</button>

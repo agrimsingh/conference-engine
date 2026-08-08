@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/ui";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -68,6 +69,12 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	for (const row of submissions) {
 		const answers = parseAnswers(row.answers_json);
 		const speakers = await listSpeakersForSubmission(db, row.id);
+		// Pending co-speakers stay visible to organizers (flagged), and still
+		// count for double-booking; declined/removed drop out entirely.
+		const active = speakers.filter(
+			(speaker) =>
+				speaker.status === "confirmed" || speaker.status === "pending",
+		);
 		const slot = slotsBySubmission.get(row.id) ?? null;
 		sessions.push({
 			id: row.id,
@@ -75,10 +82,14 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			status: row.status,
 			submitterName: row.submitter_name,
 			durationMinutes: durationMinutesFromAnswers(answers),
-			speakerKeys: speakers.map((speaker) =>
+			speakerKeys: active.map((speaker) =>
 				normalizeSpeakerKey(speaker.email),
 			),
-			speakerLabels: speakers.map((speaker) => speaker.name || speaker.email),
+			speakerLabels: active.map((speaker) =>
+				speaker.status === "pending"
+					? `${speaker.name || speaker.email} (pending)`
+					: speaker.name || speaker.email,
+			),
 			slot: slot
 				? {
 						roomName: slot.room_name,
@@ -95,7 +106,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			: ["Main Stage", "Room B", "Workshop Lab"];
 
 	return (
-		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={event.slug} />
 			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader
@@ -105,14 +116,10 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 				/>
 
 				{sessions.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							Nothing to schedule yet
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Accept a submission first, then come back to place it on the grid.
-						</p>
-					</div>
+					<EmptyState
+						title="Nothing to schedule yet"
+						description="Accept a submission first, then come back to place it on the grid."
+					/>
 				) : (
 					<ScheduleBoard
 						eventSlug={event.slug}

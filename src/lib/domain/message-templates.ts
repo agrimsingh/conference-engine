@@ -2,6 +2,8 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"submission_received",
 	"acceptance",
 	"rejection",
+	"waitlist",
+	"co_speaker_invite",
 	"calendar_invite",
 	"task_reminder",
 	"portal_magic_link",
@@ -20,6 +22,8 @@ export type MessageTemplateContext = {
 	taskLabels?: string[];
 	outstandingCount?: number;
 	portalUrl?: string;
+	confirmUrl?: string;
+	declineUrl?: string;
 };
 
 export type RenderedMessage = {
@@ -59,6 +63,37 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`Thank you for submitting "${ctx.title}" to ${ctx.eventName}.`,
 			"We are unable to accept it for this program.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
+	// Deliberately promise-free: no ticket, comp, or timeline language.
+	waitlist: (ctx) => ({
+		subject: `Waitlist update: ${ctx.title}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`Thank you for submitting "${ctx.title}" to ${ctx.eventName}.`,
+			"Your proposal is currently on the waitlist. If a slot opens up, we may reach out with next steps.",
+			"No action is needed from you right now.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
+	// Promise-free: no ticket, comp, or travel language. Confirming only
+	// verifies the person is real and willing to be listed.
+	co_speaker_invite: (ctx) => ({
+		subject: `You're listed as a co-speaker: ${ctx.title}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`You were listed as a co-speaker on "${ctx.title}", a proposal for ${ctx.eventName}.`,
+			"Please confirm your participation so organizers know you're on board:",
+			"",
+			`Confirm: ${ctx.confirmUrl ?? "(link unavailable)"}`,
+			`Decline: ${ctx.declineUrl ?? "(link unavailable)"}`,
+			"",
+			"If you weren't expecting this, you can decline or ignore this email.",
 			"",
 			"— conference-engine",
 		].join("\n"),
@@ -134,6 +169,8 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 	return (
 		key !== "calendar_invite" &&
 		key !== "task_reminder" &&
-		key !== "portal_magic_link"
+		key !== "portal_magic_link" &&
+		// Multiple co-speakers per submission + admin resend.
+		key !== "co_speaker_invite"
 	);
 }

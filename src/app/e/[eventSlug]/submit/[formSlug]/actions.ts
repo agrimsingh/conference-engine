@@ -1,10 +1,21 @@
 "use server";
 
+import { headers } from "next/headers";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
 import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
+import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
+
+async function requestOrigin(): Promise<string> {
+	const headerList = await headers();
+	const host = headerList.get("host") ?? "localhost:3000";
+	const proto =
+		headerList.get("x-forwarded-proto") ??
+		(host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+	return `${proto}://${host}`;
+}
 
 export type SubmitActionResult =
 	| { ok: true; submissionId: string }
@@ -50,6 +61,11 @@ export async function submitCfpAction(input: {
 		answers: validated.visibleAnswers,
 		speakers: validated.speakers,
 		category,
+	});
+
+	await sendPendingInvitesForSubmission(db, {
+		submissionId,
+		origin: await requestOrigin(),
 	});
 
 	return { ok: true, submissionId };

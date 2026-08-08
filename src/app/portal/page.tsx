@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/ui";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventById,
@@ -21,7 +22,7 @@ export default async function PortalPage({ searchParams }: Props) {
 
 	if (!token) {
 		return (
-			<main className="mx-auto min-h-dvh max-w-lg px-4 py-10 text-neutral-900">
+			<main className="mx-auto max-w-lg px-4 py-10">
 				<PageHeader
 					eyebrow="Speaker portal"
 					title="Sign in"
@@ -30,7 +31,7 @@ export default async function PortalPage({ searchParams }: Props) {
 				<PortalLoginForm initialEmail={params.email ?? ""} />
 				<p className="mt-8 text-sm text-neutral-500">
 					<Link
-						className="underline underline-offset-2"
+						className="underline underline-offset-2 hover:text-neutral-300"
 						href="/"
 					>
 						← Home
@@ -43,17 +44,17 @@ export default async function PortalPage({ searchParams }: Props) {
 	const session = await readPortalSession(token);
 	if (!session) {
 		return (
-			<main className="mx-auto min-h-dvh max-w-lg px-4 py-10 text-neutral-900">
-				<div className="rounded-lg border border-red-200 bg-red-50 px-4 py-6">
-					<p className="text-sm font-medium text-red-900">
+			<main className="mx-auto max-w-lg px-4 py-10">
+				<div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-6">
+					<p className="text-sm font-medium text-red-300">
 						This sign-in link is invalid or expired
 					</p>
-					<p className="mt-1 text-sm text-red-800">
+					<p className="mt-1 text-sm text-red-400">
 						Request a fresh link — they expire for security.
 					</p>
 					<p className="mt-4">
 						<Link
-							className="text-sm font-medium text-red-900 underline underline-offset-2"
+							className="text-sm font-medium text-red-300 underline underline-offset-2"
 							href="/portal"
 						>
 							Request a new link
@@ -78,7 +79,7 @@ export default async function PortalPage({ searchParams }: Props) {
 	const completedCount = tasks.filter((t) => t.status === "completed").length;
 
 	return (
-		<main className="mx-auto min-h-dvh max-w-2xl px-4 py-10 text-neutral-900">
+		<main className="mx-auto max-w-2xl px-4 py-10">
 			<PageHeader
 				eyebrow="Speaker portal"
 				title={session.email}
@@ -94,24 +95,20 @@ export default async function PortalPage({ searchParams }: Props) {
 					Your talks
 				</h2>
 				{submissions.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							No accepted talks yet
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Once organizers accept your proposal, it appears here with tasks.
-						</p>
-					</div>
+					<EmptyState
+						title="No accepted talks yet"
+						description="Once organizers accept your proposal, it appears here with tasks."
+					/>
 				) : (
-					<ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 						{submissions.map((row) => {
 							const answers = parseAnswers(row.answers_json);
 							return (
 								<li key={row.id} className="px-4 py-3 text-sm">
-									<p className="font-medium">
+									<p className="font-medium text-neutral-100">
 										{typeof answers.title === "string" ? answers.title : "(untitled)"}
 									</p>
-									<p className="mt-1 text-neutral-600">
+									<p className="mt-1 text-neutral-400">
 										{events.get(row.event_id) ?? "Event"} ·{" "}
 										{row.status.replaceAll("_", " ")}
 									</p>
@@ -127,14 +124,10 @@ export default async function PortalPage({ searchParams }: Props) {
 					Onboarding checklist
 				</h2>
 				{tasks.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							No tasks yet
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Bio, headshot, slides, and docs will show up after acceptance.
-						</p>
-					</div>
+					<EmptyState
+						title="No tasks yet"
+						description="Bio, headshot, slides, and docs will show up after acceptance."
+					/>
 				) : (
 					<TaskChecklist
 						token={token}

@@ -20,11 +20,27 @@ export type OutstandingTaskGroup = {
 	tasks: OutstandingTaskRow[];
 };
 
+/**
+ * Unconfirmed co-speakers are outstanding pipeline work — the pipeline
+ * never stalls silently, so the dashboard surfaces them next to tasks.
+ */
+export type PendingCoSpeakerItem = {
+	speakerId: string;
+	name: string;
+	email: string;
+	submissionId: string;
+	submissionTitle: string;
+	submissionStatus: string;
+	addedAfterAcceptance: boolean;
+	invitedAt: number | null;
+};
+
 export type OutstandingTasksSnapshot = {
 	eventId: string;
 	eventSlug: string;
 	incompleteCount: number;
 	groups: OutstandingTaskGroup[];
+	pendingCoSpeakers: PendingCoSpeakerItem[];
 	fetchedAt: number;
 };
 

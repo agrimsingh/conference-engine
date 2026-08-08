@@ -13,6 +13,7 @@ import type {
 	ReviewerRow,
 	SpeakerProfileRow,
 	SpeakerTaskRow,
+	SubmissionLabelRow,
 	SubmissionRow,
 	SubmissionSpeakerRow,
 	TaskTemplateRow,
@@ -110,6 +111,98 @@ export async function listSpeakersForSubmission(
 		.bind(submissionId)
 		.all<SubmissionSpeakerRow>();
 	return result.results;
+}
+
+export async function getSubmissionSpeakerById(
+	db: D1Database,
+	speakerId: string,
+): Promise<SubmissionSpeakerRow | null> {
+	return db
+		.prepare("SELECT * FROM submission_speakers WHERE id = ?")
+		.bind(speakerId)
+		.first<SubmissionSpeakerRow>();
+}
+
+export async function getSpeakerByConfirmTokenHash(
+	db: D1Database,
+	tokenHash: string,
+): Promise<SubmissionSpeakerRow | null> {
+	return db
+		.prepare("SELECT * FROM submission_speakers WHERE confirm_token_hash = ?")
+		.bind(tokenHash)
+		.first<SubmissionSpeakerRow>();
+}
+
+export type PendingCoSpeakerJoinRow = SubmissionSpeakerRow & {
+	submission_status: string;
+	answers_json: string;
+};
+
+/**
+ * Pending co-speakers on live submissions (not rejected/withdrawn) — the
+ * pipeline never stalls silently, so these count as outstanding work.
+ */
+export async function listPendingCoSpeakersForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<PendingCoSpeakerJoinRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT ss.*, s.status AS submission_status, s.answers_json AS answers_json
+       FROM submission_speakers ss
+       JOIN submissions s ON s.id = ss.submission_id
+       WHERE s.event_id = ?
+         AND ss.status = 'pending'
+         AND s.status NOT IN ('rejected', 'withdrawn')
+       ORDER BY s.created_at DESC, ss.position ASC`,
+		)
+		.bind(eventId)
+		.all<PendingCoSpeakerJoinRow>();
+	return result.results;
+}
+
+export async function listLabelsForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<SubmissionLabelRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT sl.* FROM submission_labels sl
+       JOIN submissions s ON s.id = sl.submission_id
+       WHERE s.event_id = ?
+       ORDER BY sl.label ASC`,
+		)
+		.bind(eventId)
+		.all<SubmissionLabelRow>();
+	return result.results;
+}
+
+export async function addSubmissionLabel(
+	db: D1Database,
+	submissionId: string,
+	label: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`INSERT OR IGNORE INTO submission_labels (id, submission_id, label, created_at)
+       VALUES (?, ?, ?, ?)`,
+		)
+		.bind(crypto.randomUUID(), submissionId, label, Date.now())
+		.run();
+}
+
+export async function removeSubmissionLabel(
+	db: D1Database,
+	submissionId: string,
+	label: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`DELETE FROM submission_labels
+       WHERE submission_id = ? AND label = ? COLLATE NOCASE`,
+		)
+		.bind(submissionId, label)
+		.run();
 }
 
 export async function getPersonByEmail(
