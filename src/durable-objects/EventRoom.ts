@@ -2,6 +2,13 @@ import { DurableObject } from "cloudflare:workers";
 
 export class EventRoom extends DurableObject<CloudflareEnv> {
 	async fetch(request: Request): Promise<Response> {
+		const url = new URL(request.url);
+		if (request.method === "POST" && url.pathname === "/broadcast") {
+			const body = await request.text();
+			this.broadcast(body || JSON.stringify({ type: "invalidate" }));
+			return new Response("ok");
+		}
+
 		const upgrade = request.headers.get("Upgrade");
 		if (upgrade?.toLowerCase() !== "websocket") {
 			return new Response("Expected WebSocket upgrade", { status: 426 });

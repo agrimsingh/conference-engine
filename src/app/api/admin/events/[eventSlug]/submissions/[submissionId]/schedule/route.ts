@@ -77,6 +77,7 @@ export async function POST(request: Request, context: RouteContext) {
 		status: result.status,
 		slot: result.slot,
 		email: result.email,
+		broadcasted: result.broadcasted,
 		icsPreview: result.icsBytes.slice(0, 200).replace(/\r?\n/g, "\\n"),
 		icsBytesLength: result.icsBytes.length,
 	});

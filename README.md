@@ -12,7 +12,7 @@ Built as a Sessionboard Program alternative for the AI Engineer hackathon. Job-t
 | 2. Speaker portal (bio, headshot, slides, docs) | ✅ Local (accept → tasks → R2) |
 | 3. Templated email + calendar ICS | ✅ Local Resend+ICS |
 | 4. Evaluation / scoring workflows | ✅ Local basic scoring |
-| 5. DnD schedule + conflict detection | 🚧 |
+| 5. DnD schedule + conflict detection | ✅ Local (HTML5 DnD + hard conflicts) |
 | 6. Realtime outstanding-tasks dashboard | 🚧 |
 | Deploy `conference-engine.65labs.org` | 🚧 |
 
@@ -37,10 +37,13 @@ npm run dev                      # http://localhost:3000
 ### Seeded demo
 
 - Public CFP: `/e/aie-sandbox/submit/cfp`
+- Public schedule: `/e/aie-sandbox/schedule` (list/day; shows `scheduled` + `published`)
 - Admin bypass (local): `/admin/bypass` → `/admin/events/aie-sandbox/submissions`
+- Admin schedule (DnD): `/admin/events/aie-sandbox/schedule`
 - Speaker portal: `/portal` (email + KV token)
 - Admin tasks: `/admin/events/aie-sandbox/tasks`
 - Review board: activate plan from submissions admin, then `/review?token=…` (or `/review?event=aie-sandbox` with bypass)
+- Seeded rooms: Main Stage, Room B, Workshop Lab
 
 ### API smoke
 
@@ -80,6 +83,7 @@ curl -sS -b /tmp/ce-admin.txt -X POST \
 #   http://localhost:3000/api/admin/events/aie-sandbox/submissions/<SUBMISSION_ID>/reject
 
 # 5) Schedule → agenda_slots + ICS calendar invite email
+#    Hard conflicts: same room overlap OR same speaker double-book → 409, no write
 curl -sS -b /tmp/ce-admin.txt -X POST \
   http://localhost:3000/api/admin/events/aie-sandbox/submissions/<SUBMISSION_ID>/schedule \
   -H 'content-type: application/json' \
@@ -106,6 +110,8 @@ Custom domain is configured in `wrangler.jsonc` as `conference-engine.65labs.org
 Spine: `Event → CFPForm → Submission → Evaluation → Acceptance → SpeakerTask → AgendaSlot`.
 
 A `Submission` *is* the session once accepted. Status transitions are enforced in `src/lib/domain/submission-status.ts`. Speaker onboarding task types live in `SPEAKER_TASK_TYPE_REGISTRY` (`bio`, `headshot`, `slides`); accept spawns `speaker_tasks` idempotently on `(submission_id, person_id, template_key)`. Form field types and visibility rules live in typed registries under `src/lib/domain/`.
+
+Schedule conflicts are pure in `src/lib/domain/schedule.ts` (`detectConflicts`): room overlap and speaker double-book. Public schedule lists slots whose submission is `scheduled` or `published` (demo choice; document in `DECISIONS.md`).
 
 ## License
 

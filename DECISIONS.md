@@ -20,5 +20,13 @@ All true with runtime evidence:
 | start | Goal armed; repo + Sat baseline next | 1 already true locally |
 | Sat commit | Public repo + CFP baseline pushed | 1 ✅; 8 partial (repo exists) |
 | Sun commit | Portal + accept→tasks + R2 (`3471e05`) | 2 ✅ |
+| Mon commit | Eval + Resend + ICS (`df1aa86`) | 3–4 ✅ (Resend blocks `example.com` onboarding; real domains OK) |
 | Sun slice | Accept → speaker_tasks + /portal + R2 uploads | 2 ✅ locally (pending parent commit) |
 | Mon slice | Eval scores + Resend templates + ICS schedule | 3–4 ✅ locally (pending parent commit) |
+| Tue slice | DnD admin schedule + public schedule + hard conflicts | 5 ✅ locally (pending parent commit) |
+
+## Tue schedule notes
+
+- Public `/e/[slug]/schedule` shows slots for submissions in `scheduled` **or** `published` (demo visibility; tighten later if organizers need draft-only).
+- Rooms live in `event_rooms` (seeded: Main Stage, Room B, Workshop Lab); slots still store `room_name` text.
+- `EventRoom` HTTP `POST /broadcast` on schedule mutate; soft-fails under plain `next dev` without DO.

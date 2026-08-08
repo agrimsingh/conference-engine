@@ -1,9 +1,11 @@
 import type {
 	AgendaSlotRow,
+	AgendaSlotWithSubmissionRow,
 	AssetRow,
 	CfpFormRow,
 	EvaluationPlanRow,
 	EvaluationScoreRow,
+	EventRoomRow,
 	EventRow,
 	FormFieldRow,
 	OutboundMessageRow,
@@ -298,6 +300,74 @@ export async function getAgendaSlotBySubmission(
 		.prepare("SELECT * FROM agenda_slots WHERE submission_id = ?")
 		.bind(submissionId)
 		.first<AgendaSlotRow>();
+}
+
+export async function listAgendaSlotsForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<AgendaSlotRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM agenda_slots
+       WHERE event_id = ?
+       ORDER BY starts_at ASC, room_name ASC`,
+		)
+		.bind(eventId)
+		.all<AgendaSlotRow>();
+	return result.results;
+}
+
+export async function listAgendaSlotsWithSubmissions(
+	db: D1Database,
+	eventId: string,
+): Promise<AgendaSlotWithSubmissionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT
+         a.*,
+         s.status AS submission_status,
+         s.answers_json AS answers_json,
+         s.submitter_name AS submitter_name,
+         s.submitter_email AS submitter_email
+       FROM agenda_slots a
+       INNER JOIN submissions s ON s.id = a.submission_id
+       WHERE a.event_id = ?
+       ORDER BY a.starts_at ASC, a.room_name ASC`,
+		)
+		.bind(eventId)
+		.all<AgendaSlotWithSubmissionRow>();
+	return result.results;
+}
+
+export async function listEventRooms(
+	db: D1Database,
+	eventId: string,
+): Promise<EventRoomRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM event_rooms
+       WHERE event_id = ?
+       ORDER BY position ASC, name ASC`,
+		)
+		.bind(eventId)
+		.all<EventRoomRow>();
+	return result.results;
+}
+
+export async function listSchedulableSubmissions(
+	db: D1Database,
+	eventId: string,
+): Promise<SubmissionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM submissions
+       WHERE event_id = ?
+         AND status IN ('accepted', 'scheduled', 'published')
+       ORDER BY updated_at DESC`,
+		)
+		.bind(eventId)
+		.all<SubmissionRow>();
+	return result.results;
 }
 
 export async function listOutboundForSubmission(

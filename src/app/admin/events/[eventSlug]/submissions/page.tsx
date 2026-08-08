@@ -68,12 +68,20 @@ export default async function AdminSubmissionsPage({ params }: Props) {
 						/e/{event.slug}/submit/cfp
 					</Link>
 					{" · "}
+					<Link className="underline" href={`/admin/events/${event.slug}/schedule`}>
+						Schedule
+					</Link>
+					{" · "}
 					<Link className="underline" href={`/admin/events/${event.slug}/tasks`}>
 						Speaker tasks
 					</Link>
 					{" · "}
 					<Link className="underline" href={`/review?event=${event.slug}`}>
 						Review board
+					</Link>
+					{" · "}
+					<Link className="underline" href={`/e/${event.slug}/schedule`}>
+						Public schedule
 					</Link>
 					{" · "}
 					<Link className="underline" href="/portal">

@@ -3,6 +3,7 @@ DELETE FROM evaluation_scores;
 DELETE FROM evaluation_plans;
 DELETE FROM outbound_messages;
 DELETE FROM agenda_slots;
+DELETE FROM event_rooms;
 DELETE FROM speaker_tasks;
 DELETE FROM task_templates;
 DELETE FROM submission_speakers;
@@ -181,4 +182,27 @@ INSERT INTO task_templates (
 	'file',
 	1,
 	2
+);
+
+INSERT INTO event_rooms (id, event_id, name, position, created_at) VALUES
+(
+	'room_aie_main',
+	'evt_aie_sandbox',
+	'Main Stage',
+	0,
+	1754650000000
+),
+(
+	'room_aie_b',
+	'evt_aie_sandbox',
+	'Room B',
+	1,
+	1754650000000
+),
+(
+	'room_aie_workshop',
+	'evt_aie_sandbox',
+	'Workshop Lab',
+	2,
+	1754650000000
 );

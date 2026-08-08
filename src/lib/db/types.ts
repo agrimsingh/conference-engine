@@ -153,3 +153,18 @@ export type AgendaSlotRow = {
 	created_at: number;
 	updated_at: number;
 };
+
+export type EventRoomRow = {
+	id: string;
+	event_id: string;
+	name: string;
+	position: number;
+	created_at: number;
+};
+
+export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
+	submission_status: string;
+	answers_json: string;
+	submitter_name: string | null;
+	submitter_email: string | null;
+};

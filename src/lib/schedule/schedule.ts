@@ -1,18 +1,25 @@
 import {
 	getAgendaSlotBySubmission,
+	listAgendaSlotsForEvent,
+	listSpeakersForSubmission,
 	getSubmissionById,
 } from "@/lib/db/queries";
 import type { AgendaSlotRow } from "@/lib/db/types";
 import {
 	IllegalSubmissionTransitionError,
+	detectConflicts,
+	formatScheduleConflicts,
 	isSubmissionStatus,
+	normalizeSpeakerKey,
 	transitionSubmission,
+	type ScheduleInterval,
 	type SubmissionStatus,
 } from "@/lib/domain";
 import { stableAgendaUid } from "@/lib/email/ics";
 import { notifyCalendarInvite } from "@/lib/email/notify";
 import type { OutboundSendResult } from "@/lib/email/resend";
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 
 export type ScheduleResult =
 	| {
@@ -21,8 +28,23 @@ export type ScheduleResult =
 			status: SubmissionStatus;
 			email: OutboundSendResult | null;
 			icsBytes: string;
+			broadcasted: boolean;
 	  }
 	| { ok: false; error: string; status?: number };
+
+async function loadInterval(
+	db: D1Database,
+	slot: Pick<AgendaSlotRow, "submission_id" | "room_name" | "starts_at" | "ends_at">,
+): Promise<ScheduleInterval> {
+	const speakers = await listSpeakersForSubmission(db, slot.submission_id);
+	return {
+		submissionId: slot.submission_id,
+		roomName: slot.room_name,
+		startsAtMs: slot.starts_at,
+		endsAtMs: slot.ends_at,
+		speakerKeys: speakers.map((speaker) => normalizeSpeakerKey(speaker.email)),
+	};
+}
 
 export async function scheduleSubmission(
 	db: D1Database,
@@ -57,10 +79,34 @@ export async function scheduleSubmission(
 		return { ok: false, error: `Unknown status: ${submission.status}`, status: 500 };
 	}
 
+	const candidateSpeakers = await listSpeakersForSubmission(db, submission.id);
+	const candidate: ScheduleInterval = {
+		submissionId: submission.id,
+		roomName,
+		startsAtMs: args.startsAtMs,
+		endsAtMs: args.endsAtMs,
+		speakerKeys: candidateSpeakers.map((speaker) =>
+			normalizeSpeakerKey(speaker.email),
+		),
+	};
+
+	const existingSlots = await listAgendaSlotsForEvent(db, submission.event_id);
+	const existingIntervals = await Promise.all(
+		existingSlots.map((slot) => loadInterval(db, slot)),
+	);
+	const conflicts = detectConflicts(candidate, existingIntervals);
+	if (conflicts.length > 0) {
+		return {
+			ok: false,
+			error: formatScheduleConflicts(conflicts),
+			status: 409,
+		};
+	}
+
 	const now = Date.now();
 	let nextStatus: SubmissionStatus = submission.status;
 
-	if (submission.status !== "scheduled") {
+	if (submission.status !== "scheduled" && submission.status !== "published") {
 		try {
 			nextStatus = transitionSubmission(submission.status, "scheduled");
 		} catch (error) {
@@ -142,11 +188,17 @@ export async function scheduleSubmission(
 		fromEmail,
 	});
 
+	const broadcasted = await broadcastEventInvalidate(
+		submission.event_id,
+		"schedule.mutate",
+	);
+
 	return {
 		ok: true,
 		slot,
 		status: nextStatus,
 		email,
 		icsBytes,
+		broadcasted,
 	};
 }
