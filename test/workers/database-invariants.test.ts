@@ -5,7 +5,8 @@ import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 import { completeFileTask } from "@/lib/speakers/complete-task";
 import { inviteCoSpeaker, sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { createAuthChallenge, consumeAuthChallenge } from "@/lib/auth/challenges";
-import { acceptEventInvitation } from "@/lib/events/invite-member";
+import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
+import { acceptEventInvitation, inviteOrganizerToEvent } from "@/lib/events/invite-member";
 import {
 	markEmailDeliveryAccepted,
 	markEmailDeliveryFailed,
@@ -286,6 +287,62 @@ describe("D1 runtime invariants", () => {
 		expect(await acceptEventInvitation(env.DB, { secret: "invite-secret", token: "removed-admin-token", now: now + 2 })).toBeNull();
 		expect(await env.DB.prepare("SELECT status FROM event_invitations WHERE id = 'removed-admin-invite'").first<{ status: string }>()).toEqual({ status: "failed" });
 		expect(await env.DB.prepare("SELECT state FROM auth_challenges WHERE token_hash = ?").bind(removedAdminChallenge.tokenHash).first<{ state: string }>()).toEqual({ state: "failed" });
+	});
+
+	it("keeps ambiguous organizer, portal, and event-invite links consumable", async () => {
+		await seedEvent("delivery-link-event", "delivery-link-event");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('delivery-link-account', 'delivery@example.test', 'Delivery', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('delivery-link-person', 'speaker-delivery@example.test', 'Speaker', ?)").bind(now),
+		]);
+		const cases = [
+			{ kind: "organizer_login" as const, token: "organizer-ambiguous", accountId: "delivery-link-account" },
+			{ kind: "portal_login" as const, token: "portal-ambiguous", personId: "delivery-link-person", eventId: "delivery-link-event" },
+			{ kind: "event_invite" as const, token: "invite-ambiguous", accountId: "delivery-link-account", eventId: "delivery-link-event" },
+		];
+		for (const entry of cases) {
+			const challenge = await createAuthChallenge(env.DB, { secret: "delivery-link-secret", ...entry, now });
+			expect(await failOneTimeLinkChallengeIfConfirmed(env.DB, {
+				tokenHash: challenge.tokenHash,
+				result: { ok: false, failureKind: "ambiguous" },
+				reason: "transport timeout",
+			})).toBe(false);
+			expect(await consumeAuthChallenge(env.DB, { secret: "delivery-link-secret", token: entry.token, kind: entry.kind, now })).not.toBeNull();
+		}
+		const rejected = await createAuthChallenge(env.DB, { secret: "delivery-link-secret", kind: "organizer_login", accountId: "delivery-link-account", token: "organizer-rejected", now });
+		expect(await failOneTimeLinkChallengeIfConfirmed(env.DB, {
+			tokenHash: rejected.tokenHash,
+			result: { ok: false, failureKind: "confirmed" },
+			reason: "provider rejected",
+		})).toBe(true);
+		expect(await consumeAuthChallenge(env.DB, { secret: "delivery-link-secret", token: "organizer-rejected", kind: "organizer_login", now })).toBeNull();
+	});
+
+	it("marks an ambiguously sent event invitation delivered so its link can be accepted", async () => {
+		await seedEvent("ambiguous-invite-event", "ambiguous-invite-event");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('ambiguous-inviter', 'inviter@ambiguous.test', 'Inviter', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO event_memberships (id, event_id, account_id, role, created_at) VALUES ('ambiguous-inviter-member', 'ambiguous-invite-event', 'ambiguous-inviter', 'admin', ?)").bind(now),
+		]);
+		const event = await env.DB.prepare("SELECT * FROM events WHERE id = 'ambiguous-invite-event'").first<import("@/lib/db/types").EventRow>();
+		if (!event) throw new Error("seeded event missing");
+		let rawToken = "";
+		const result = await inviteOrganizerToEvent(env.DB, {
+			event,
+			email: "invitee@ambiguous.test",
+			role: "admin",
+			origin: "https://conference.example.test",
+			exposeLoginUrl: false,
+			secret: "ambiguous-invite-secret",
+			invitedByAccountId: "ambiguous-inviter",
+			sendEmail: async (message) => {
+				rawToken = new URL(message.context.loginUrl ?? "").searchParams.get("token") ?? "";
+				return { ok: false, error: "connection lost", failureKind: "ambiguous" };
+			},
+		});
+		expect(result.ok && result.emailStatus).toBe("sent");
+		expect(rawToken).not.toBe("");
+		expect(await acceptEventInvitation(env.DB, { secret: "ambiguous-invite-secret", token: rawToken, now })).not.toBeNull();
 	});
 
 	it("allows only one concurrent draft finalization when the form limit is one", async () => {

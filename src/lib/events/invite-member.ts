@@ -1,4 +1,5 @@
 import { createAuthChallenge, hashAuthChallengeToken } from "@/lib/auth/challenges";
+import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
 import { upsertAccountByEmail } from "@/lib/db/queries";
 import type { AccountRow, EventRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
@@ -31,6 +32,7 @@ export async function inviteOrganizerToEvent(
 		exposeLoginUrl: boolean;
 		secret: string;
 		invitedByAccountId?: string | null;
+		sendEmail?: typeof sendAuthEmail;
 	},
 ): Promise<InviteOrganizerResult> {
 	const email = args.email.trim().toLowerCase();
@@ -69,7 +71,7 @@ export async function inviteOrganizerToEvent(
 	callbackUrl.searchParams.set("token", challenge.token);
 	callbackUrl.searchParams.set("next", `/admin/events/${args.event.slug}/team`);
 	const loginUrl = callbackUrl.toString();
-	const emailResult = await sendAuthEmail({
+	const emailResult = await (args.sendEmail ?? sendAuthEmail)({
 		toEmail: account.email,
 		templateKey: "organizer_invite",
 		context: {
@@ -81,10 +83,13 @@ export async function inviteOrganizerToEvent(
 		idempotencyKey: challenge.tokenHash,
 	});
 
-	if (!emailResult.ok) {
+	if (!emailResult.ok && await failOneTimeLinkChallengeIfConfirmed(db, {
+		tokenHash: challenge.tokenHash,
+		result: emailResult,
+		reason: emailResult.error ?? "mail delivery failed",
+	})) {
 		await db.batch([
 			db.prepare("UPDATE event_invitations SET status = 'failed', updated_at = ? WHERE id = ? AND status = 'pending'").bind(Date.now(), invitationId),
-			db.prepare("UPDATE auth_challenges SET state = 'failed', failure_reason = ? WHERE token_hash = ? AND state = 'active'").bind(emailResult.error ?? "mail delivery failed", challenge.tokenHash),
 		]);
 		return { ok: true, account, invitationId, role, emailStatus: "failed", loginUrl: args.exposeLoginUrl ? loginUrl : null };
 	}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
-import { createAuthChallenge, failAuthChallenge } from "@/lib/auth/challenges";
+import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
+import { createAuthChallenge } from "@/lib/auth/challenges";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { getEventById, getPersonByEmail, listSubmissionsForPerson } from "@/lib/db/queries";
 import { sendTemplatedEmail } from "@/lib/email/resend";
@@ -49,8 +50,11 @@ export async function POST(request: Request) {
 		context: { eventName: event?.name ?? "conference-engine", submitterName: person.name?.trim() || "there", title: "Speaker portal", portalUrl: url.toString() },
 		force: true,
 	});
-	if (!delivery.ok) {
-		await failAuthChallenge(db, { tokenHash: challenge.tokenHash, reason: delivery.error ?? "mail delivery failed" });
+	if (!delivery.ok && await failOneTimeLinkChallengeIfConfirmed(db, {
+		tokenHash: challenge.tokenHash,
+		result: delivery,
+		reason: delivery.error ?? "mail delivery failed",
+	})) {
 		return accepted();
 	}
 	if (await shouldExposeDevLoginUrl()) {

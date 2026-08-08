@@ -25,6 +25,10 @@ export type EmailDeliveryRuntime = {
 	resendFromEmail?: string;
 };
 
+export type AuthEmailSendResult =
+	| { ok: true; providerId?: string }
+	| { ok: false; error: string; failureKind: "confirmed" | "ambiguous" };
+
 type ResendSuccess = { id?: string };
 type ResendErrorBody = { message?: string; name?: string };
 type DeliveryState = "reserved" | "sending" | "provider_accepted" | "sent" | "failed";
@@ -318,11 +322,11 @@ export async function sendAuthEmail(args: {
 	templateKey: Extract<MessageTemplateKey, "organizer_magic_link" | "organizer_invite" | "portal_magic_link">;
 	context: MessageTemplateContext;
 	idempotencyKey: string;
-}): Promise<{ ok: boolean; error?: string; providerId?: string }> {
+}): Promise<AuthEmailSendResult> {
 	const toEmail = args.toEmail.trim().toLowerCase();
 	const rendered = renderMessageTemplate(args.templateKey, args.context);
 	const env = await getCloudflareEnv();
-	if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY missing" };
+	if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY missing", failureKind: "confirmed" };
 	try {
 		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
@@ -334,9 +338,11 @@ export async function sendAuthEmail(args: {
 			body: JSON.stringify({ from: env.RESEND_FROM_EMAIL || "team@65labs.org", to: [toEmail], subject: rendered.subject, text: rendered.text }),
 		});
 		const parsed = parseProviderResponse(await response.text(), response.status);
-		return response.ok ? { ok: true, providerId: parsed.providerId ?? undefined } : { ok: false, error: parsed.error };
+		return response.ok
+			? { ok: true, providerId: parsed.providerId ?? undefined }
+			: { ok: false, error: parsed.error, failureKind: "confirmed" };
 	} catch (error) {
-		return { ok: false, error: error instanceof Error ? error.message : "send failed" };
+		return { ok: false, error: error instanceof Error ? error.message : "send failed", failureKind: "ambiguous" };
 	}
 }
 
