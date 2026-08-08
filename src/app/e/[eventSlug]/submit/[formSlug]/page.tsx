@@ -14,6 +14,7 @@ export default async function PublicCfpPage({ params }: Props) {
 	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
 	if (!loaded) notFound();
 
+	// eslint-disable-next-line react-hooks/purity -- request-time close check in a server component
 	if (isCfpPastClosesAt(loaded.form, Date.now())) {
 		return (
 			<main className="min-h-dvh bg-neutral-50 px-4 py-10 text-neutral-900">
