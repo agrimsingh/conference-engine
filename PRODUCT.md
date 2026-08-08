@@ -38,7 +38,7 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 - Forms render generically from DB rows. Admin form-builder at `/admin/events/[slug]/forms` edits those rows (no seed-SQL edits required).
 - English-only; no payments; no CRM/marketing/CMS scope. AI-assisted review explicitly optional/struck.
 - Airtable: one-way CSV download plus optional Airtable REST push; never the system of record.
-- Reviewer assignment: organizers assign named reviewers to specific submissions; scoring fail-closes when a reviewer has zero assignments. The review board UI still shows the full list when unassigned (`emptyMeansAll`) for committee-style browsing.
+- Reviewer assignment: organizers assign named reviewers to specific submissions; scoring and the review board both fail-close when a reviewer has zero assignments (empty board / no scores). `emptyMeansAll` remains on the filter helper for explicit non-board callers only.
 - Public schedule: attendees see `published` sessions only; `scheduled` remains organizer-private until publish.
 - Multi-event: organizer accounts (`accounts`) hold email identity; `event_memberships` (owner/admin) scope admin access per event. Magic-link login is the production auth path. Event owners/admins invite teammates by email from `/admin/events/[slug]/team` (adds `admin` membership + magic-link email).
 - Public embed: `/embed/[slug]/schedule` is the iframe-friendly schedule (no app chrome).

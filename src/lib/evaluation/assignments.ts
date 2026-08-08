@@ -10,7 +10,8 @@ import type { ReviewAssignmentRow } from "@/lib/db/types";
 /**
  * Committee → all submissions.
  * Reviewer with assignments → only assigned ids.
- * Reviewer with zero assignments → empty unless emptyMeansAll (board UI compat).
+ * Reviewer with zero assignments → empty (fail-closed). Pass emptyMeansAll only for
+ * explicit non-board callers that want the old fail-open behavior.
  */
 export function filterBoardSubmissions<T extends { id: string }>(
 	submissions: T[],

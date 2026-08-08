@@ -96,7 +96,6 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const submissions = filterBoardSubmissions(reviewable, {
 		mode: identity.mode,
 		assignments: reviewerAssignments,
-		emptyMeansAll: true,
 	});
 	const scores = await listEvaluationScoresForPlan(db, plan.id);
 	const scoresBySubmission = new Map<string, typeof scores>();

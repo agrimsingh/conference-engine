@@ -37,6 +37,7 @@ describe("filterBoardSubmissions", () => {
 		).toEqual([]);
 	});
 
+	// Flag still supported for explicit callers; board must not pass it.
 	it("returns all for reviewer with zero assignments when emptyMeansAll", () => {
 		expect(
 			filterBoardSubmissions(submissions, {

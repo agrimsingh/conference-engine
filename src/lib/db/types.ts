@@ -185,6 +185,7 @@ export type AgendaSlotRow = {
 	id: string;
 	event_id: string;
 	submission_id: string;
+	room_id: string | null;
 	room_name: string;
 	starts_at: number;
 	ends_at: number;

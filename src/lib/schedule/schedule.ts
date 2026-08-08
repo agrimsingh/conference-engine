@@ -87,16 +87,15 @@ export async function scheduleSubmission(
 	}
 
 	const eventRooms = await listEventRooms(db, submission.event_id);
-	if (eventRooms.length > 0) {
-		const knownRooms = new Set(eventRooms.map((r) => r.name.trim()));
-		if (!knownRooms.has(roomName)) {
-			return {
-				ok: false,
-				error: `Unknown room "${roomName}". Use one of: ${[...knownRooms].join(", ")}`,
-				status: 400,
-			};
-		}
+	const matchedRoom = eventRooms.find((r) => r.name.trim() === roomName);
+	if (eventRooms.length > 0 && !matchedRoom) {
+		return {
+			ok: false,
+			error: `Unknown room "${roomName}". Use one of: ${eventRooms.map((r) => r.name.trim()).join(", ")}`,
+			status: 400,
+		};
 	}
+	const roomId = matchedRoom?.id ?? null;
 
 	const candidateSpeakers = await listSpeakersForSubmission(db, submission.id);
 	const candidate: ScheduleInterval = {
@@ -150,13 +149,14 @@ export async function scheduleSubmission(
 		await db
 			.prepare(
 				`UPDATE agenda_slots
-         SET room_name = ?, starts_at = ?, ends_at = ?, updated_at = ?
+         SET room_id = ?, room_name = ?, starts_at = ?, ends_at = ?, updated_at = ?
          WHERE id = ?`,
 			)
-			.bind(roomName, args.startsAtMs, args.endsAtMs, now, existing.id)
+			.bind(roomId, roomName, args.startsAtMs, args.endsAtMs, now, existing.id)
 			.run();
 		slot = {
 			...existing,
+			room_id: roomId,
 			room_name: roomName,
 			starts_at: args.startsAtMs,
 			ends_at: args.endsAtMs,
@@ -167,14 +167,15 @@ export async function scheduleSubmission(
 		await db
 			.prepare(
 				`INSERT INTO agenda_slots (
-          id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid,
+          id, event_id, submission_id, room_id, room_name, starts_at, ends_at, ics_uid,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
 				submission.event_id,
 				submission.id,
+				roomId,
 				roomName,
 				args.startsAtMs,
 				args.endsAtMs,
@@ -187,6 +188,7 @@ export async function scheduleSubmission(
 			id,
 			event_id: submission.event_id,
 			submission_id: submission.id,
+			room_id: roomId,
 			room_name: roomName,
 			starts_at: args.startsAtMs,
 			ends_at: args.endsAtMs,
