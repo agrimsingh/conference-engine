@@ -89,39 +89,29 @@ export async function upsertAccountByEmail(
 ): Promise<AccountRow> {
 	const email = args.email.trim().toLowerCase();
 	const name = args.name?.trim() ?? "";
-	const existing = await db
-		.prepare("SELECT * FROM accounts WHERE email = ?")
-		.bind(email)
-		.first<AccountRow>();
-
 	const now = Date.now();
-	if (existing) {
-		// Public login and invitation requests are mailbox-unproven. They may
-		// seed an empty legacy account name but can never overwrite a real one.
-		if (name && !existing.name.trim()) {
-			await db
-				.prepare(
-					`UPDATE accounts SET name = ?, updated_at = ? WHERE id = ?`,
-				)
-				.bind(name, now, existing.id)
-				.run();
-			return { ...existing, name, updated_at: now };
-		}
-		return existing;
-	}
-
 	const id = args.id ?? crypto.randomUUID();
-	await db
+	const account = await db
 		.prepare(
 			`INSERT INTO accounts (id, email, name, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(email) DO UPDATE SET
+			name = CASE
+				WHEN trim(COALESCE(accounts.name, '')) = '' AND trim(excluded.name) <> ''
+				THEN excluded.name
+				ELSE accounts.name
+			END,
+			updated_at = CASE
+				WHEN trim(COALESCE(accounts.name, '')) = '' AND trim(excluded.name) <> ''
+				THEN excluded.updated_at
+				ELSE accounts.updated_at
+			END
+		 RETURNING *`,
 		)
 		.bind(id, email, name, now, now)
-		.run();
-
-	const created = await getAccountById(db, id);
-	if (!created) throw new Error("Failed to create account");
-	return created;
+		.first<AccountRow>();
+	if (!account) throw new Error("Failed to create account");
+	return account;
 }
 
 export async function getEventMembership(

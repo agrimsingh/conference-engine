@@ -76,6 +76,28 @@ describe("D1 runtime invariants", () => {
 		expect(invite.ok && invite.loginUrl).toBeNull();
 	});
 
+	it("atomically fills empty account names once and handles concurrent first creation", async () => {
+		await upsertAccountByEmail(env.DB, { id: "empty-account", email: "empty@account.test" });
+		const candidates = ["Ada", "Bea", "Cy", "Dee", "Eli", "Fay"];
+		const raced = await Promise.all(candidates.map((name) => upsertAccountByEmail(env.DB, {
+			email: "empty@account.test", name,
+		})));
+		const stored = await env.DB.prepare("SELECT id, name, created_at FROM accounts WHERE email = 'empty@account.test'").first<{ id: string; name: string; created_at: number }>();
+		expect(stored?.id).toBe("empty-account");
+		expect(candidates).toContain(stored?.name);
+		expect(new Set(raced.map((account) => account.id))).toEqual(new Set(["empty-account"]));
+		expect((await upsertAccountByEmail(env.DB, { email: "empty@account.test", name: "Later overwrite" })).name).toBe(stored?.name);
+
+		const created = await Promise.all(candidates.map((name) => upsertAccountByEmail(env.DB, {
+			email: "first-race@account.test", name,
+		})));
+		const first = await env.DB.prepare("SELECT id, name FROM accounts WHERE email = 'first-race@account.test'").first<{ id: string; name: string }>();
+		expect(first).not.toBeNull();
+		expect(candidates).toContain(first?.name);
+		expect(new Set(created.map((account) => account.id))).toEqual(new Set([first?.id]));
+		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM accounts WHERE email = 'first-race@account.test'").first<{ count: number }>())?.count).toBe(1);
+	});
+
 	it("applies the production migrations, makes ownership canonical, and fails preflight closed", async () => {
 		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM d1_migrations").first<{ count: number }>())?.count).toBe(14);
 		await seedEvent("ownership-event", "ownership-event");
