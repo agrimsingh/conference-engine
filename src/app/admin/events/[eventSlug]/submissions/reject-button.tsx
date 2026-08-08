@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { buttonClasses } from "@/components/ui";
 
 type Props = {
 	eventSlug: string;
@@ -41,11 +42,11 @@ export function RejectButton({ eventSlug, submissionId, disabled }: Props) {
 				type="button"
 				onClick={() => void onClick()}
 				disabled={disabled || pending}
-				className="rounded border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-800 hover:bg-neutral-50 disabled:opacity-40"
+				className={buttonClasses("secondary", "sm")}
 			>
 				{pending ? "Rejecting…" : "Reject"}
 			</button>
-			{error ? <p className="text-xs text-red-700">{error}</p> : null}
+			{error ? <p className="text-xs text-red-400">{error}</p> : null}
 		</div>
 	);
 }

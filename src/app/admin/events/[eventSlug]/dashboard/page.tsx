@@ -25,7 +25,7 @@ export default async function AdminDashboardPage({ params }: Props) {
 	const snapshot = await loadOutstandingTasksSnapshot(db, event);
 
 	return (
-		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={event.slug} />
 			<main className="mx-auto max-w-4xl px-4 py-10">
 				<PageHeader

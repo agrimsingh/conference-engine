@@ -15,6 +15,10 @@ import {
 	titleFromAnswers,
 } from "@/lib/domain";
 import {
+	SEGMENTED_CONTAINER_CLASSES,
+	EmptyState,
+} from "@/components/ui";
+import {
 	DEMO_SCHEDULE_DAY,
 	dayKeyInTimeZone,
 	formatClock,
@@ -110,16 +114,16 @@ function SlotCard({
 	showCategory?: boolean;
 }) {
 	return (
-		<div className="rounded border border-neutral-200 bg-white px-3 py-2 text-sm">
-			<p className="font-mono text-xs text-neutral-500">
+		<div className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm">
+			<p className="font-mono text-xs tabular-nums text-neutral-500">
 				{formatClock(slot.startsAtMs, timezone)}–
 				{formatClock(slot.endsAtMs, timezone)}
 				{showRoom ? ` · ${slot.roomName}` : ""}
 				{showCategory ? ` · ${slot.category}` : ""}
 			</p>
-			<p className="mt-0.5 font-medium">{slot.title}</p>
+			<p className="mt-0.5 font-medium text-neutral-100">{slot.title}</p>
 			{slot.speakers.length > 0 ? (
-				<p className="text-neutral-600">{slot.speakers.join(", ")}</p>
+				<p className="text-neutral-400">{slot.speakers.join(", ")}</p>
 			) : null}
 		</div>
 	);
@@ -216,16 +220,16 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 	const views: ScheduleView[] = ["list", "day", "week", "track", "room"];
 
 	return (
-		<main className="mx-auto min-h-dvh max-w-5xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-4 border-b border-neutral-200 pb-5">
+		<main className="mx-auto max-w-5xl px-4 py-10">
+			<header className="mb-8 space-y-4 border-b border-neutral-800 pb-5">
 				<div className="space-y-2">
 					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 						Public schedule
 					</p>
-					<h1 className="text-balance text-3xl font-semibold tracking-tight">
+					<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 						{event.name}
 					</h1>
-					<p className="text-pretty text-sm text-neutral-600">
+					<p className="text-pretty text-sm text-neutral-400">
 						{view === "week"
 							? `${formatDayLabel(weekKeys[0]!, event.timezone)} – ${formatDayLabel(weekKeys[6]!, event.timezone)}`
 							: formatDayLabel(dayKey, event.timezone)}{" "}
@@ -237,7 +241,7 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 					<div
 						role="tablist"
 						aria-label="Schedule view"
-						className="inline-flex w-fit flex-wrap rounded-lg border border-neutral-300 bg-white p-0.5"
+						className={SEGMENTED_CONTAINER_CLASSES}
 					>
 						{views.map((v) => {
 							const active = view === v;
@@ -253,8 +257,8 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 									})}
 									className={
 										active
-											? "rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
-											: "rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900"
+											? "rounded-md bg-neutral-800 px-3 py-1.5 text-sm font-medium text-neutral-100"
+											: "rounded-md px-3 py-1.5 text-sm font-medium text-neutral-400 hover:text-neutral-100"
 									}
 								>
 									{viewLabel(v)}
@@ -279,8 +283,8 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 									})}
 									className={
 										active
-											? "rounded-full bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white"
-											: "rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 hover:border-neutral-400"
+											? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
+											: "rounded-full border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-neutral-500"
 									}
 								>
 									{room === "all" ? "All rooms" : room}
@@ -293,31 +297,27 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 
 			{view === "list" ? (
 				daySlots.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							Nothing scheduled for this day
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Check back once organizers publish the program, or try another view.
-						</p>
-					</div>
+					<EmptyState
+						title="Nothing scheduled for this day"
+						description="Check back once organizers publish the program, or try another view."
+					/>
 				) : (
 					<ol className="space-y-4">
 						{daySlots.map((slot) => (
 							<li
 								key={slot.id}
-								className="border-l-2 border-neutral-900 pl-4"
+								className="border-l-2 border-neutral-200 pl-4"
 							>
-								<p className="font-mono text-xs text-neutral-500">
+								<p className="font-mono text-xs tabular-nums text-neutral-500">
 									{formatClock(slot.startsAtMs, event.timezone)}–
 									{formatClock(slot.endsAtMs, event.timezone)} · {slot.roomName} ·{" "}
 									{slot.category}
 								</p>
-								<h2 className="mt-1 text-lg font-medium tracking-tight">
+								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100">
 									{slot.title}
 								</h2>
 								{slot.speakers.length > 0 ? (
-									<p className="mt-1 text-sm text-neutral-600">
+									<p className="mt-1 text-sm text-neutral-400">
 										{slot.speakers.join(", ")}
 									</p>
 								) : null}
@@ -329,14 +329,10 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 
 			{view === "day" ? (
 				daySlots.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							Nothing scheduled for this day
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Try another room filter or come back after scheduling.
-						</p>
-					</div>
+					<EmptyState
+						title="Nothing scheduled for this day"
+						description="Try another room filter or come back after scheduling."
+					/>
 				) : (
 					<div className="space-y-6">
 						{roomsForDay
@@ -354,17 +350,17 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 										<ul className="space-y-3">
 											{roomSlots.map((slot) => (
 												<li key={slot.id} className="flex gap-4 text-sm">
-													<p className="w-28 shrink-0 font-mono text-neutral-500">
+													<p className="w-28 shrink-0 font-mono tabular-nums text-neutral-500">
 														{formatClock(slot.startsAtMs, event.timezone)}–
 														{formatClock(slot.endsAtMs, event.timezone)}
 													</p>
 													<div>
-														<p className="font-medium">{slot.title}</p>
+														<p className="font-medium text-neutral-100">{slot.title}</p>
 														<p className="text-xs text-neutral-500">
 															{slot.category}
 														</p>
 														{slot.speakers.length > 0 ? (
-															<p className="text-neutral-600">
+															<p className="text-neutral-400">
 																{slot.speakers.join(", ")}
 															</p>
 														) : null}
@@ -388,13 +384,13 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 						return (
 							<section
 								key={key}
-								className="min-h-[8rem] rounded border border-neutral-200 bg-neutral-50 p-2"
+								className="min-h-[8rem] rounded-lg border border-neutral-800 bg-neutral-900 p-2"
 							>
 								<h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
 									{formatDayLabel(key, event.timezone)}
 								</h2>
 								{column.length === 0 ? (
-									<p className="text-xs text-neutral-400">No sessions</p>
+									<p className="text-xs text-neutral-500">No sessions</p>
 								) : (
 									<ul className="space-y-2">
 										{column.map((slot) => (
@@ -423,12 +419,12 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 							<section key={label}>
 								<h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
 									{label}{" "}
-									<span className="font-normal normal-case text-neutral-400">
+									<span className="font-normal normal-case text-neutral-500">
 										({column.length})
 									</span>
 								</h2>
 								{column.length === 0 ? (
-									<p className="text-xs text-neutral-400">No sessions</p>
+									<p className="text-xs text-neutral-500">No sessions</p>
 								) : (
 									<ul className="space-y-2">
 										{column.map((slot) => (
@@ -460,13 +456,13 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 						return (
 							<section
 								key={room}
-								className="min-h-[8rem] rounded border border-neutral-200 bg-neutral-50 p-3"
+								className="min-h-[8rem] rounded-lg border border-neutral-800 bg-neutral-900 p-3"
 							>
 								<h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
 									{room}
 								</h2>
 								{column.length === 0 ? (
-									<p className="text-xs text-neutral-400">No sessions</p>
+									<p className="text-xs text-neutral-500">No sessions</p>
 								) : (
 									<ul className="space-y-2">
 										{column.map((slot) => (
@@ -484,13 +480,11 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 						);
 					})}
 					{roomsForDay.length === 0 ? (
-						<div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center md:col-span-2 lg:col-span-3">
-							<p className="text-sm font-medium text-neutral-900">
-								No rooms configured
-							</p>
-							<p className="mt-1 text-sm text-neutral-600">
-								Organizers haven&apos;t set up rooms for this day yet.
-							</p>
+						<div className="md:col-span-2 lg:col-span-3">
+							<EmptyState
+								title="No rooms configured"
+								description="Organizers haven't set up rooms for this day yet."
+							/>
 						</div>
 					) : null}
 				</div>
@@ -498,7 +492,7 @@ export default async function PublicSchedulePage({ params, searchParams }: Props
 
 			<p className="mt-10 text-sm text-neutral-500">
 				<Link
-					className="font-medium text-neutral-800 underline underline-offset-2"
+					className="font-medium text-neutral-200 underline underline-offset-2"
 					href={`/e/${event.slug}/submit/cfp`}
 				>
 					Submit a talk

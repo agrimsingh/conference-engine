@@ -40,31 +40,34 @@ export default async function ReviewPage({ searchParams }: Props) {
 
 	if (!identity) {
 		return (
-			<main className="mx-auto min-h-dvh max-w-3xl px-4 py-10 text-neutral-900">
+			<main className="mx-auto max-w-3xl px-4 py-10">
 				<PageHeader
 					eyebrow="Review"
 					title="Open your review link"
 					description="Use the personal link from your invite email, or ask an organizer to activate the evaluation plan and share the board URL."
 				/>
 				{admin ? (
-					<p className="text-sm text-neutral-600">
+					<p className="text-sm text-neutral-400">
 						As organizer: activate a plan from{" "}
 						<Link
-							className="font-medium underline underline-offset-2"
+							className="font-medium text-neutral-200 underline underline-offset-2"
 							href="/admin/events/aie-sandbox/submissions"
 						>
 							Submissions
 						</Link>
 						, then reopen this page with{" "}
-						<code className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs">
+						<code className="rounded-md bg-neutral-900 px-1.5 py-0.5 text-xs text-neutral-300">
 							?event=aie-sandbox
 						</code>
 						.
 					</p>
 				) : (
-					<p className="text-sm text-neutral-600">
+					<p className="text-sm text-neutral-400">
 						Missing or invalid token.{" "}
-						<Link className="underline underline-offset-2" href="/">
+						<Link
+							className="text-neutral-200 underline underline-offset-2"
+							href="/"
+						>
 							Back home
 						</Link>
 					</p>
@@ -120,18 +123,18 @@ export default async function ReviewPage({ searchParams }: Props) {
 		identity.mode === "reviewer" ? identity.reviewer.name : "committee";
 
 	return (
-		<main className="mx-auto min-h-dvh max-w-3xl px-4 py-10 text-neutral-900">
-			<header className="mb-8 space-y-3 border-b border-neutral-200 pb-5">
+		<main className="mx-auto max-w-3xl px-4 py-10">
+			<header className="mb-8 space-y-3 border-b border-neutral-800 pb-5">
 				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 					Review · {plan.name}
 				</p>
-				<h1 className="text-balance text-3xl font-semibold tracking-tight">
+				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					{event.name}
 				</h1>
-				<p className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+				<p className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-100">
 					Reviewing as {reviewingAs}
 				</p>
-				<p className="text-pretty text-sm text-neutral-600">
+				<p className="text-pretty text-sm text-neutral-400">
 					Tap 1–5 to score. Optional comment, then save. Organizers can accept or
 					reject from here when signed in.
 				</p>

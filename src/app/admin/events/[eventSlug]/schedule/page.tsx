@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/ui";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -95,7 +96,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			: ["Main Stage", "Room B", "Workshop Lab"];
 
 	return (
-		<div className="min-h-dvh bg-neutral-50 text-neutral-900">
+		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={event.slug} />
 			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader
@@ -105,14 +106,10 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 				/>
 
 				{sessions.length === 0 ? (
-					<div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-10 text-center">
-						<p className="text-sm font-medium text-neutral-900">
-							Nothing to schedule yet
-						</p>
-						<p className="mt-1 text-sm text-neutral-600">
-							Accept a submission first, then come back to place it on the grid.
-						</p>
-					</div>
+					<EmptyState
+						title="Nothing to schedule yet"
+						description="Accept a submission first, then come back to place it on the grid."
+					/>
 				) : (
 					<ScheduleBoard
 						eventSlug={event.slug}
