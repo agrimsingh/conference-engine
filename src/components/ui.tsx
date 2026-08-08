@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import type { CoSpeakerStatus } from "@/lib/domain";
 
 export type ButtonVariant = "primary" | "secondary";
 export type ButtonSize = "sm" | "md";
@@ -80,6 +81,23 @@ export function submissionStatusTone(status: string): StatusTone {
 			return "negative";
 		default:
 			return "neutral";
+	}
+}
+
+export function coSpeakerStatusTone(status: CoSpeakerStatus): StatusTone {
+	switch (status) {
+		case "confirmed":
+			return "positive";
+		case "pending":
+			return "warning";
+		// One Red Rule: declined/removed are outcomes, not errors.
+		case "declined":
+		case "removed":
+			return "neutral";
+		default: {
+			const _exhaustive: never = status;
+			return _exhaustive;
+		}
 	}
 }
 

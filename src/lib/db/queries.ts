@@ -113,6 +113,54 @@ export async function listSpeakersForSubmission(
 	return result.results;
 }
 
+export async function getSubmissionSpeakerById(
+	db: D1Database,
+	speakerId: string,
+): Promise<SubmissionSpeakerRow | null> {
+	return db
+		.prepare("SELECT * FROM submission_speakers WHERE id = ?")
+		.bind(speakerId)
+		.first<SubmissionSpeakerRow>();
+}
+
+export async function getSpeakerByConfirmTokenHash(
+	db: D1Database,
+	tokenHash: string,
+): Promise<SubmissionSpeakerRow | null> {
+	return db
+		.prepare("SELECT * FROM submission_speakers WHERE confirm_token_hash = ?")
+		.bind(tokenHash)
+		.first<SubmissionSpeakerRow>();
+}
+
+export type PendingCoSpeakerJoinRow = SubmissionSpeakerRow & {
+	submission_status: string;
+	answers_json: string;
+};
+
+/**
+ * Pending co-speakers on live submissions (not rejected/withdrawn) — the
+ * pipeline never stalls silently, so these count as outstanding work.
+ */
+export async function listPendingCoSpeakersForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<PendingCoSpeakerJoinRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT ss.*, s.status AS submission_status, s.answers_json AS answers_json
+       FROM submission_speakers ss
+       JOIN submissions s ON s.id = ss.submission_id
+       WHERE s.event_id = ?
+         AND ss.status = 'pending'
+         AND s.status NOT IN ('rejected', 'withdrawn')
+       ORDER BY s.created_at DESC, ss.position ASC`,
+		)
+		.bind(eventId)
+		.all<PendingCoSpeakerJoinRow>();
+	return result.results;
+}
+
 export async function listLabelsForEvent(
 	db: D1Database,
 	eventId: string,

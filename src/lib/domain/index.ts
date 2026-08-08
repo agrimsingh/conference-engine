@@ -59,6 +59,15 @@ export {
 } from "./speaker-tasks";
 
 export {
+	CO_SPEAKER_STATUSES,
+	isCoSpeakerStatus,
+	isPostAcceptance,
+	MAX_CO_SPEAKERS,
+	POST_ACCEPTANCE_STATUSES,
+	type CoSpeakerStatus,
+} from "./co-speakers";
+
+export {
 	isEvaluationPlanStatus,
 	isReviewableSubmissionStatus,
 	isValidScore,

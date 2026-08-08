@@ -302,11 +302,18 @@ function FieldInput({
 			return (
 				<fieldset className="flex flex-col gap-3 text-sm">
 					<legend className="font-medium">{field.label} *</legend>
+					<p className="text-xs text-neutral-500">
+						The first speaker is the primary contact. Co-speakers are listed
+						immediately and get an email to confirm their participation.
+					</p>
 					{speakers.map((speaker, index) => (
 						<div
 							key={index}
 							className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-900 p-3 sm:grid-cols-2"
 						>
+							<p className="col-span-full text-xs font-medium uppercase tracking-wide text-neutral-500">
+								{index === 0 ? "Primary speaker" : `Co-speaker ${index}`}
+							</p>
 							<label className="flex flex-col gap-1">
 								<span>Name</span>
 								<input
@@ -355,7 +362,7 @@ function FieldInput({
 								onChange([...speakers, { name: "", email: "", bio: "" }])
 							}
 						>
-							Add speaker
+							Add co-speaker
 						</button>
 					) : null}
 				</fieldset>

@@ -5,6 +5,7 @@ import {
 } from "@/lib/domain";
 import { getSpeakerTaskById } from "@/lib/db/queries";
 import type { AssetRow, SpeakerTaskRow } from "@/lib/db/types";
+import { implicitlyConfirmByTaskCompletion } from "./co-speakers";
 
 export type CompleteTextResult =
 	| { ok: true; task: SpeakerTaskRow }
@@ -64,6 +65,12 @@ export async function completeTextTask(
 		)
 		.bind(text, task.submission_id, task.person_id)
 		.run();
+
+	// Completing a task proves the person is real → implicit confirmation.
+	await implicitlyConfirmByTaskCompletion(db, {
+		submissionId: task.submission_id,
+		personId: task.person_id,
+	});
 
 	const updated = await getSpeakerTaskById(db, task.id);
 	if (!updated) return { ok: false, error: "Task missing after update", status: 500 };
@@ -153,6 +160,12 @@ export async function completeFileTask(
 			.bind(assetId, now, task.event_id, task.person_id)
 			.run();
 	}
+
+	// Completing a task proves the person is real → implicit confirmation.
+	await implicitlyConfirmByTaskCompletion(db, {
+		submissionId: task.submission_id,
+		personId: task.person_id,
+	});
 
 	const updated = await getSpeakerTaskById(db, task.id);
 	if (!updated) return { ok: false, error: "Task missing after update", status: 500 };
