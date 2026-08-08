@@ -14,6 +14,7 @@ const LINKS = [
 	{ segment: "schedule", label: "Schedule" },
 	{ segment: "dashboard", label: "Dashboard" },
 	{ segment: "tasks", label: "Tasks" },
+	{ segment: "team", label: "Team" },
 ] as const;
 
 export function AdminEventNav({ eventSlug }: Props) {

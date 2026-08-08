@@ -193,7 +193,10 @@ export async function sendTemplatedEmail(
 
 export async function sendAuthEmail(args: {
 	toEmail: string;
-	templateKey: Extract<MessageTemplateKey, "organizer_magic_link" | "portal_magic_link">;
+	templateKey: Extract<
+		MessageTemplateKey,
+		"organizer_magic_link" | "organizer_invite" | "portal_magic_link"
+	>;
 	context: MessageTemplateContext;
 }): Promise<{ ok: boolean; error?: string }> {
 	const toEmail = args.toEmail.trim().toLowerCase();

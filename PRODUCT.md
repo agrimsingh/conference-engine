@@ -40,7 +40,7 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 - Airtable: one-way CSV download plus optional Airtable REST push; never the system of record.
 - Reviewer assignment: organizers assign named reviewers to specific submissions; scoring fail-closes when a reviewer has zero assignments. The review board UI still shows the full list when unassigned (`emptyMeansAll`) for committee-style browsing.
 - Public schedule: attendees see `published` sessions only; `scheduled` remains organizer-private until publish.
-- Multi-event: organizer accounts (`accounts`) hold email identity; `event_memberships` (owner/admin) scope admin access per event. Magic-link login is the production auth path.
+- Multi-event: organizer accounts (`accounts`) hold email identity; `event_memberships` (owner/admin) scope admin access per event. Magic-link login is the production auth path. Event owners/admins invite teammates by email from `/admin/events/[slug]/team` (adds `admin` membership + magic-link email).
 - Public embed: `/embed/[slug]/schedule` is the iframe-friendly schedule (no app chrome).
 - Licensing: MIT open source. No paid SKU and no per-event pricing track.
 - Undecided product facts: product name (see Brand Commitments).

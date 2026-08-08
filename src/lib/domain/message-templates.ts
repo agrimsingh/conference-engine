@@ -8,6 +8,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"task_reminder",
 	"portal_magic_link",
 	"organizer_magic_link",
+	"organizer_invite",
 ] as const;
 
 export type MessageTemplateKey = (typeof MESSAGE_TEMPLATE_KEYS)[number];
@@ -167,6 +168,20 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"— conference-engine",
 		].join("\n"),
 	}),
+	organizer_invite: (ctx) => ({
+		subject: `You're invited to organize ${ctx.eventName}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`You've been added as an organizer on ${ctx.eventName}.`,
+			"Open this one-time link to sign in and access the event admin:",
+			ctx.loginUrl ?? "/auth/callback",
+			"",
+			"If you did not expect this invite, you can ignore this email.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
 };
 
 export function isMessageTemplateKey(value: string): value is MessageTemplateKey {
@@ -186,6 +201,7 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 		key !== "task_reminder" &&
 		key !== "portal_magic_link" &&
 		key !== "organizer_magic_link" &&
+		key !== "organizer_invite" &&
 		// Multiple co-speakers per submission + admin resend.
 		key !== "co_speaker_invite"
 	);

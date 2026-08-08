@@ -106,6 +106,79 @@ export async function getEventMembership(
 		.first<EventMembershipRow>();
 }
 
+export type EventMemberListRow = EventMembershipRow & {
+	email: string;
+	name: string;
+};
+
+export async function listEventMembers(
+	db: D1Database,
+	eventId: string,
+): Promise<EventMemberListRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT m.*, a.email AS email, a.name AS name
+       FROM event_memberships m
+       INNER JOIN accounts a ON a.id = m.account_id
+       WHERE m.event_id = ?
+       ORDER BY
+         CASE m.role WHEN 'owner' THEN 0 ELSE 1 END,
+         a.email ASC`,
+		)
+		.bind(eventId)
+		.all<EventMemberListRow>();
+	return result.results;
+}
+
+export async function addEventMembership(
+	db: D1Database,
+	args: {
+		eventId: string;
+		accountId: string;
+		role: "owner" | "admin";
+	},
+): Promise<EventMembershipRow> {
+	const existing = await getEventMembership(db, args.eventId, args.accountId);
+	if (existing) return existing;
+
+	const id = crypto.randomUUID();
+	const now = Date.now();
+	await db
+		.prepare(
+			`INSERT INTO event_memberships (id, event_id, account_id, role, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+		)
+		.bind(id, args.eventId, args.accountId, args.role, now)
+		.run();
+
+	return {
+		id,
+		event_id: args.eventId,
+		account_id: args.accountId,
+		role: args.role,
+		created_at: now,
+	};
+}
+
+export async function removeEventMembership(
+	db: D1Database,
+	args: { eventId: string; accountId: string },
+): Promise<boolean> {
+	const membership = await getEventMembership(db, args.eventId, args.accountId);
+	if (!membership) return false;
+	if (membership.role === "owner") {
+		throw new Error("Cannot remove the event owner");
+	}
+	const result = await db
+		.prepare(
+			`DELETE FROM event_memberships
+       WHERE event_id = ? AND account_id = ? AND role != 'owner'`,
+		)
+		.bind(args.eventId, args.accountId)
+		.run();
+	return (result.meta.changes ?? 0) > 0;
+}
+
 export async function countEventMemberships(
 	db: D1Database,
 	eventId: string,
