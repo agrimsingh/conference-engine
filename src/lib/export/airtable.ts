@@ -1,4 +1,5 @@
 import type { SubmissionExportRow } from "@/lib/export/submissions-csv";
+import { fetchWithBoundedRetry } from "@/lib/security/fetch";
 
 export type AirtableConfig = {
 	apiKey: string;
@@ -44,10 +45,10 @@ export async function pushSubmissionsToAirtable(
 
 	for (let i = 0; i < rows.length; i += BATCH_SIZE) {
 		const batch = rows.slice(i, i + BATCH_SIZE);
-		let attempt = 0;
-		for (;;) {
-			attempt += 1;
-			const response = await fetch(url, {
+		{
+			let response: Response;
+			try {
+				response = await fetchWithBoundedRetry(url, {
 				method: "PATCH",
 				headers: {
 					Authorization: `Bearer ${config.apiKey}`,
@@ -68,18 +69,16 @@ export async function pushSubmissionsToAirtable(
 						},
 					})),
 				}),
-			});
+				}, { attempts: 3, timeoutMs: 10_000 });
+			} catch {
+				return { ok: false, error: "Airtable request timed out", status: 502 };
+			}
 
 			let body: AirtableCreateResponse = {};
 			try {
 				body = (await response.json()) as AirtableCreateResponse;
 			} catch {
 				body = {};
-			}
-
-			if (response.status === 429 && attempt < 4) {
-				await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
-				continue;
 			}
 
 			if (!response.ok) {
@@ -90,7 +89,6 @@ export async function pushSubmissionsToAirtable(
 			}
 
 			upserted += body.records?.length ?? batch.length;
-			break;
 		}
 	}
 

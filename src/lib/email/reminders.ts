@@ -2,6 +2,7 @@ import {
 	isSpeakerTaskKey,
 	SPEAKER_TASK_TYPE_REGISTRY,
 } from "../domain/speaker-tasks";
+import { fetchWithBoundedRetry } from "../security/fetch";
 import {
 	renderMessageTemplate,
 	type MessageTemplateKey,
@@ -219,11 +220,12 @@ async function sendReminderEmail(
 	}
 
 	try {
-		const response = await fetch("https://api.resend.com/emails", {
+		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
+				"Idempotency-Key": messageId,
 			},
 			body: JSON.stringify({
 				from: fromEmail,

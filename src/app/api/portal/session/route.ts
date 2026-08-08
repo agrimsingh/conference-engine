@@ -1,106 +1,52 @@
 import { NextResponse } from "next/server";
 import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
-import { getDb } from "@/lib/db/cloudflare";
-import {
-	getEventById,
-	getPersonByEmail,
-	listAcceptedSubmissionsForPerson,
-} from "@/lib/db/queries";
+import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
+import { getEventById, getPersonByEmail, listSubmissionsForPerson } from "@/lib/db/queries";
 import { sendTemplatedEmail } from "@/lib/email/resend";
-import { createPortalSession } from "@/lib/speakers/portal-session";
+import { hasPortalEligibility, mintPortalSessionToken, persistPortalSession } from "@/lib/speakers/portal-session";
+import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
+import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
-type Body = {
-	email?: unknown;
-};
+function accepted(extra: Record<string, unknown> = {}): NextResponse {
+	return NextResponse.json({ ok: true, ...extra }, { status: 202 });
+}
 
 export async function POST(request: Request) {
-	let body: Body;
-	try {
-		body = (await request.json()) as Body;
-	} catch {
-		return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
-	}
-
-	const email =
-		typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-	if (!email.includes("@")) {
-		return NextResponse.json({ ok: false, error: "Valid email required" }, { status: 400 });
-	}
-
+	let raw: unknown;
+	try { raw = await request.json(); } catch { return accepted(); }
+	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+	const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
 	const db = await getDb();
+	const secret = await getAuthSecret();
+	const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+	const [emailAllowed, ipAllowed] = await Promise.all([
+		consumeFixedWindowRateLimit(db, { secret, bucket: "portal-link-email", subject: `email:${email || "invalid"}`, limit: 5, windowMs: 15 * 60_000 }),
+		consumeFixedWindowRateLimit(db, { secret, bucket: "portal-link-ip", subject: `ip:${ip}`, limit: 20, windowMs: 15 * 60_000 }),
+	]);
+	if (!isPlausibleEmail(email) || !emailAllowed || !ipAllowed) return accepted();
+
 	const person = await getPersonByEmail(db, email);
-	if (!person) {
-		return NextResponse.json(
-			{
-				ok: false,
-				error: "No speaker record for that email. Accept a submission first.",
-			},
-			{ status: 404 },
-		);
-	}
-
-	const { token, expiresInSeconds } = await createPortalSession({
-		email: person.email,
-		personId: person.id,
-	});
-
+	if (!person) return accepted();
+	const submissions = await listSubmissionsForPerson(db, person.id);
+	if (!hasPortalEligibility(submissions)) return accepted();
+	const primary = submissions[0];
+	if (!primary) return accepted();
+	const event = await getEventById(db, primary.event_id);
+	const token = await mintPortalSessionToken();
 	const url = new URL("/portal", request.url);
 	url.searchParams.set("token", token);
-	const portalUrl = url.toString();
-	const portalPath = `${url.pathname}?${url.searchParams.toString()}`;
-
-	const submissions = await listAcceptedSubmissionsForPerson(db, person.id);
-	const primary = submissions[0];
-	if (!primary) {
-		return NextResponse.json(
-			{
-				ok: false,
-				error: "No accepted submissions for that speaker.",
-			},
-			{ status: 404 },
-		);
-	}
-
-	const event = await getEventById(db, primary.event_id);
-	const eventName = event?.name ?? "conference-engine";
-
-	const sendResult = await sendTemplatedEmail(db, {
+	const delivery = await sendTemplatedEmail(db, {
 		eventId: primary.event_id,
 		submissionId: null,
 		templateKey: "portal_magic_link",
 		toEmail: person.email,
-		context: {
-			eventName,
-			submitterName: person.name?.trim() || "there",
-			title: "Speaker portal",
-			portalUrl,
-		},
+		context: { eventName: event?.name ?? "conference-engine", submitterName: person.name?.trim() || "there", title: "Speaker portal", portalUrl: url.toString() },
 		force: true,
 	});
-
-	const exposeDevUrl = await shouldExposeDevLoginUrl();
-	if (exposeDevUrl) {
-		return NextResponse.json({
-			ok: true,
-			sent: sendResult.ok,
-			token,
-			personId: person.id,
-			email: person.email,
-			expiresInSeconds,
-			portalUrl: portalPath,
-			...(sendResult.ok ? {} : { emailError: sendResult.error }),
-		});
+	if (!delivery.ok) return accepted();
+	await persistPortalSession(token, { email: person.email, personId: person.id });
+	if (await shouldExposeDevLoginUrl()) {
+		return accepted({ token, personId: person.id, email: person.email, portalUrl: `${url.pathname}?${url.searchParams}` });
 	}
-
-	if (!sendResult.ok) {
-		return NextResponse.json(
-			{ ok: false, error: sendResult.error || "Failed to send sign-in email" },
-			{ status: 502 },
-		);
-	}
-
-	return NextResponse.json({
-		ok: true,
-		sent: true,
-	});
+	return accepted();
 }

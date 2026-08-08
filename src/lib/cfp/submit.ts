@@ -61,13 +61,29 @@ export async function insertSubmission(
 ): Promise<string> {
 	const now = Date.now();
 	const submissionId = crypto.randomUUID();
+	const submitterEmail = args.submitterEmail.trim().toLowerCase();
+	const principals = new Map<string, string>();
+	principals.set(submitterEmail, args.submitterName.trim());
+	for (const speaker of args.speakers) {
+		const email = speaker.email.trim().toLowerCase();
+		if (email) principals.set(email, speaker.name.trim());
+	}
+	const personStatements = [...principals.entries()].map(([email, name]) =>
+		db.prepare(
+			`INSERT INTO people (id, email, name, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET name = CASE
+         WHEN people.name IS NULL OR people.name = '' THEN excluded.name
+         ELSE people.name END`,
+		).bind(crypto.randomUUID(), email, name || null, now),
+	);
 
-	await db
-		.prepare(
+	const submissionStatement = db.prepare(
 			`INSERT INTO submissions (
-        id, form_id, event_id, status, answers_json, category,
-        submitter_email, submitter_name, created_at, updated_at, submitted_at
-      ) VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?, ?, ?, ?)`,
+		id, form_id, event_id, status, answers_json, category,
+		submitter_email, submitter_name, submitter_person_id, created_at, updated_at, submitted_at
+	  ) VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?,
+	    (SELECT id FROM people WHERE email = ?), ?, ?, ?)`,
 		)
 		.bind(
 			submissionId,
@@ -75,15 +91,14 @@ export async function insertSubmission(
 			args.eventId,
 			JSON.stringify(args.answers),
 			args.category ?? null,
-			args.submitterEmail,
+			submitterEmail,
 			args.submitterName,
+			submitterEmail,
 			now,
 			now,
 			now,
-		)
-		.run();
+		);
 
-	const submitterEmail = args.submitterEmail.trim().toLowerCase();
 	const stmts = args.speakers.map((speaker, index) => {
 		const email = speaker.email.trim().toLowerCase();
 		// The primary submitter is confirmed by the act of submitting;
@@ -91,14 +106,15 @@ export async function insertSubmission(
 		const status = index === 0 || email === submitterEmail ? "confirmed" : "pending";
 		return db
 			.prepare(
-				`INSERT INTO submission_speakers (
+			`INSERT INTO submission_speakers (
           id, submission_id, person_id, name, email, bio, position,
           status, invited_at, confirmed_at, added_after_acceptance, confirm_token_hash
-        ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, 0, NULL)`,
+		) VALUES (?, ?, (SELECT id FROM people WHERE email = ?), ?, ?, ?, ?, ?, NULL, ?, 0, NULL)`,
 			)
 			.bind(
 				crypto.randomUUID(),
 				submissionId,
+				email,
 				speaker.name.trim(),
 				email,
 				speaker.bio?.trim() ?? null,
@@ -108,9 +124,7 @@ export async function insertSubmission(
 			);
 	});
 
-	if (stmts.length) {
-		await db.batch(stmts);
-	}
+	await db.batch([...personStatements, submissionStatement, ...stmts]);
 
 	return submissionId;
 }

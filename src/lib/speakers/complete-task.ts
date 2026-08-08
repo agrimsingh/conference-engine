@@ -39,32 +39,28 @@ export async function completeTextTask(
 	}
 
 	const now = Date.now();
-	await db
-		.prepare(
+	await db.batch([
+		db.prepare(
 			`UPDATE speaker_tasks
        SET status = 'completed', text_value = ?, completed_at = ?, updated_at = ?
        WHERE id = ?`,
 		)
 		.bind(text, now, now, task.id)
-		.run();
-
-	await db
-		.prepare(
+		,
+		db.prepare(
 			`UPDATE speaker_profiles
        SET bio = ?, updated_at = ?
        WHERE event_id = ? AND person_id = ?`,
 		)
 		.bind(text, now, task.event_id, task.person_id)
-		.run();
-
-	await db
-		.prepare(
+		,
+		db.prepare(
 			`UPDATE submission_speakers
        SET bio = ?
        WHERE submission_id = ? AND person_id = ?`,
 		)
 		.bind(text, task.submission_id, task.person_id)
-		.run();
+	]);
 
 	// Completing a task proves the person is real → implicit confirmation.
 	await implicitlyConfirmByTaskCompletion(db, {
@@ -132,33 +128,39 @@ export async function completeFileTask(
 	});
 
 	const now = Date.now();
-	await db
-		.prepare(
+	const statements: D1PreparedStatement[] = [
+		db.prepare(
 			`INSERT INTO assets (
         id, event_id, r2_key, content_type, filename, uploaded_by_person_id, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		)
 		.bind(assetId, task.event_id, r2Key, contentType, safeName, task.person_id, now)
-		.run();
-
-	await db
-		.prepare(
+		,
+		db.prepare(
 			`UPDATE speaker_tasks
        SET status = 'completed', asset_id = ?, completed_at = ?, updated_at = ?
        WHERE id = ?`,
 		)
 		.bind(assetId, now, now, task.id)
-		.run();
+		,
+	];
 
 	if (key === "headshot") {
-		await db
-			.prepare(
+		statements.push(db.prepare(
 				`UPDATE speaker_profiles
          SET headshot_asset_id = ?, updated_at = ?
          WHERE event_id = ? AND person_id = ?`,
 			)
 			.bind(assetId, now, task.event_id, task.person_id)
-			.run();
+		);
+	}
+	try {
+		await db.batch(statements);
+	} catch (error) {
+		// R2 has no cross-service transaction with D1. Remove only the object we
+		// just wrote, then preserve the database error for the caller.
+		try { await files.delete(r2Key); } catch { /* best-effort compensation */ }
+		throw error;
 	}
 
 	// Completing a task proves the person is real → implicit confirmation.

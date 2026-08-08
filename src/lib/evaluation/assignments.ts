@@ -1,6 +1,5 @@
 import {
 	clearAssignmentsForSubmission,
-	insertReviewAssignment,
 	listAssignmentsForReviewer,
 	listAssignmentsForSubmission,
 	listReviewersForPlan,
@@ -74,8 +73,6 @@ export async function setSubmissionReviewers(
 		uniqueIds.push(id);
 	}
 
-	await clearAssignmentsForSubmission(db, args.planId, args.submissionId);
-
 	const now = Date.now();
 	const rows: ReviewAssignmentRow[] = uniqueIds.map((reviewerId) => ({
 		id: crypto.randomUUID(),
@@ -85,9 +82,14 @@ export async function setSubmissionReviewers(
 		created_at: now,
 	}));
 
-	for (const row of rows) {
-		await insertReviewAssignment(db, row);
-	}
+	await db.batch([
+		db.prepare(`DELETE FROM review_assignments WHERE plan_id = ? AND submission_id = ?`)
+			.bind(args.planId, args.submissionId),
+		...rows.map((row) => db.prepare(
+			`INSERT INTO review_assignments (id, plan_id, reviewer_id, submission_id, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+		).bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at)),
+	]);
 
 	return rows;
 }

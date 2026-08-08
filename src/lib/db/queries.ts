@@ -55,7 +55,7 @@ export async function getAccountById(
 
 export async function upsertAccountByEmail(
 	db: D1Database,
-	args: { email: string; name?: string },
+	args: { email: string; name?: string; id?: string },
 ): Promise<AccountRow> {
 	const email = args.email.trim().toLowerCase();
 	const name = args.name?.trim() ?? "";
@@ -78,7 +78,7 @@ export async function upsertAccountByEmail(
 		return existing;
 	}
 
-	const id = crypto.randomUUID();
+	const id = args.id ?? crypto.randomUUID();
 	await db
 		.prepare(
 			`INSERT INTO accounts (id, email, name, created_at, updated_at)
@@ -99,8 +99,12 @@ export async function getEventMembership(
 ): Promise<EventMembershipRow | null> {
 	return db
 		.prepare(
-			`SELECT * FROM event_memberships
-       WHERE event_id = ? AND account_id = ?`,
+			`SELECT m.id, m.event_id, m.account_id,
+        CASE WHEN o.account_id = m.account_id THEN 'owner' ELSE 'admin' END AS role,
+        m.created_at
+       FROM event_memberships m
+       LEFT JOIN event_ownership o ON o.event_id = m.event_id
+       WHERE m.event_id = ? AND m.account_id = ?`,
 		)
 		.bind(eventId, accountId)
 		.first<EventMembershipRow>();
@@ -117,12 +121,15 @@ export async function listEventMembers(
 ): Promise<EventMemberListRow[]> {
 	const result = await db
 		.prepare(
-			`SELECT m.*, a.email AS email, a.name AS name
+			`SELECT m.id, m.event_id, m.account_id,
+        CASE WHEN o.account_id = m.account_id THEN 'owner' ELSE 'admin' END AS role,
+        m.created_at, a.email AS email, a.name AS name
        FROM event_memberships m
        INNER JOIN accounts a ON a.id = m.account_id
+		 LEFT JOIN event_ownership o ON o.event_id = m.event_id
        WHERE m.event_id = ?
        ORDER BY
-         CASE m.role WHEN 'owner' THEN 0 ELSE 1 END,
+		 CASE WHEN o.account_id = m.account_id THEN 0 ELSE 1 END,
          a.email ASC`,
 		)
 		.bind(eventId)
@@ -139,23 +146,31 @@ export async function addEventMembership(
 	},
 ): Promise<EventMembershipRow> {
 	const existing = await getEventMembership(db, args.eventId, args.accountId);
-	if (existing) return existing;
+	if (existing) {
+		if (args.role === "owner" && existing.role !== "owner") {
+			return transferEventOwnership(db, {
+				eventId: args.eventId,
+				toAccountId: args.accountId,
+			});
+		}
+		return existing;
+	}
 
 	const id = crypto.randomUUID();
 	const now = Date.now();
 	await db
 		.prepare(
 			`INSERT INTO event_memberships (id, event_id, account_id, role, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, 'admin', ?)`,
 		)
-		.bind(id, args.eventId, args.accountId, args.role, now)
+		.bind(id, args.eventId, args.accountId, now)
 		.run();
 
 	return {
 		id,
 		event_id: args.eventId,
 		account_id: args.accountId,
-		role: args.role,
+		role: "admin",
 		created_at: now,
 	};
 }
@@ -166,13 +181,22 @@ export async function removeEventMembership(
 ): Promise<boolean> {
 	const membership = await getEventMembership(db, args.eventId, args.accountId);
 	if (!membership) return false;
-	if (membership.role === "owner") {
+	const ownership = await db
+		.prepare("SELECT account_id FROM event_ownership WHERE event_id = ?")
+		.bind(args.eventId)
+		.first<{ account_id: string }>();
+	if (ownership?.account_id === args.accountId) {
 		throw new Error("Cannot remove the event owner");
 	}
 	const result = await db
 		.prepare(
 			`DELETE FROM event_memberships
-       WHERE event_id = ? AND account_id = ? AND role != 'owner'`,
+       WHERE event_id = ? AND account_id = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM event_ownership o
+           WHERE o.event_id = event_memberships.event_id
+             AND o.account_id = event_memberships.account_id
+         )`,
 		)
 		.bind(args.eventId, args.accountId)
 		.run();
@@ -189,21 +213,23 @@ export async function setEventMembershipRole(
 ): Promise<EventMembershipRow | null> {
 	const membership = await getEventMembership(db, args.eventId, args.accountId);
 	if (!membership) return null;
-	if (membership.role === args.role) return membership;
+	if (args.role === "owner") {
+		return transferEventOwnership(db, {
+			eventId: args.eventId,
+			toAccountId: args.accountId,
+		});
+	}
+	assertMembershipRoleChange(membership.role, args.role);
+	return { ...membership, role: "admin" };
+}
 
-	await db
-		.prepare(
-			`UPDATE event_memberships
-       SET role = ?
-       WHERE event_id = ? AND account_id = ?`,
-		)
-		.bind(args.role, args.eventId, args.accountId)
-		.run();
-
-	return {
-		...membership,
-		role: args.role,
-	};
+export function assertMembershipRoleChange(
+	currentRole: EventMembershipRow["role"],
+	nextRole: EventMembershipRow["role"],
+): void {
+	if (currentRole === "owner" && nextRole === "admin") {
+		throw new Error("Transfer ownership before demoting the event owner");
+	}
 }
 
 /**
@@ -222,26 +248,19 @@ export async function transferEventOwnership(
 		return target;
 	}
 
-	const members = await listEventMembers(db, args.eventId);
-	for (const member of members) {
-		if (member.role === "owner" && member.account_id !== args.toAccountId) {
-			await setEventMembershipRole(db, {
-				eventId: args.eventId,
-				accountId: member.account_id,
-				role: "admin",
-			});
-		}
+	const now = Date.now();
+	const result = await db
+		.prepare(
+			`UPDATE event_ownership
+       SET account_id = ?, updated_at = ?
+       WHERE event_id = ?`,
+		)
+		.bind(args.toAccountId, now, args.eventId)
+		.run();
+	if ((result.meta.changes ?? 0) === 0) {
+		throw new Error("Event has no canonical owner");
 	}
-
-	const updated = await setEventMembershipRole(db, {
-		eventId: args.eventId,
-		accountId: args.toAccountId,
-		role: "owner",
-	});
-	if (!updated) {
-		throw new Error("Failed to transfer ownership");
-	}
-	return updated;
+	return { ...target, role: "owner" };
 }
 
 export async function countEventMemberships(
@@ -263,9 +282,8 @@ export async function listOrphanEvents(db: D1Database): Promise<EventRow[]> {
 		.prepare(
 			`SELECT e.*
        FROM events e
-       WHERE NOT EXISTS (
-         SELECT 1 FROM event_memberships m WHERE m.event_id = e.id
-       )
+       WHERE e.ownership_claimable = 1
+         AND NOT EXISTS (SELECT 1 FROM event_ownership o WHERE o.event_id = e.id)
        ORDER BY e.name ASC`,
 		)
 		.all<EventRow>();
@@ -285,18 +303,39 @@ export async function claimOrphanEventOwnership(
 
 	const id = crypto.randomUUID();
 	const now = Date.now();
-	const result = await db
-		.prepare(
-			`INSERT INTO event_memberships (id, event_id, account_id, role, created_at)
-       SELECT ?, ?, ?, 'owner', ?
-       WHERE NOT EXISTS (
-         SELECT 1 FROM event_memberships WHERE event_id = ?
-       )`,
-		)
-		.bind(id, args.eventId, args.accountId, now, args.eventId)
-		.run();
+	const results = await db.batch([
+		db
+			.prepare(
+				`INSERT OR IGNORE INTO event_memberships (id, event_id, account_id, role, created_at)
+         SELECT ?, ?, ?, 'admin', ?
+         WHERE EXISTS (
+           SELECT 1 FROM events
+           WHERE id = ? AND ownership_claimable = 1
+         ) AND NOT EXISTS (
+           SELECT 1 FROM event_ownership WHERE event_id = ?
+         )`,
+			)
+			.bind(id, args.eventId, args.accountId, now, args.eventId, args.eventId),
+		db
+			.prepare(
+				`INSERT INTO event_ownership (event_id, account_id, created_at, updated_at)
+         SELECT ?, ?, ?, ?
+         WHERE EXISTS (
+           SELECT 1 FROM event_memberships
+           WHERE event_id = ? AND account_id = ?
+         ) AND EXISTS (
+           SELECT 1 FROM events WHERE id = ? AND ownership_claimable = 1
+         ) AND NOT EXISTS (
+           SELECT 1 FROM event_ownership WHERE event_id = ?
+         )`,
+			)
+			.bind(args.eventId, args.accountId, now, now, args.eventId, args.accountId, args.eventId, args.eventId),
+		db
+			.prepare("UPDATE events SET ownership_claimable = 0, updated_at = ? WHERE id = ? AND ownership_claimable = 1")
+			.bind(now, args.eventId),
+	]);
 
-	if ((result.meta.changes ?? 0) === 0) {
+	if ((results[1]?.meta.changes ?? 0) === 0) {
 		return getEventMembership(db, args.eventId, args.accountId);
 	}
 
@@ -649,6 +688,25 @@ export async function listAcceptedSubmissionsForPerson(
        ORDER BY s.updated_at DESC`,
 		)
 		.bind(personId)
+		.all<SubmissionRow>();
+	return result.results;
+}
+
+/** Any submitter- or speaker-owned proposal may use the portal; task access is
+ * still enforced by the acceptance-gated task rows themselves. */
+export async function listSubmissionsForPerson(
+	db: D1Database,
+	personId: string,
+): Promise<SubmissionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT DISTINCT s.*
+       FROM submissions s
+       LEFT JOIN submission_speakers ss ON ss.submission_id = s.id
+       WHERE s.submitter_person_id = ? OR ss.person_id = ?
+       ORDER BY s.updated_at DESC`,
+		)
+		.bind(personId, personId)
 		.all<SubmissionRow>();
 	return result.results;
 }

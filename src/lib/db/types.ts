@@ -32,6 +32,13 @@ export type CfpFormRow = {
 	status: "draft" | "open" | "closed";
 	opens_at: number | null;
 	closes_at: number | null;
+	welcome_copy: string | null;
+	confirmation_copy: string | null;
+	reminder_copy: string | null;
+	min_speakers: number;
+	max_speakers: number;
+	drafts_enabled: number;
+	submission_limit: number;
 	created_at: number;
 	updated_at: number;
 };
@@ -59,6 +66,7 @@ export type SubmissionRow = {
 	category: string | null;
 	submitter_email: string | null;
 	submitter_name: string | null;
+	submitter_person_id: string | null;
 	created_at: number;
 	updated_at: number;
 	submitted_at: number | null;

@@ -3,7 +3,6 @@ import { getCurrentOrganizerAccount } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	claimOrphanEventOwnership,
-	countEventMemberships,
 	getEventBySlug,
 	getEventMembership,
 } from "@/lib/db/queries";
@@ -37,14 +36,6 @@ export async function POST(_request: Request, context: RouteContext) {
 			role: existing.role,
 			alreadyMember: true,
 		});
-	}
-
-	const membershipCount = await countEventMemberships(db, event.id);
-	if (membershipCount > 0) {
-		return NextResponse.json(
-			{ ok: false, error: "Event already has an owner" },
-			{ status: 409 },
-		);
 	}
 
 	const membership = await claimOrphanEventOwnership(db, {

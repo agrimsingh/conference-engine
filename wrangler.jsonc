@@ -30,6 +30,7 @@
 	"vars": {
 		"RESEND_FROM_EMAIL": "team@65labs.org",
 		"APP_NAME": "conference-engine",
+		"ADMIN_BYPASS_ENABLED": "0",
 		"AIRTABLE_BASE_ID": "appzkYZYKU3sG6vRM",
 		"AIRTABLE_TABLE_NAME": "Submissions"
 	},

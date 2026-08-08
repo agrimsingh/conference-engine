@@ -1,4 +1,5 @@
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import { fetchWithBoundedRetry } from "@/lib/security/fetch";
 import {
 	isOneShotTemplate,
 	renderMessageTemplate,
@@ -119,11 +120,12 @@ export async function sendTemplatedEmail(
 	}
 
 	try {
-		const response = await fetch("https://api.resend.com/emails", {
+		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
+				"Idempotency-Key": messageId,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -201,6 +203,7 @@ export async function sendAuthEmail(args: {
 }): Promise<{ ok: boolean; error?: string }> {
 	const toEmail = args.toEmail.trim().toLowerCase();
 	const rendered = renderMessageTemplate(args.templateKey, args.context);
+	const idempotencyKey = crypto.randomUUID();
 
 	const env = await getCloudflareEnv();
 	const apiKey = env.RESEND_API_KEY;
@@ -211,11 +214,12 @@ export async function sendAuthEmail(args: {
 	}
 
 	try {
-		const response = await fetch("https://api.resend.com/emails", {
+		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
+				"Idempotency-Key": idempotencyKey,
 			},
 			body: JSON.stringify({
 				from: fromEmail,

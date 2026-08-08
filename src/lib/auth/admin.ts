@@ -16,7 +16,7 @@ export const ADMIN_BYPASS_COOKIE = "ce_admin_bypass";
 
 export async function isAdminBypassEnabled(): Promise<boolean> {
 	const env = await getCloudflareEnv();
-	return env.ADMIN_BYPASS_ENABLED === "1" || env.NEXTJS_ENV === "development";
+	return String(env.ADMIN_BYPASS_ENABLED) === "1" || env.NEXTJS_ENV === "development";
 }
 
 /** True only when bypass is allowed in this environment AND the cookie is set. */

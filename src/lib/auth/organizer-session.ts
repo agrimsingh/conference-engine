@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getAuthSecret, getSessionsKv } from "@/lib/db/cloudflare";
 import { getAccountById } from "@/lib/db/queries";
 import type { AccountRow } from "@/lib/db/types";
+import { hmacSha256, randomToken } from "@/lib/security/crypto";
 
 export const ORGANIZER_SESSION_COOKIE = "ce_organizer_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -34,8 +35,7 @@ export async function createOrganizerSession(args: {
 	email: string;
 }): Promise<{ token: string; expiresInSeconds: number }> {
 	const kv = await getSessionsKv();
-	const secret = await getAuthSecret();
-	const token = await mintToken(secret);
+	const token = await mintOrganizerLoginToken();
 	const session: OrganizerSession = {
 		accountId: args.accountId,
 		email: args.email.trim().toLowerCase(),
@@ -125,9 +125,24 @@ export async function createOrganizerLoginToken(args: {
 	accountId: string;
 	email: string;
 }): Promise<{ token: string; expiresInSeconds: number }> {
-	const kv = await getSessionsKv();
+	const token = await mintOrganizerLoginToken();
+	await persistOrganizerLoginToken(token, args);
+	return { token, expiresInSeconds: LOGIN_TTL_SECONDS };
+}
+
+/** Minting is separate from persistence so a failed mail delivery has no login state. */
+export async function mintOrganizerLoginToken(): Promise<string> {
 	const secret = await getAuthSecret();
-	const token = await mintToken(secret);
+	const random = randomToken(24);
+	const signature = await hmacSha256(secret, random);
+	return `${random}.${signature.slice(0, 16)}`;
+}
+
+export async function persistOrganizerLoginToken(
+	token: string,
+	args: { accountId: string; email: string },
+): Promise<void> {
+	const kv = await getSessionsKv();
 	const payload: OrganizerLoginToken = {
 		accountId: args.accountId,
 		email: args.email.trim().toLowerCase(),
@@ -137,8 +152,6 @@ export async function createOrganizerLoginToken(args: {
 	await kv.put(loginKey(token), JSON.stringify(payload), {
 		expirationTtl: LOGIN_TTL_SECONDS,
 	});
-
-	return { token, expiresInSeconds: LOGIN_TTL_SECONDS };
 }
 
 export async function consumeOrganizerLoginToken(
@@ -177,35 +190,4 @@ export async function consumeOrganizerLoginToken(
 	const createdAt = typeof record.createdAt === "number" ? record.createdAt : 0;
 
 	return { accountId: record.accountId, email: record.email, createdAt };
-}
-
-async function mintToken(secret: string): Promise<string> {
-	const random = crypto.getRandomValues(new Uint8Array(24));
-	const randomB64 = bufferToBase64Url(random);
-	const sig = await hmacSha256(secret, randomB64);
-	return `${randomB64}.${sig.slice(0, 16)}`;
-}
-
-async function hmacSha256(secret: string, message: string): Promise<string> {
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(secret),
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["sign"],
-	);
-	const mac = await crypto.subtle.sign(
-		"HMAC",
-		key,
-		new TextEncoder().encode(message),
-	);
-	return bufferToBase64Url(new Uint8Array(mac));
-}
-
-function bufferToBase64Url(bytes: Uint8Array): string {
-	let binary = "";
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }

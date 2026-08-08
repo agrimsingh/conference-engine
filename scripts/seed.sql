@@ -4,6 +4,8 @@ DELETE FROM review_assignments;
 DELETE FROM reviewers;
 DELETE FROM evaluation_plans;
 DELETE FROM outbound_messages;
+DELETE FROM submission_draft_tokens;
+DELETE FROM submission_drafts;
 DELETE FROM agenda_slots;
 DELETE FROM event_rooms;
 DELETE FROM speaker_tasks;
@@ -17,14 +19,18 @@ DELETE FROM event_members;
 DELETE FROM speaker_profiles;
 DELETE FROM assets;
 DELETE FROM people;
+DELETE FROM event_ownership;
+DELETE FROM event_memberships;
+DELETE FROM rate_limit_buckets;
 DELETE FROM events;
 
-INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
+INSERT INTO events (id, slug, name, timezone, ownership_claimable, created_at, updated_at)
 VALUES (
 	'evt_aie_sandbox',
 	'aie-sandbox',
 	'AI Engineer Sandbox',
 	'America/Los_Angeles',
+	1,
 	1754650000000,
 	1754650000000
 );
