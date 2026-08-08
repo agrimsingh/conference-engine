@@ -14,7 +14,9 @@
     "db:migrate:local": "wrangler d1 migrations apply conference-engine --local",
     "db:seed:local": "wrangler d1 execute conference-engine --local --file=scripts/seed.sql",
     "db:reset:local": "npm run db:migrate:local && npm run db:seed:local",
-    "test": "vitest run"
+    "test": "npm run test:unit && npm run test:workers",
+    "test:unit": "vitest run --config vitest.config.mts",
+    "test:workers": "vitest run --config vitest.workers.config.mts"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.9",
@@ -23,6 +25,7 @@
     "react-dom": "^19.1.7"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.20.3",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.43",

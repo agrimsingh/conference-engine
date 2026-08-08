@@ -23,6 +23,7 @@
 		},
 		"types": [
 			"./cloudflare-env.d.ts",
+			"@cloudflare/vitest-pool-workers/types",
 			"node"
 		]
 	},
