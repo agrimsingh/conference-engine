@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "@/lib/domain/form-fields";
 import type { AccountRow } from "@/lib/db/types";
+import { validateEventSettings } from "./settings";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
@@ -57,6 +58,8 @@ export type CreateEventInput = {
 	name: string;
 	slug: string;
 	timezone?: string;
+	startDay: string;
+	endDay: string;
 };
 
 export type CreateEventResult = {
@@ -72,12 +75,14 @@ export async function createEventWithDefaults(
 	const slug = args.slug.trim().toLowerCase();
 	const name = args.name.trim();
 	const timezone = args.timezone?.trim() || DEFAULT_TIMEZONE;
+	const schedule = validateEventSettings({ startDay: args.startDay, endDay: args.endDay, timezone });
+	if (!schedule.ok) throw new Error(schedule.error);
 	const now = Date.now();
 	const eventId = crypto.randomUUID();
 	const formId = crypto.randomUUID();
 	const statements: D1PreparedStatement[] = [
-		db.prepare(`INSERT INTO events (id, slug, name, timezone, ownership_claimable, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, owner ? 0 : 1, now, now),
+		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, opens_at, closes_at, created_at, updated_at)
       VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, "Call for proposals", "Submit a session proposal.", now, now),
 		db.prepare(`INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at)

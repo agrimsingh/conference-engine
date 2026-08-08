@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition, type DragEvent } from "react";
+import Link from "next/link";
+import { useMemo, useState, useTransition, type DragEvent, type KeyboardEvent } from "react";
 import { noticeClasses, SegmentedControl } from "@/components/ui";
 import {
 	detectConflicts,
@@ -13,12 +14,15 @@ import {
 	SLOT_STEP_MINUTES,
 	formatClock,
 	formatDayLabel,
+	dayKeyInTimeZone,
+	weekDayKeys,
 	wallTimeToUtcMs,
 } from "@/lib/schedule/time";
 
 export type ScheduleSession = {
 	id: string;
 	title: string;
+	category: string;
 	status: string;
 	submitterName: string | null;
 	durationMinutes: number;
@@ -35,16 +39,18 @@ type Props = {
 	eventSlug: string;
 	timeZone: string;
 	dayKey: string;
+	days: string[];
 	rooms: string[];
 	sessions: ScheduleSession[];
 };
 
-type ViewMode = "day" | "list";
+type ViewMode = "day" | "list" | "week" | "track" | "room";
 
 export function ScheduleBoard({
 	eventSlug,
 	timeZone,
 	dayKey,
+	days,
 	rooms,
 	sessions: initialSessions,
 }: Props) {
@@ -116,6 +122,28 @@ export function ScheduleBoard({
 		);
 	}, [daySessions, roomFilter]);
 
+	const groupedSessions = useMemo(() => {
+		const visible = sessions.filter((session) => {
+			if (!session.slot) return false;
+			return roomFilter === "all" || session.slot.roomName === roomFilter;
+		});
+		const groups = new Map<string, ScheduleSession[]>();
+		const add = (key: string, session: ScheduleSession) => groups.set(key, [...(groups.get(key) ?? []), session]);
+		if (view === "week") {
+			const keys = weekDayKeys(dayKey);
+			for (const session of visible) {
+				const key = dayKeyInTimeZone(session.slot!.startsAtMs, timeZone);
+				if (keys.includes(key)) add(formatDayLabel(key, timeZone), session);
+			}
+			for (const key of keys) if (![...groups.keys()].includes(formatDayLabel(key, timeZone))) groups.set(formatDayLabel(key, timeZone), []);
+		} else if (view === "track") {
+			for (const session of daySessions.filter((item) => roomFilter === "all" || item.slot?.roomName === roomFilter)) add(session.category, session);
+		} else if (view === "room") {
+			for (const session of daySessions.filter((item) => roomFilter === "all" || item.slot?.roomName === roomFilter)) add(session.slot!.roomName, session);
+		}
+		return [...groups.entries()].map(([label, entries]) => [label, entries.sort((a, b) => a.slot!.startsAtMs - b.slot!.startsAtMs)] as const);
+	}, [dayKey, daySessions, roomFilter, sessions, timeZone, view]);
+
 	function sessionAt(roomName: string, startMs: number): ScheduleSession | null {
 		return (
 			daySessions.find((session) => {
@@ -151,6 +179,7 @@ export function ScheduleBoard({
 		setError(null);
 		setMessage(null);
 		startTransition(async () => {
+			try {
 			const response = await fetch(
 				`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`,
 				{
@@ -163,7 +192,7 @@ export function ScheduleBoard({
 					}),
 				},
 			);
-			const payload: unknown = await response.json();
+			const payload = await readJson(response);
 			if (
 				typeof payload !== "object" ||
 				payload === null ||
@@ -204,6 +233,9 @@ export function ScheduleBoard({
 			);
 			setSelectedId(null);
 			setMessage(`Placed “${session.title}” in ${roomName}`);
+			} catch {
+				setError("Couldn’t save this schedule change. Check your connection and try again.");
+			}
 		});
 	}
 
@@ -223,6 +255,31 @@ export function ScheduleBoard({
 		placeSession(selectedId, roomName, startMinutes);
 	}
 
+	function onCardKeyDown(event: KeyboardEvent<HTMLElement>, submissionId: string) {
+		if (event.key !== "Enter" && event.key !== " ") return;
+		event.preventDefault();
+		setSelectedId((current) => current === submissionId ? null : submissionId);
+	}
+
+	function mutateAction(submissionId: string, action: "unplace" | "publish" | "unpublish") {
+		setError(null);
+		startTransition(async () => {
+			try {
+			const response = await fetch(`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`, {
+				method: action === "unplace" ? "DELETE" : "PATCH",
+				headers: { "content-type": "application/json" },
+				body: action === "unplace" ? undefined : JSON.stringify({ action }),
+			});
+			const payload = await readJson<{ ok?: boolean; error?: string; status?: string }>(response);
+			if (!response.ok || !payload?.ok) { setError(payload?.error ?? "Schedule update failed"); return; }
+			setSessions((previous) => previous.map((session) => session.id !== submissionId ? session : action === "unplace" ? { ...session, status: payload.status ?? "accepted", slot: null } : { ...session, status: payload.status ?? session.status }));
+			setMessage(action === "unplace" ? "Session returned to the unplaced rail." : action === "publish" ? "Session is now public." : "Session is no longer public.");
+			} catch {
+				setError("Couldn’t save this schedule change. Check your connection and try again.");
+			}
+		});
+	}
+
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
@@ -232,12 +289,18 @@ export function ScheduleBoard({
 					options={[
 						{ value: "day", label: "Day" },
 						{ value: "list", label: "List" },
+						{ value: "week", label: "Week" },
+						{ value: "track", label: "Track" },
+						{ value: "room", label: "Room" },
 					]}
 					onChange={setView}
 				/>
-				<p className="text-sm text-neutral-400">
-					{formatDayLabel(dayKey, timeZone)} · {timeZone}
-				</p>
+					<p className="text-sm text-neutral-400">
+						{formatDayLabel(dayKey, timeZone)} · {timeZone}
+					</p>
+					<nav className="flex flex-wrap gap-1" aria-label="Schedule day">
+						{days.map((day) => <Link key={day} href={`/admin/events/${eventSlug}/schedule?day=${day}`} className={day === dayKey ? "rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white" : "rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"}>{formatDayLabel(day, timeZone)}</Link>)}
+					</nav>
 				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-300">
 					Room
 					<select
@@ -260,9 +323,9 @@ export function ScheduleBoard({
 					role="alert"
 					className="rounded-md border border-red-400/60 bg-red-600 px-3 py-2.5 text-sm font-semibold text-white shadow-lg"
 				>
-					Conflict: {error}
-				</p>
-			) : null}
+					{error}
+					</p>
+				) : null}
 			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
 			{pending ? (
 				<p className="text-sm text-neutral-500">Saving…</p>
@@ -273,9 +336,7 @@ export function ScheduleBoard({
 					Unplaced / other days
 				</h2>
 				{pool.length === 0 ? (
-					<p className="text-sm text-neutral-500">
-						All accepted talks are placed on this day.
-					</p>
+						<p className="text-sm text-neutral-500">All accepted talks are placed on this day.</p>
 				) : (
 					<ul className="flex flex-wrap gap-2">
 						{pool.map((session) => (
@@ -301,6 +362,7 @@ export function ScheduleBoard({
 											? "border-emerald-500/60 bg-neutral-800 text-neutral-100"
 											: "border-neutral-700 bg-neutral-950/60 text-neutral-200 hover:border-neutral-500"
 									}`}
+									aria-pressed={selectedId === session.id}
 								>
 									<p className="font-medium">{session.title}</p>
 									<p className="mt-0.5 text-xs opacity-80">
@@ -312,12 +374,23 @@ export function ScheduleBoard({
 								</button>
 							</li>
 						))}
-					</ul>
-				)}
-				<p className="mt-2 text-xs text-neutral-500">
+						</ul>
+					)}
+					<p className="mt-2 text-xs text-neutral-500">
 					Drag onto a slot, or click a session then click a cell.
 				</p>
-			</section>
+				</section>
+
+			{view === "week" || view === "track" || view === "room" ? (
+				<div className={view === "week" ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-7" : "grid gap-3 md:grid-cols-2"}>
+					{groupedSessions.map(([label, entries]) => (
+						<section key={label} className="min-h-28 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+							<h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</h2>
+							{entries.length === 0 ? <p className="text-xs text-neutral-500">No sessions</p> : <ul className="space-y-2">{entries.map((session) => <li key={session.id} className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2 py-2 text-xs"><p className="font-medium text-neutral-100">{session.title}</p><p className="mt-0.5 font-mono text-neutral-500">{formatClock(session.slot!.startsAtMs, timeZone)}–{formatClock(session.slot!.endsAtMs, timeZone)} · {session.slot!.roomName}</p><p className="mt-0.5 text-neutral-500">{session.category}</p></li>)}</ul>}
+						</section>
+					))}
+				</div>
+			) : null}
 
 			{view === "day" ? (
 				<div className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
@@ -367,8 +440,13 @@ export function ScheduleBoard({
 													{occupant && !isStart ? (
 														<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
 													) : occupant && isStart ? (
-														<div
-															draggable
+									<div
+										draggable
+										role="button"
+										tabIndex={0}
+									aria-label={`Move ${occupant.title}; press Enter then choose a schedule cell`}
+									aria-pressed={selectedId === occupant.id}
+										onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
 															onDragStart={(event) => {
 																event.dataTransfer.setData(
 																	"text/submission-id",
@@ -401,7 +479,7 @@ export function ScheduleBoard({
 																)}
 															</p>
 														</div>
-													) : (
+															) : (
 														<button
 															type="button"
 															className="flex h-10 w-full items-stretch border border-transparent hover:border-neutral-600 hover:bg-neutral-800/40"
@@ -410,9 +488,9 @@ export function ScheduleBoard({
 																onDropCell(event, room, startMinutes)
 															}
 															onClick={() => onClickCell(room, startMinutes)}
-															aria-label={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
-														/>
-													)}
+																					aria-label={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
+																				/>
+															)}
 												</td>
 											);
 										})}
@@ -422,7 +500,7 @@ export function ScheduleBoard({
 						</tbody>
 					</table>
 				</div>
-			) : (
+				) : view === "list" ? (
 				<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 					{listSessions.length === 0 ? (
 						<li className="px-4 py-8 text-center text-sm text-neutral-400">
@@ -431,7 +509,7 @@ export function ScheduleBoard({
 						</li>
 					) : (
 						listSessions.map((session) => (
-							<li key={session.id} className="px-4 py-3 text-sm">
+									<li key={session.id} className="px-4 py-3 text-sm">
 								<p className="font-medium text-neutral-100">{session.title}</p>
 								<p className="mt-1 text-neutral-400">
 									<span className="font-mono text-xs tabular-nums">
@@ -442,12 +520,24 @@ export function ScheduleBoard({
 									{session.speakerLabels.length
 										? ` · ${session.speakerLabels.join(", ")}`
 										: ""}
-								</p>
+										</p>
+										<div className="mt-2 flex flex-wrap gap-2">
+											<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
+											{session.status === "published" ? <button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button> : <button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => mutateAction(session.id, "publish")}>Publish</button>}
+										</div>
 							</li>
-						))
-					)}
-				</ul>
-			)}
+							))
+						)}
+					</ul>
+				) : null}
 		</div>
 	);
+}
+
+async function readJson<T = unknown>(response: Response): Promise<T | null> {
+	try {
+		return await response.json() as T;
+	} catch {
+		return null;
+	}
 }

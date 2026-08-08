@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { EmptyState, noticeClasses, StatusPill } from "@/components/ui";
 import {
 	parseInvalidateMessage,
@@ -26,6 +26,11 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 	const [snapshot, setSnapshot] = useState(initialSnapshot);
 	const [transport, setTransport] = useState<LiveSyncTransport>("polling");
 	const [lastError, setLastError] = useState<string | null>(null);
+	const mounted = useSyncExternalStore(
+		() => () => {},
+		() => true,
+		() => false,
+	);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -158,7 +163,7 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 						</StatusPill>
 					</span>
 					<span className="text-xs tabular-nums text-neutral-500">
-						updated {new Date(snapshot.fetchedAt).toLocaleTimeString()}
+						{mounted ? `updated ${new Date(snapshot.fetchedAt).toLocaleTimeString()}` : "updated just now"}
 					</span>
 				</div>
 			</div>

@@ -85,7 +85,6 @@ export function formatDayLabel(dayKey: string, timeZone: string): string {
 	}).format(new Date(ms));
 }
 
-export const DEMO_SCHEDULE_DAY = "2026-10-01";
 export const DAY_START_MINUTES = 9 * 60;
 export const DAY_END_MINUTES = 18 * 60;
 export const SLOT_STEP_MINUTES = 30;
@@ -109,4 +108,33 @@ export function weekDayKeys(dayKey: string): string[] {
 		);
 	}
 	return keys;
+}
+
+/**
+ * Prefer explicit civil event dates, then scheduled content, and only then the
+ * current day in the event timezone. This keeps a new event usable without
+ * leaking the old demo date into production.
+ */
+export function deriveScheduleDays(args: {
+	startDay?: string | null;
+	endDay?: string | null;
+	scheduledDays?: readonly string[];
+	timeZone: string;
+	now?: number;
+}): string[] {
+	const start = parseDayKey(args.startDay);
+	const end = parseDayKey(args.endDay);
+	if (start && end && start <= end) {
+		const days: string[] = [];
+		for (let current = start; current <= end; ) {
+			days.push(current);
+			const [year, month, day] = current.split("-").map(Number) as [number, number, number];
+			const next = new Date(Date.UTC(year, month - 1, day + 1));
+			current = `${next.getUTCFullYear()}-${pad2(next.getUTCMonth() + 1)}-${pad2(next.getUTCDate())}`;
+		}
+		return days;
+	}
+	const scheduled = [...new Set((args.scheduledDays ?? []).map(parseDayKey).filter((day): day is string => Boolean(day)))].sort();
+	if (scheduled.length > 0) return scheduled;
+	return [dayKeyInTimeZone(args.now ?? Date.now(), args.timeZone)];
 }

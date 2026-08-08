@@ -26,6 +26,10 @@ type SubmissionView = {
 	submitterName: string | null;
 	submitterEmail: string | null;
 	title: string;
+	category: string;
+	format: string | null;
+	answers: Array<{ label: string; value: string }>;
+	assignment: string;
 	previews: Record<DecisionAction, RenderedMessage>;
 	scores: ScoreView[];
 };
@@ -101,9 +105,10 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 							<div className="flex flex-wrap items-start justify-between gap-3">
 								<div>
 									<p className="font-medium text-neutral-100">{row.title}</p>
-									<p className="mt-1 text-neutral-400">
-										{row.submitterName} · {row.submitterEmail}
-									</p>
+										<p className="mt-1 text-neutral-400">
+											{row.submitterName} · {row.submitterEmail}
+										</p>
+										<p className="mt-1 text-xs text-neutral-500">{row.category}{row.format ? ` · ${row.format}` : ""} · {row.assignment}</p>
 								</div>
 								<StatusPill tone={submissionStatusTone(row.status)}>
 									{row.status.replaceAll("_", " ")}
@@ -111,7 +116,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 								</StatusPill>
 							</div>
 
-							{row.scores.length > 0 ? (
+								{row.scores.length > 0 ? (
 								<ul className="space-y-1 text-xs text-neutral-400">
 									{row.scores.map((s) => (
 										<li key={s.id}>
@@ -120,11 +125,17 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 										</li>
 									))}
 								</ul>
-							) : null}
+								) : null}
+								<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2">
+									<summary className="cursor-pointer font-medium text-neutral-200">Proposal details</summary>
+									<dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+										{row.answers.map((answer) => <div key={answer.label}><dt className="text-neutral-500">{answer.label}</dt><dd className="mt-0.5 whitespace-pre-wrap text-neutral-300">{answer.value}</dd></div>)}
+									</dl>
+								</details>
 
 							<div className="space-y-2">
-								<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-									Your score
+									<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+										Your score <span className="normal-case font-normal">(1 weak fit · 3 viable · 5 strong)</span>
 								</p>
 								<div
 									className="inline-flex rounded-lg border border-neutral-800 bg-neutral-950/60 p-0.5"

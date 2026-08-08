@@ -31,6 +31,13 @@ type Props = {
 	initialDescription: string;
 	initialStatus: string;
 	initialClosesAt: number | null;
+	initialMinSpeakers: number;
+	initialMaxSpeakers: number;
+	initialDraftsEnabled: boolean;
+	initialSubmissionLimit: number;
+	initialWelcomeCopy: string;
+	initialConfirmationCopy: string;
+	initialReminderCopy: string;
 	initialFields: FieldRow[];
 };
 
@@ -214,6 +221,13 @@ export function FormBuilder({
 	initialDescription,
 	initialStatus,
 	initialClosesAt,
+	initialMinSpeakers,
+	initialMaxSpeakers,
+	initialDraftsEnabled,
+	initialSubmissionLimit,
+	initialWelcomeCopy,
+	initialConfirmationCopy,
+	initialReminderCopy,
 	initialFields,
 }: Props) {
 	const router = useRouter();
@@ -223,6 +237,13 @@ export function FormBuilder({
 	const [closesAtInput, setClosesAtInput] = useState(
 		closesAtInputValue(initialClosesAt),
 	);
+	const [minSpeakers, setMinSpeakers] = useState(initialMinSpeakers);
+	const [maxSpeakers, setMaxSpeakers] = useState(initialMaxSpeakers);
+	const [draftsEnabled, setDraftsEnabled] = useState(initialDraftsEnabled);
+	const [submissionLimit, setSubmissionLimit] = useState(initialSubmissionLimit);
+	const [welcomeCopy, setWelcomeCopy] = useState(initialWelcomeCopy);
+	const [confirmationCopy, setConfirmationCopy] = useState(initialConfirmationCopy);
+	const [reminderCopy, setReminderCopy] = useState(initialReminderCopy);
 	const [fields, setFields] = useState(initialFields);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<{
@@ -263,6 +284,13 @@ export function FormBuilder({
 				description: description.trim() || null,
 				status,
 				closesAt: parseClosesAtInput(closesAtInput),
+				minSpeakers,
+				maxSpeakers,
+				draftsEnabled,
+				submissionLimit,
+				welcomeCopy: welcomeCopy.trim() || null,
+				confirmationCopy: confirmationCopy.trim() || null,
+				reminderCopy: reminderCopy.trim() || null,
 			}),
 		});
 		const json = (await res.json()) as { ok?: boolean; error?: string };
@@ -447,6 +475,31 @@ export function FormBuilder({
 						onChange={(e) => setTitle(e.target.value)}
 					/>
 				</label>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<label className="block text-xs text-neutral-400">
+						Minimum speakers
+						<input type="number" min={1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={minSpeakers} onChange={(e) => setMinSpeakers(Number(e.target.value))} />
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Maximum speakers
+						<input type="number" min={minSpeakers || 1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={maxSpeakers} onChange={(e) => setMaxSpeakers(Number(e.target.value))} />
+					</label>
+				</div>
+				<label className="block text-xs text-neutral-400">
+					Submission limit <span className="text-neutral-500">(0 means unlimited)</span>
+					<input type="number" min={0} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={submissionLimit} onChange={(e) => setSubmissionLimit(Number(e.target.value))} />
+				</label>
+				<label className="flex items-center gap-2 text-xs text-neutral-300">
+					<input type="checkbox" checked={draftsEnabled} onChange={(e) => setDraftsEnabled(e.target.checked)} />
+					Allow submitters to save a draft and resume by email
+				</label>
+				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
+					<summary className="cursor-pointer font-medium text-neutral-200">Email copy and reminders</summary>
+					<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail and confirmation copy for submitted proposals. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the event template defaults.</p>
+					<label className="mt-3 block">Welcome copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={welcomeCopy} onChange={(e) => setWelcomeCopy(e.target.value)} /></label>
+					<label className="mt-3 block">Confirmation copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={confirmationCopy} onChange={(e) => setConfirmationCopy(e.target.value)} /></label>
+					<label className="mt-3 block">Reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
+				</details>
 				<label className="block text-xs text-neutral-400">
 					Description
 					<textarea

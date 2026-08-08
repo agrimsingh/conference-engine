@@ -36,6 +36,36 @@ export async function getEventById(
 	return db.prepare("SELECT * FROM events WHERE id = ?").bind(eventId).first<EventRow>();
 }
 
+/** Event labels for an already-authorized collection. One query avoids portal N+1s. */
+export async function listEventsByIds(
+	db: D1Database,
+	eventIds: string[],
+): Promise<EventRow[]> {
+	const ids = [...new Set(eventIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY name ASC`)
+		.bind(...ids)
+		.all<EventRow>();
+	return result.results;
+}
+
+/** Person labels for an already-authorized collection. */
+export async function listPeopleByIds(
+	db: D1Database,
+	personIds: string[],
+): Promise<PersonRow[]> {
+	const ids = [...new Set(personIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(`SELECT * FROM people WHERE id IN (${placeholders})`)
+		.bind(...ids)
+		.all<PersonRow>();
+	return result.results;
+}
+
 export async function listAllEvents(db: D1Database): Promise<EventRow[]> {
 	const result = await db
 		.prepare(`SELECT * FROM events ORDER BY name ASC`)
@@ -420,6 +450,83 @@ export async function listSubmissionsForEvent(
 	return result.results;
 }
 
+export type AdminSubmissionPageFilters = {
+	category: string;
+	label: string;
+	status: string;
+	query: string;
+	sort: "newest" | "title" | "status";
+	page: number;
+	pageSize: number;
+};
+
+export type SubmissionFacetCounts = {
+	total: number;
+	byCategory: Array<{ value: string | null; count: number }>;
+	byStatus: Array<{ value: string; count: number }>;
+	byLabel: Array<{ value: string; count: number }>;
+};
+
+function adminSubmissionWhere(eventId: string, filters: AdminSubmissionPageFilters): { sql: string; binds: unknown[] } {
+	const clauses = ["s.event_id = ?"];
+	const binds: unknown[] = [eventId];
+	if (filters.category !== "all") {
+		if (filters.category === "Uncategorized") clauses.push("s.category IS NULL");
+		else { clauses.push("s.category = ?"); binds.push(filters.category); }
+	}
+	if (filters.label !== "all") {
+		clauses.push("EXISTS (SELECT 1 FROM submission_labels sl WHERE sl.submission_id = s.id AND sl.label = ? COLLATE NOCASE)");
+		binds.push(filters.label);
+	}
+	if (filters.status !== "all") { clauses.push("s.status = ?"); binds.push(filters.status); }
+	if (filters.query) {
+		const like = `%${filters.query.toLowerCase()}%`;
+		clauses.push(`(
+      lower(COALESCE(s.submitter_name, '')) LIKE ? OR
+      lower(COALESCE(s.submitter_email, '')) LIKE ? OR
+      lower(s.answers_json) LIKE ? OR
+      lower(COALESCE(s.category, '')) LIKE ? OR
+      EXISTS (SELECT 1 FROM submission_speakers ss WHERE ss.submission_id = s.id
+        AND (lower(COALESCE(ss.name, '')) LIKE ? OR lower(COALESCE(ss.email, '')) LIKE ?))
+    )`);
+		binds.push(like, like, like, like, like, like);
+	}
+	return { sql: clauses.join(" AND "), binds };
+}
+
+/**
+ * The organizer list must page in D1; the only unbounded reads around it are
+ * compact facet aggregates used to render filter chips.
+ */
+export async function listAdminSubmissionsPage(
+	db: D1Database,
+	eventId: string,
+	filters: AdminSubmissionPageFilters,
+): Promise<{ rows: SubmissionRow[]; total: number }> {
+	const { sql, binds } = adminSubmissionWhere(eventId, filters);
+	const orderBy = filters.sort === "title"
+		? "json_extract(s.answers_json, '$.title') COLLATE NOCASE ASC, s.created_at DESC"
+		: filters.sort === "status"
+			? "s.status ASC, s.created_at DESC"
+			: "s.created_at DESC";
+	const offset = (Math.max(1, filters.page) - 1) * filters.pageSize;
+	const [rows, count] = await Promise.all([
+		db.prepare(`SELECT s.* FROM submissions s WHERE ${sql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).bind(...binds, filters.pageSize, offset).all<SubmissionRow>(),
+		db.prepare(`SELECT COUNT(*) AS count FROM submissions s WHERE ${sql}`).bind(...binds).first<{ count: number }>(),
+	]);
+	return { rows: rows.results, total: count?.count ?? 0 };
+}
+
+export async function getSubmissionFacetCounts(db: D1Database, eventId: string): Promise<SubmissionFacetCounts> {
+	const [total, categories, statuses, labels] = await Promise.all([
+		db.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ?").bind(eventId).first<{ count: number }>(),
+		db.prepare("SELECT category AS value, COUNT(*) AS count FROM submissions WHERE event_id = ? GROUP BY category").bind(eventId).all<{ value: string | null; count: number }>(),
+		db.prepare("SELECT status AS value, COUNT(*) AS count FROM submissions WHERE event_id = ? GROUP BY status").bind(eventId).all<{ value: string; count: number }>(),
+		db.prepare(`SELECT sl.label AS value, COUNT(*) AS count FROM submission_labels sl JOIN submissions s ON s.id = sl.submission_id WHERE s.event_id = ? GROUP BY sl.label ORDER BY sl.label COLLATE NOCASE ASC`).bind(eventId).all<{ value: string; count: number }>(),
+	]);
+	return { total: total?.count ?? 0, byCategory: categories.results, byStatus: statuses.results, byLabel: labels.results };
+}
+
 export async function getSubmissionById(
 	db: D1Database,
 	submissionId: string,
@@ -539,6 +646,21 @@ export async function listLabelsForEvent(
 	return result.results;
 }
 
+export async function listLabelsForSubmissions(db: D1Database, submissionIds: string[]): Promise<Map<string, string[]>> {
+	const labels = new Map<string, string[]>();
+	const ids = [...new Set(submissionIds)];
+	if (!ids.length) return labels;
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db.prepare(`SELECT submission_id, label FROM submission_labels WHERE submission_id IN (${placeholders}) ORDER BY label COLLATE NOCASE ASC`).bind(...ids).all<Pick<SubmissionLabelRow, "submission_id" | "label">>();
+	for (const row of result.results) labels.set(row.submission_id, [...(labels.get(row.submission_id) ?? []), row.label]);
+	return labels;
+}
+
+export async function hasSuccessfulOutboundDelivery(db: D1Database, args: { submissionId: string; toEmail: string; templateKey: string }): Promise<boolean> {
+	const found = await db.prepare(`SELECT id FROM outbound_messages WHERE submission_id = ? AND lower(to_email) = lower(?) AND template_key = ? AND status = 'sent' LIMIT 1`).bind(args.submissionId, args.toEmail, args.templateKey).first<{ id: string }>();
+	return Boolean(found);
+}
+
 export async function addSubmissionLabel(
 	db: D1Database,
 	submissionId: string,
@@ -611,6 +733,14 @@ export async function listTasksForEvent(
 		)
 		.bind(eventId)
 		.all<SpeakerTaskRow>();
+	return result.results;
+}
+
+export async function listTasksForSubmissions(db: D1Database, submissionIds: string[]): Promise<SpeakerTaskRow[]> {
+	const ids = [...new Set(submissionIds)];
+	if (!ids.length) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db.prepare(`SELECT * FROM speaker_tasks WHERE submission_id IN (${placeholders}) ORDER BY created_at DESC`).bind(...ids).all<SpeakerTaskRow>();
 	return result.results;
 }
 
@@ -930,6 +1060,14 @@ export async function listAssignmentsForPlan(
 		)
 		.bind(planId)
 		.all<ReviewAssignmentRow>();
+	return result.results;
+}
+
+export async function listAssignmentsForPlanSubmissions(db: D1Database, planId: string, submissionIds: string[]): Promise<ReviewAssignmentRow[]> {
+	const ids = [...new Set(submissionIds)];
+	if (!ids.length) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db.prepare(`SELECT * FROM review_assignments WHERE plan_id = ? AND submission_id IN (${placeholders}) ORDER BY created_at ASC`).bind(planId, ...ids).all<ReviewAssignmentRow>();
 	return result.results;
 }
 

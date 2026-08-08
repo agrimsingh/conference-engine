@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
-import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
+import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -53,15 +53,23 @@ export async function submitCfpAction(input: {
 		validated.visibleAnswers,
 	);
 
-	const submissionId = await insertSubmission(db, {
-		eventId: loaded.event.id,
-		formId: loaded.form.id,
-		submitterEmail: email,
-		submitterName: name,
-		answers: validated.visibleAnswers,
-		speakers: validated.speakers,
-		category,
-	});
+	let submissionId: string;
+	try {
+		submissionId = await insertSubmission(db, {
+			eventId: loaded.event.id,
+			formId: loaded.form.id,
+			submitterEmail: email,
+			submitterName: name,
+			answers: validated.visibleAnswers,
+			speakers: validated.speakers,
+			category,
+		});
+	} catch (error) {
+		if (isSubmissionLimitReachedError(error)) {
+			return { ok: false, errors: ["This CFP has reached its submission limit."] };
+		}
+		throw error;
+	}
 
 	await sendPendingInvitesForSubmission(db, {
 		submissionId,

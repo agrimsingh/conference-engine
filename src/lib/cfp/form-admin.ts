@@ -99,6 +99,13 @@ export async function updateFormMeta(
 		description?: string | null;
 		status?: "draft" | "open" | "closed";
 		closesAt?: number | null;
+		minSpeakers?: number;
+		maxSpeakers?: number;
+		draftsEnabled?: boolean;
+		submissionLimit?: number;
+		welcomeCopy?: string | null;
+		confirmationCopy?: string | null;
+		reminderCopy?: string | null;
 	},
 ): Promise<void> {
 	const existing = await db
@@ -113,15 +120,43 @@ export async function updateFormMeta(
 	const status = args.status ?? (existing.status as "draft" | "open" | "closed");
 	const closesAt =
 		args.closesAt === undefined ? existing.closes_at : args.closesAt;
+	const minSpeakers = args.minSpeakers ?? existing.min_speakers;
+	const maxSpeakers = args.maxSpeakers ?? existing.max_speakers;
+	const submissionLimit = args.submissionLimit ?? existing.submission_limit;
+	if (!Number.isInteger(minSpeakers) || minSpeakers < 1) {
+		throw new Error("Minimum speakers must be at least 1");
+	}
+	if (!Number.isInteger(maxSpeakers) || maxSpeakers < minSpeakers) {
+		throw new Error("Maximum speakers must be at least the minimum");
+	}
+	if (!Number.isInteger(submissionLimit) || submissionLimit < 0) {
+		throw new Error("Submission limit must be a non-negative whole number");
+	}
 	const now = Date.now();
 
 	await db
 		.prepare(
-			`UPDATE cfp_forms
-       SET title = ?, description = ?, status = ?, closes_at = ?, updated_at = ?
+		`UPDATE cfp_forms
+       SET title = ?, description = ?, status = ?, closes_at = ?,
+           min_speakers = ?, max_speakers = ?, drafts_enabled = ?, submission_limit = ?,
+           welcome_copy = ?, confirmation_copy = ?, reminder_copy = ?, updated_at = ?
        WHERE id = ?`,
 		)
-		.bind(title, description, status, closesAt, now, args.formId)
+		.bind(
+			title,
+			description,
+			status,
+			closesAt,
+			minSpeakers,
+			maxSpeakers,
+			args.draftsEnabled === undefined ? existing.drafts_enabled : args.draftsEnabled ? 1 : 0,
+			submissionLimit,
+			args.welcomeCopy === undefined ? existing.welcome_copy : args.welcomeCopy,
+			args.confirmationCopy === undefined ? existing.confirmation_copy : args.confirmationCopy,
+			args.reminderCopy === undefined ? existing.reminder_copy : args.reminderCopy,
+			now,
+			args.formId,
+		)
 		.run();
 }
 

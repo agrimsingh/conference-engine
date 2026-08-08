@@ -19,6 +19,9 @@ export type EventRow = {
 	slug: string;
 	name: string;
 	timezone: string;
+	/** Civil event boundaries used to seed schedule navigation when no slots exist. */
+	start_day: string | null;
+	end_day: string | null;
 	created_at: number;
 	updated_at: number;
 };

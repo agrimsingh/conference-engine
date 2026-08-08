@@ -7,6 +7,7 @@ import {
 	renderMessageTemplate,
 	type MessageTemplateKey,
 } from "../domain/message-templates";
+import { renderFormCopy } from "../cfp/form-copy";
 
 const REMINDER_KV_TTL_SECONDS = 20 * 60 * 60;
 const DEFAULT_PORTAL_ORIGIN = "https://conference-engine.65labs.org";
@@ -31,6 +32,7 @@ type PendingTaskRow = {
 	person_name: string | null;
 	event_name: string;
 	event_slug: string;
+	reminder_copy: string | null;
 };
 
 type PersonEventGroup = {
@@ -41,6 +43,7 @@ type PersonEventGroup = {
 	eventName: string;
 	eventSlug: string;
 	templateKeys: string[];
+	reminderCopy: string | null;
 };
 
 function reminderKvKey(personId: string, eventId: string): string {
@@ -100,7 +103,12 @@ export async function sendTaskReminders(
 			eventId: group.eventId,
 			toEmail: group.email,
 			subject: rendered.subject,
-			text: rendered.text,
+			text: composeReminderText(rendered.text, group.reminderCopy, {
+				eventName: group.eventName,
+				submitterName: group.personName?.trim() || "there",
+				title: `${count} outstanding tasks`,
+				resumeUrl: `${portalOrigin}/portal`,
+			}),
 			templateKey: "task_reminder",
 		});
 
@@ -132,10 +140,13 @@ async function loadPendingTaskRows(
 					p.email AS email,
 					p.name AS person_name,
 					e.name AS event_name,
-					e.slug AS event_slug
+					e.slug AS event_slug,
+					f.reminder_copy AS reminder_copy
 				FROM speaker_tasks st
 				INNER JOIN people p ON p.id = st.person_id
 				INNER JOIN events e ON e.id = st.event_id
+				INNER JOIN submissions s ON s.id = st.submission_id
+				INNER JOIN cfp_forms f ON f.id = s.form_id
 				WHERE st.status = 'pending' AND st.event_id = ?
 				ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 			)
@@ -153,10 +164,13 @@ async function loadPendingTaskRows(
 				p.email AS email,
 				p.name AS person_name,
 				e.name AS event_name,
-				e.slug AS event_slug
+			e.slug AS event_slug,
+			f.reminder_copy AS reminder_copy
 			FROM speaker_tasks st
 			INNER JOIN people p ON p.id = st.person_id
 			INNER JOIN events e ON e.id = st.event_id
+			INNER JOIN submissions s ON s.id = st.submission_id
+			INNER JOIN cfp_forms f ON f.id = s.form_id
 			WHERE st.status = 'pending'
 			ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 		)
@@ -171,6 +185,9 @@ function groupByPersonEvent(rows: PendingTaskRow[]): PersonEventGroup[] {
 		const existing = map.get(key);
 		if (existing) {
 			existing.templateKeys.push(row.template_key);
+			if (!existing.reminderCopy && row.reminder_copy?.trim()) {
+				existing.reminderCopy = row.reminder_copy;
+			}
 			continue;
 		}
 		map.set(key, {
@@ -181,9 +198,19 @@ function groupByPersonEvent(rows: PendingTaskRow[]): PersonEventGroup[] {
 			eventName: row.event_name,
 			eventSlug: row.event_slug,
 			templateKeys: [row.template_key],
+			reminderCopy: row.reminder_copy?.trim() || null,
 		});
 	}
 	return [...map.values()];
+}
+
+export function composeReminderText(
+	defaultText: string,
+	reminderCopy: string | null,
+	context: { eventName: string; submitterName: string; title: string; resumeUrl: string },
+): string {
+	if (!reminderCopy?.trim()) return defaultText;
+	return `${renderFormCopy(reminderCopy, context).trim()}\n\n${defaultText}`;
 }
 
 type ReminderSendResult = { ok: true } | { ok: false; error: string };

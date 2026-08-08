@@ -5,7 +5,7 @@ import {
 	getEventBySlug,
 	listAgendaSlotsWithSubmissions,
 	listEventRooms,
-	listSpeakersForSubmission,
+	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
 import {
 	AIE_CATEGORY_LABELS,
@@ -19,7 +19,7 @@ import {
 	EmptyState,
 } from "@/components/ui";
 import {
-	DEMO_SCHEDULE_DAY,
+	deriveScheduleDays,
 	dayKeyInTimeZone,
 	formatClock,
 	formatDayLabel,
@@ -145,23 +145,30 @@ export async function PublicSchedule({
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) notFound();
 
-	const dayKey = parseDayKey(dayParam) ?? DEMO_SCHEDULE_DAY;
-	const view = parseView(viewParam);
-	const roomFilter = roomParam?.trim() || "all";
-
 	const [rooms, slots] = await Promise.all([
 		listEventRooms(db, event.id),
 		listAgendaSlotsWithSubmissions(db, event.id),
 	]);
+	const days = deriveScheduleDays({
+		startDay: event.start_day,
+		endDay: event.end_day,
+		scheduledDays: slots.map((slot) => dayKeyInTimeZone(slot.starts_at, event.timezone)),
+		timeZone: event.timezone,
+	});
+	const requestedDay = parseDayKey(dayParam);
+	const dayKey = requestedDay && days.includes(requestedDay) ? requestedDay : days[0]!;
+	const view = parseView(viewParam);
+	const roomFilter = roomParam?.trim() || "all";
 
 	const publicSlots = slots.filter((slot) =>
 		isPublicScheduleStatus(slot.submission_status),
 	);
 
 	const enriched: EnrichedSlot[] = [];
+	const speakersBySubmission = await listSpeakersForSubmissions(db, publicSlots.map((slot) => slot.submission_id));
 	for (const slot of publicSlots) {
 		const answers = parseAnswers(slot.answers_json);
-		const speakers = await listSpeakersForSubmission(db, slot.submission_id);
+		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
 		enriched.push({
 			id: slot.id,
 			submissionId: slot.submission_id,

@@ -11,6 +11,7 @@ import {
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
 import { renderDecisionPreviews } from "@/lib/domain";
+import { displayCategory } from "@/lib/domain";
 import {
 	filterBoardSubmissions,
 	listReviewerAssignments,
@@ -107,6 +108,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
+		let parsedAnswers: Record<string, unknown> = {};
 		try {
 			const answers: unknown = JSON.parse(row.answers_json);
 			if (
@@ -117,6 +119,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 			) {
 				title = (answers as { title: string }).title;
 			}
+			if (typeof answers === "object" && answers !== null && !Array.isArray(answers)) parsedAnswers = answers as Record<string, unknown>;
 		} catch {
 			// ignore
 		}
@@ -126,6 +129,13 @@ export default async function ReviewPage({ searchParams }: Props) {
 			submitterName: row.submitter_name,
 			submitterEmail: row.submitter_email,
 			title,
+			category: displayCategory(row.category),
+			format: typeof parsedAnswers.format === "string" ? parsedAnswers.format : null,
+			assignment: identity.mode === "reviewer" ? "Assigned to you" : "Committee review",
+			answers: Object.entries(parsedAnswers)
+				.filter(([key]) => key !== "speakers")
+				.map(([key, value]) => ({ label: key.replaceAll("_", " "), value: Array.isArray(value) ? value.join(", ") : typeof value === "string" || typeof value === "number" ? String(value) : JSON.stringify(value) }))
+				.filter((answer) => answer.value && answer.value !== "{}"),
 			previews: renderDecisionPreviews({
 				eventName: event.name,
 				submitterName: row.submitter_name ?? "there",

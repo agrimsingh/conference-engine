@@ -23,9 +23,10 @@ type TaskView = {
 type Props = {
 	token: string;
 	tasks: TaskView[];
+	compact?: boolean;
 };
 
-export function TaskChecklist({ token, tasks }: Props) {
+export function TaskChecklist({ token, tasks, compact = false }: Props) {
 	const router = useRouter();
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export function TaskChecklist({ token, tasks }: Props) {
 					return (
 						<li
 							key={task.id}
-							className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+							className={`${compact ? "border-t border-neutral-800 py-3 first:border-t-0" : "rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"} text-sm`}
 						>
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
 								<p className="font-medium text-neutral-100">{task.label}</p>
@@ -100,13 +101,7 @@ export function TaskChecklist({ token, tasks }: Props) {
 								</StatusPill>
 							</div>
 
-							{done ? (
-								<p className="mt-2 text-neutral-400">
-									{task.kind === "text"
-										? (task.textValue ?? "Completed")
-										: "File uploaded — thanks."}
-								</p>
-							) : task.kind === "text" ? (
+							{task.kind === "text" ? (
 								<form
 									className="mt-3 space-y-2"
 									onSubmit={(event) => {
@@ -116,20 +111,21 @@ export function TaskChecklist({ token, tasks }: Props) {
 										void completeTextTask(task.id, task.label, text);
 									}}
 								>
-									<textarea
+										<textarea
 										name="text"
 										required
 										minLength={20}
 										rows={4}
 										className={`w-full ${INPUT_CLASSES}`}
-										placeholder={`Write your ${task.label.toLowerCase()} (20+ characters)`}
+											placeholder={`Write your ${task.label.toLowerCase()} (20+ characters)`}
+											defaultValue={task.textValue ?? ""}
 									/>
 									<button
 										type="submit"
 										disabled={busyId === task.id}
 										className={buttonClasses("secondary")}
 									>
-										{busyId === task.id ? "Saving…" : `Save ${task.label}`}
+										{busyId === task.id ? "Saving…" : done ? `Update ${task.label}` : `Save ${task.label}`}
 									</button>
 								</form>
 							) : (
@@ -161,12 +157,12 @@ export function TaskChecklist({ token, tasks }: Props) {
 											className="mt-1 block w-full text-sm text-neutral-400 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-neutral-100"
 										/>
 									</label>
-									<button
+										<button
 										type="submit"
 										disabled={busyId === task.id}
 										className={buttonClasses("secondary")}
 									>
-										{busyId === task.id ? "Uploading…" : "Upload"}
+											{busyId === task.id ? "Uploading…" : done ? "Replace file" : "Upload"}
 									</button>
 								</form>
 							)}

@@ -1,15 +1,18 @@
 import { notFound } from "next/navigation";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
 import { loadCfpForm } from "@/lib/cfp/load-form";
+import { renderFormCopy } from "@/lib/cfp/form-copy";
 import { getDb } from "@/lib/db/cloudflare";
 import { CfpForm } from "./cfp-form";
 
 type Props = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
+	searchParams: Promise<{ draft?: string }>;
 };
 
-export default async function PublicCfpPage({ params }: Props) {
+export default async function PublicCfpPage({ params, searchParams }: Props) {
 	const { eventSlug, formSlug } = await params;
+	const { draft } = await searchParams;
 	const db = await getDb();
 	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
 	if (!loaded) notFound();
@@ -41,6 +44,10 @@ export default async function PublicCfpPage({ params }: Props) {
 				eventName={loaded.event.name}
 				formTitle={loaded.form.title}
 				formDescription={loaded.form.description}
+				welcomeCopy={loaded.form.welcome_copy ? renderFormCopy(loaded.form.welcome_copy, { eventName: loaded.event.name, submitterName: "there", title: loaded.form.title }) : null}
+				draftToken={typeof draft === "string" ? draft : ""}
+				draftsEnabled={loaded.form.drafts_enabled === 1}
+				submissionLimit={loaded.form.submission_limit}
 				fields={loaded.fields}
 			/>
 		</main>

@@ -4,12 +4,14 @@ import {
 	getSpeakerByConfirmTokenHash,
 	getSubmissionById,
 	getSubmissionSpeakerById,
+	hasSuccessfulOutboundDelivery,
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
 import type { SubmissionSpeakerRow } from "@/lib/db/types";
 import { isPostAcceptance, MAX_CO_SPEAKERS } from "@/lib/domain";
 import { titleFromAnswersJson } from "@/lib/email/notify";
 import { sendTemplatedEmail, type OutboundSendResult } from "@/lib/email/resend";
+import { shouldSendPendingCoSpeakerInvite } from "@/lib/cfp/delivery";
 import {
 	ensureTaskTemplates,
 	materializeAcceptedSpeaker,
@@ -137,6 +139,12 @@ export async function sendPendingInvitesForSubmission(
 	const results: InviteResult[] = [];
 	for (const speaker of speakers) {
 		if (speaker.status !== "pending") continue;
+		const delivered = await hasSuccessfulOutboundDelivery(db, {
+			submissionId: args.submissionId,
+			toEmail: speaker.email,
+			templateKey: "co_speaker_invite",
+		});
+		if (!shouldSendPendingCoSpeakerInvite(delivered)) continue;
 		results.push(await inviteCoSpeaker(db, { speakerId: speaker.id, origin: args.origin }));
 	}
 	return results;

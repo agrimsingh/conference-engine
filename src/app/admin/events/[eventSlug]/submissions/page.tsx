@@ -6,13 +6,14 @@ import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
-	getPersonById,
-	listAssignmentsForPlan,
-	listLabelsForEvent,
+	getSubmissionFacetCounts,
+	listPeopleByIds,
+	listAssignmentsForPlanSubmissions,
+	listAdminSubmissionsPage,
+	listLabelsForSubmissions,
 	listReviewersForPlan,
-	listSpeakersForSubmission,
-	listSubmissionsForEvent,
-	listTasksForSubmission,
+	listSpeakersForSubmissions,
+	listTasksForSubmissions,
 } from "@/lib/db/queries";
 import {
 	AIE_CATEGORY_LABELS,
@@ -29,27 +30,45 @@ import { SubmissionSpeakers, type SpeakerSummary } from "./submission-speakers";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
-	searchParams: Promise<{ category?: string; label?: string }>;
+	searchParams: Promise<{ category?: string; label?: string; status?: string; q?: string; sort?: string; page?: string }>;
 };
 
 export default async function AdminSubmissionsPage({ params, searchParams }: Props) {
 	const { eventSlug } = await params;
-	const { category: categoryParam, label: labelParam } = await searchParams;
+	const { category: categoryParam, label: labelParam, status: statusParam, q: queryParam, sort: sortParam, page: pageParam } = await searchParams;
 
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
 
-	const submissions = await listSubmissionsForEvent(db, event.id);
 	const categoryFilter = categoryParam?.trim() || "all";
 	const labelFilter = labelParam?.trim() || "all";
+	const statusFilter = statusParam?.trim() || "all";
+	const query = queryParam?.trim().toLowerCase() || "";
+	const sort = sortParam === "title" || sortParam === "status" ? sortParam : "newest";
 
+	const pageSize = 25;
+	const requestedPage = Math.max(1, Number(pageParam) || 1);
 	const activePlan = await getActiveEvaluationPlan(db, event.id);
-	const planReviewers = activePlan
-		? await listReviewersForPlan(db, activePlan.id)
-		: [];
-	const planAssignments = activePlan
-		? await listAssignmentsForPlan(db, activePlan.id)
-		: [];
+	const [pageResult, facets, reviewers] = await Promise.all([
+		listAdminSubmissionsPage(db, event.id, { category: categoryFilter, label: labelFilter, status: statusFilter, query, sort, page: requestedPage, pageSize }),
+		getSubmissionFacetCounts(db, event.id),
+		activePlan ? listReviewersForPlan(db, activePlan.id) : Promise.resolve([]),
+	]);
+	const totalPages = Math.max(1, Math.ceil(pageResult.total / pageSize));
+	const page = Math.min(requestedPage, totalPages);
+	const pageRows = page === requestedPage
+		? pageResult.rows
+		: (await listAdminSubmissionsPage(db, event.id, { category: categoryFilter, label: labelFilter, status: statusFilter, query, sort, page, pageSize })).rows;
+	const pageSubmissionIds = pageRows.map((row) => row.id);
+	const [pageLabels, pageTasks, bulkSpeakers, planAssignments] = await Promise.all([
+		listLabelsForSubmissions(db, pageSubmissionIds),
+		listTasksForSubmissions(db, pageSubmissionIds),
+		listSpeakersForSubmissions(db, pageSubmissionIds),
+		activePlan ? listAssignmentsForPlanSubmissions(db, activePlan.id, pageSubmissionIds) : Promise.resolve([]),
+	]);
+	const people = await listPeopleByIds(db, pageTasks.map((task) => task.person_id));
+
+	const planReviewers = reviewers;
 	const assignedBySubmission = new Map<string, string[]>();
 	for (const row of planAssignments) {
 		const list = assignedBySubmission.get(row.submission_id) ?? [];
@@ -57,21 +76,12 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		assignedBySubmission.set(row.submission_id, list);
 	}
 
-	const labelRows = await listLabelsForEvent(db, event.id);
-	const labelsBySubmission = new Map<string, string[]>();
+	const labelsBySubmission = pageLabels;
 	const labelCounts = new Map<string, number>();
-	for (const row of labelRows) {
-		const list = labelsBySubmission.get(row.submission_id) ?? [];
-		list.push(row.label);
-		labelsBySubmission.set(row.submission_id, list);
-		labelCounts.set(row.label, (labelCounts.get(row.label) ?? 0) + 1);
-	}
+	for (const row of facets.byLabel) labelCounts.set(row.value, row.count);
 
 	const categoryCounts = new Map<string, number>();
-	for (const row of submissions) {
-		const label = displayCategory(row.category);
-		categoryCounts.set(label, (categoryCounts.get(label) ?? 0) + 1);
-	}
+	for (const row of facets.byCategory) categoryCounts.set(displayCategory(row.value), row.count);
 
 	const chipLabels = [
 		...AIE_CATEGORY_LABELS,
@@ -83,23 +93,15 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		UNCATEGORIZED_CATEGORY,
 	];
 
-	const filtered = submissions.filter(
-		(row) =>
-			(categoryFilter === "all" ||
-				displayCategory(row.category) === categoryFilter) &&
-			(labelFilter === "all" ||
-				(labelsBySubmission.get(row.id) ?? []).includes(labelFilter)),
-	);
-
-	const tasksBySubmission = new Map<
-		string,
-		Awaited<ReturnType<typeof listTasksForSubmission>>
-	>();
+	const tasksBySubmission = new Map<string, typeof pageTasks>();
 	const speakersBySubmission = new Map<string, SpeakerSummary[]>();
-	const personNames = new Map<string, string>();
-
-	for (const row of filtered) {
-		const speakers = await listSpeakersForSubmission(db, row.id);
+	for (const task of pageTasks) {
+		const list = tasksBySubmission.get(task.submission_id) ?? [];
+		list.push(task);
+		tasksBySubmission.set(task.submission_id, list);
+	}
+	for (const row of pageRows) {
+		const speakers = bulkSpeakers.get(row.id) ?? [];
 		speakersBySubmission.set(
 			row.id,
 			speakers.map((speaker) => ({
@@ -111,26 +113,20 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 				addedAfterAcceptance: speaker.added_after_acceptance === 1,
 			})),
 		);
-		const tasks = await listTasksForSubmission(db, row.id);
-		tasksBySubmission.set(row.id, tasks);
-		for (const task of tasks) {
-			if (!personNames.has(task.person_id)) {
-				const person = await getPersonById(db, task.person_id);
-				personNames.set(
-					task.person_id,
-					person?.name ?? person?.email ?? task.person_id,
-				);
-			}
-		}
 	}
+	const personNames = new Map(people.map((person) => [person.id, person.name ?? person.email]));
 
 	const baseHref = `/admin/events/${event.slug}/submissions`;
-	const filterHref = (category: string, label: string) => {
+	const filterHref = (category: string, label: string, extras: Record<string, string> = {}) => {
 		const params = new URLSearchParams();
 		if (category !== "all") params.set("category", category);
 		if (label !== "all") params.set("label", label);
-		const query = params.toString();
-		return query ? `${baseHref}?${query}` : baseHref;
+		if (statusFilter !== "all") params.set("status", statusFilter);
+		if (query) params.set("q", query);
+		if (sort !== "newest") params.set("sort", sort);
+		for (const [key, value] of Object.entries(extras)) params.set(key, value);
+		const queryString = params.toString();
+		return queryString ? `${baseHref}?${queryString}` : baseHref;
 	};
 
 	return (
@@ -143,8 +139,8 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					description={
 						<>
 							Triage proposals by category, then accept or reject.{" "}
-							{filtered.length}
-							{categoryFilter !== "all" ? ` of ${submissions.length}` : ""} shown.{" "}
+							{pageResult.total}
+							{categoryFilter !== "all" ? ` of ${facets.total}` : ""} shown.{" "}
 							<Link
 								className="font-medium text-neutral-100 underline underline-offset-2"
 								href={`/e/${event.slug}/submit/cfp`}
@@ -158,7 +154,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						<CategoryChip
 							active={categoryFilter === "all"}
 							href={filterHref("all", labelFilter)}
-							label={`All (${submissions.length})`}
+							label={`All (${facets.total})`}
 						/>
 						{chipLabels.map((label) => {
 							const count = categoryCounts.get(label) ?? 0;
@@ -172,6 +168,14 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 							);
 						})}
 					</div>
+					<form className="grid gap-2 pt-3 sm:grid-cols-[1fr_auto_auto]" method="get">
+						<input type="search" name="q" defaultValue={queryParam ?? ""} className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100" placeholder="Search title, speaker, email, or abstract" />
+						<select name="status" defaultValue={statusFilter} className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"><option value="all">All statuses</option>{facets.byStatus.map(({ value: status }) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select>
+						<select name="sort" defaultValue={sort} className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"><option value="newest">Newest</option><option value="title">Title A–Z</option><option value="status">Status</option></select>
+						<input type="hidden" name="category" value={categoryFilter === "all" ? "" : categoryFilter} />
+						<input type="hidden" name="label" value={labelFilter === "all" ? "" : labelFilter} />
+						<button className="justify-self-start rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-400 sm:col-span-3" type="submit">Apply filters</button>
+					</form>
 					{labelCounts.size > 0 ? (
 						<div className="flex flex-wrap items-center gap-1.5 pt-2">
 							<span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
@@ -198,10 +202,10 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					</div>
 				</PageHeader>
 
-				{filtered.length === 0 ? (
+				{pageResult.total === 0 ? (
 					<EmptyState
-						title="No submissions yet"
-						description="Share your CFP link to start collecting talks."
+						title={facets.total === 0 ? "No submissions yet" : "No matching submissions"}
+						description={facets.total === 0 ? "Share your CFP link to start collecting talks." : "Try clearing a filter or changing your search."}
 					>
 						<p className="mt-4">
 							<Link
@@ -213,8 +217,9 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						</p>
 					</EmptyState>
 				) : (
+					<>
 					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
-						{filtered.map((row) => {
+						{pageRows.map((row) => {
 							const answers = parseAnswers(row.answers_json);
 							const tasks = tasksBySubmission.get(row.id) ?? [];
 							const completed = tasks.filter(
@@ -305,6 +310,8 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 							);
 						})}
 					</ul>
+					{totalPages > 1 ? <nav className="mt-4 flex items-center justify-between text-sm" aria-label="Submission pages">{page <= 1 ? <span className="rounded-md border border-neutral-800 px-3 py-2 text-neutral-600" aria-disabled="true">Previous</span> : <Link className="rounded-md border border-neutral-700 px-3 py-2 text-neutral-200" href={filterHref(categoryFilter, labelFilter, { page: String(page - 1) })}>Previous</Link>}<span className="text-neutral-500">Page {page} of {totalPages}</span>{page >= totalPages ? <span className="rounded-md border border-neutral-800 px-3 py-2 text-neutral-600" aria-disabled="true">Next</span> : <Link className="rounded-md border border-neutral-700 px-3 py-2 text-neutral-200" href={filterHref(categoryFilter, labelFilter, { page: String(page + 1) })}>Next</Link>}</nav> : null}
+					</>
 				)}
 			</main>
 		</div>

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
-import { insertSubmission, validateSubmissionAnswers } from "@/lib/cfp/submit";
+import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
-import { getDb } from "@/lib/db/cloudflare";
+import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
+import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
+import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -26,23 +28,22 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, errors: ["Invalid JSON"] }, { status: 400 });
 	}
 
-	const submitterName =
-		typeof body.submitterName === "string" ? body.submitterName.trim() : "";
-	const submitterEmail =
-		typeof body.submitterEmail === "string"
-			? body.submitterEmail.trim().toLowerCase()
-			: "";
+	const identity = validateSubmitterIdentity({
+		name: typeof body.submitterName === "string" ? body.submitterName : "",
+		email: typeof body.submitterEmail === "string" ? body.submitterEmail : "",
+	});
 	const answers =
 		typeof body.answers === "object" && body.answers !== null && !Array.isArray(body.answers)
 			? (body.answers as AnswerMap)
 			: null;
 
-	if (!submitterName || !submitterEmail.includes("@") || !answers) {
+	if (!identity.ok || !answers) {
 		return NextResponse.json(
-			{ ok: false, errors: ["submitterName, submitterEmail, answers required"] },
+			{ ok: false, errors: identity.ok ? ["answers required"] : identity.errors },
 			{ status: 400 },
 		);
 	}
+	const { name: submitterName, email: submitterEmail } = identity;
 
 	const db = await getDb();
 	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
@@ -60,6 +61,13 @@ export async function POST(request: Request, context: RouteContext) {
 			{ status: 403 },
 		);
 	}
+	const secret = await getAuthSecret();
+	const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+	const [emailAllowed, ipAllowed] = await Promise.all([
+		consumeFixedWindowRateLimit(db, { secret, bucket: "cfp-submit-email", subject: `${eventSlug}:${formSlug}:email:${submitterEmail}`, limit: 5, windowMs: 15 * 60_000 }),
+		consumeFixedWindowRateLimit(db, { secret, bucket: "cfp-submit-ip", subject: `${eventSlug}:${formSlug}:ip:${ip}`, limit: 20, windowMs: 15 * 60_000 }),
+	]);
+	if (!emailAllowed || !ipAllowed) return NextResponse.json({ ok: false, errors: ["Too many submission attempts. Please wait a few minutes and try again."] }, { status: 429 });
 
 	const validated = validateSubmissionAnswers(loaded.fields, answers);
 	if (!validated.ok) {
@@ -68,19 +76,28 @@ export async function POST(request: Request, context: RouteContext) {
 
 	const category = resolveSubmissionCategory(formSlug, validated.visibleAnswers);
 
-	const submissionId = await insertSubmission(db, {
-		eventId: loaded.event.id,
-		formId: loaded.form.id,
-		submitterEmail,
-		submitterName,
-		answers: validated.visibleAnswers,
-		speakers: validated.speakers,
-		category,
-	});
+	let submissionId: string;
+	try {
+		submissionId = await insertSubmission(db, {
+			eventId: loaded.event.id,
+			formId: loaded.form.id,
+			submitterEmail,
+			submitterName,
+			answers: validated.visibleAnswers,
+			speakers: validated.speakers,
+			category,
+		});
+	} catch (error) {
+		if (isSubmissionLimitReachedError(error)) {
+			return NextResponse.json({ ok: false, errors: ["This CFP has reached its submission limit."] }, { status: 409 });
+		}
+		throw error;
+	}
 
 	const email = await notifySubmissionLifecycle(db, {
 		submissionId,
 		templateKey: "submission_received",
+		override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal" }),
 	});
 
 	const coSpeakerInvites = await sendPendingInvitesForSubmission(db, {

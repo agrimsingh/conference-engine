@@ -18,6 +18,32 @@ export async function createVerifiedDraft(
 	return id;
 }
 
+/**
+ * Persist the draft and its hashed resume token in one D1 batch before an
+ * outbound message can contain the raw token. The token remains private to
+ * the caller so public endpoints can keep their anti-enumeration response.
+ */
+export async function prepareDraftResumeDelivery(
+	db: D1Database,
+	args: { secret: string; eventId: string; formId: string; verifiedEmail: string; submitterName?: string; answers?: AnswerMap; draftId?: string; token?: string; now?: number },
+): Promise<{ draftId: string; token: string }> {
+	const draftId = args.draftId ?? crypto.randomUUID();
+	const token = args.token ?? randomToken(32);
+	const now = args.now ?? Date.now();
+	const hash = await hmacHash(args.secret, token);
+	await db.batch([
+		db.prepare(
+			`INSERT INTO submission_drafts (id, event_id, form_id, verified_email, submitter_name, answers_json, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+		).bind(draftId, args.eventId, args.formId, args.verifiedEmail.trim().toLowerCase(), args.submitterName?.trim() ?? "", JSON.stringify(args.answers ?? {}), now, now),
+		db.prepare(
+			`INSERT INTO submission_draft_tokens (token_hash, draft_id, state, expires_at, created_at)
+       VALUES (?, ?, 'current', ?, ?)`,
+		).bind(hash, draftId, now + TOKEN_TTL_MS, now),
+	]);
+	return { draftId, token };
+}
+
 /** Call only after a mailbox link was accepted or a portal session proved this address. */
 export async function issueDraftResumeToken(
 	db: D1Database,
@@ -44,20 +70,20 @@ export async function issueDraftResumeToken(
 export async function loadDraftForResume(
 	db: D1Database,
 	args: { secret: string; token: string; now?: number },
-): Promise<{ id: string; eventId: string; formId: string; verifiedEmail: string; status: "draft" | "submitted"; answers: AnswerMap; submissionId: string | null } | null> {
+): Promise<{ id: string; eventId: string; formId: string; verifiedEmail: string; submitterName: string; status: "draft" | "submitted"; answers: AnswerMap; submissionId: string | null } | null> {
 	const now = args.now ?? Date.now();
 	const hash = await hmacHash(args.secret, args.token);
 	const row = await db.prepare(
-		`SELECT d.id, d.event_id, d.form_id, d.verified_email, d.status, d.answers_json, d.submission_id
+		`SELECT d.id, d.event_id, d.form_id, d.verified_email, d.submitter_name, d.status, d.answers_json, d.submission_id
      FROM submission_draft_tokens t
      JOIN submission_drafts d ON d.id = t.draft_id
      WHERE t.token_hash = ? AND t.expires_at >= ?`,
-	).bind(hash, now).first<{ id: string; event_id: string; form_id: string; verified_email: string; status: "draft" | "submitted"; answers_json: string; submission_id: string | null }>();
+	).bind(hash, now).first<{ id: string; event_id: string; form_id: string; verified_email: string; submitter_name: string; status: "draft" | "submitted"; answers_json: string; submission_id: string | null }>();
 	if (!row) return null;
 	let parsed: unknown;
 	try { parsed = JSON.parse(row.answers_json); } catch { return null; }
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-	return { id: row.id, eventId: row.event_id, formId: row.form_id, verifiedEmail: row.verified_email, status: row.status, answers: parsed as AnswerMap, submissionId: row.submission_id };
+	return { id: row.id, eventId: row.event_id, formId: row.form_id, verifiedEmail: row.verified_email, submitterName: row.submitter_name, status: row.status, answers: parsed as AnswerMap, submissionId: row.submission_id };
 }
 
 /** A proven resume token (or matching portal identity) can update draft state

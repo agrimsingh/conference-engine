@@ -13,6 +13,8 @@ export function CreateEventForm({ canCreate }: Props) {
 	const [name, setName] = useState("");
 	const [slug, setSlug] = useState("");
 	const [timezone, setTimezone] = useState("America/Los_Angeles");
+	const [startDay, setStartDay] = useState("");
+	const [endDay, setEndDay] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 
@@ -33,7 +35,7 @@ export function CreateEventForm({ canCreate }: Props) {
 			const response = await fetch("/api/admin/events", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ name, slug, timezone }),
+				body: JSON.stringify({ name, slug, timezone, startDay, endDay }),
 			});
 			const data = (await response.json()) as {
 				ok?: boolean;
@@ -69,6 +71,10 @@ export function CreateEventForm({ canCreate }: Props) {
 					placeholder="AI Engineer 2026"
 				/>
 			</label>
+			<div className="grid gap-4 sm:grid-cols-2">
+				<label className="block space-y-1.5 text-sm"><span className="font-medium text-neutral-200">Start date</span><input type="date" required value={startDay} onChange={(e) => setStartDay(e.target.value)} className={`w-full ${INPUT_CLASSES}`} /></label>
+				<label className="block space-y-1.5 text-sm"><span className="font-medium text-neutral-200">End date</span><input type="date" required min={startDay || undefined} value={endDay} onChange={(e) => setEndDay(e.target.value)} className={`w-full ${INPUT_CLASSES}`} /></label>
+			</div>
 			<label className="block space-y-1.5 text-sm">
 				<span className="font-medium text-neutral-200">Slug</span>
 				<input

@@ -7,15 +7,17 @@ import {
 	listAgendaSlotsForEvent,
 	listEventRooms,
 	listSchedulableSubmissions,
-	listSpeakersForSubmission,
+	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
 import {
 	durationMinutesFromAnswers,
+	displayCategory,
 	normalizeSpeakerKey,
 	titleFromAnswers,
 } from "@/lib/domain";
 import {
-	DEMO_SCHEDULE_DAY,
+	dayKeyInTimeZone,
+	deriveScheduleDays,
 	parseDayKey,
 } from "@/lib/schedule/time";
 import {
@@ -47,21 +49,28 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
 
-	const dayKey = parseDayKey(dayParam) ?? DEMO_SCHEDULE_DAY;
 	const [rooms, submissions, slots] = await Promise.all([
 		listEventRooms(db, event.id),
 		listSchedulableSubmissions(db, event.id),
 		listAgendaSlotsForEvent(db, event.id),
 	]);
+	const days = deriveScheduleDays({
+		startDay: event.start_day,
+		endDay: event.end_day,
+		scheduledDays: slots.map((slot) => dayKeyInTimeZone(slot.starts_at, event.timezone)),
+		timeZone: event.timezone,
+	});
+	const dayKey = parseDayKey(dayParam) && days.includes(dayParam!) ? dayParam! : days[0]!;
 
 	const slotsBySubmission = new Map(
 		slots.map((slot) => [slot.submission_id, slot] as const),
 	);
 
 	const sessions: ScheduleSession[] = [];
+	const speakersBySubmission = await listSpeakersForSubmissions(db, submissions.map((submission) => submission.id));
 	for (const row of submissions) {
 		const answers = parseAnswers(row.answers_json);
-		const speakers = await listSpeakersForSubmission(db, row.id);
+		const speakers = speakersBySubmission.get(row.id) ?? [];
 		// Pending co-speakers stay visible to organizers (flagged), and still
 		// count for double-booking; declined/removed drop out entirely.
 		const active = speakers.filter(
@@ -71,7 +80,8 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 		const slot = slotsBySubmission.get(row.id) ?? null;
 		sessions.push({
 			id: row.id,
-			title: titleFromAnswers(answers),
+		title: titleFromAnswers(answers),
+		category: displayCategory(row.category),
 			status: row.status,
 			submitterName: row.submitter_name,
 			durationMinutes: durationMinutesFromAnswers(answers),
@@ -118,6 +128,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 						eventSlug={event.slug}
 						timeZone={event.timezone}
 						dayKey={dayKey}
+						days={days}
 						rooms={roomNames}
 						sessions={sessions}
 					/>

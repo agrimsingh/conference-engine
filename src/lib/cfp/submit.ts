@@ -6,6 +6,7 @@ import {
 	type FormFieldDef,
 	type SpeakerAnswer,
 } from "@/lib/domain";
+import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 
 export type SubmitInput = {
 	answers: AnswerMap;
@@ -16,6 +17,23 @@ export type SubmitInput = {
 export type SubmitValidation =
 	| { ok: true; visibleAnswers: AnswerMap; speakers: SpeakerAnswer[] }
 	| { ok: false; errors: string[] };
+
+/** D1's trigger is the authority for a concurrent submission limit. */
+export function isSubmissionLimitReachedError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message.toLowerCase().includes("submission limit reached")
+	);
+}
+
+export function validateSubmitterIdentity(input: { name: string; email: string }): { ok: true; name: string; email: string } | { ok: false; errors: string[] } {
+	const name = input.name.trim();
+	const email = normalizeEmail(input.email);
+	const errors: string[] = [];
+	if (!name || name.length > 160) errors.push("Enter a name between 1 and 160 characters.");
+	if (!isPlausibleEmail(email)) errors.push("Enter a valid email address.");
+	return errors.length ? { ok: false, errors } : { ok: true, name, email };
+}
 
 export function validateSubmissionAnswers(
 	fields: FormFieldDef[],

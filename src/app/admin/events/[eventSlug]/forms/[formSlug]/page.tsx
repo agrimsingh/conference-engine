@@ -61,6 +61,13 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 						initialDescription={form.description ?? ""}
 						initialStatus={form.status}
 						initialClosesAt={form.closes_at}
+						initialMinSpeakers={form.min_speakers}
+						initialMaxSpeakers={form.max_speakers}
+						initialDraftsEnabled={form.drafts_enabled === 1}
+						initialSubmissionLimit={form.submission_limit}
+						initialWelcomeCopy={form.welcome_copy ?? ""}
+						initialConfirmationCopy={form.confirmation_copy ?? ""}
+						initialReminderCopy={form.reminder_copy ?? ""}
 						initialFields={fields}
 					/>
 				</div>

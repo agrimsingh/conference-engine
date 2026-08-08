@@ -40,8 +40,17 @@ body {
 
 a:focus-visible,
 button:focus-visible,
-[role="button"]:focus-visible {
-	outline: 2px solid #34d399;
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:focus-visible {
+	outline: 2px solid #818cf8;
 	outline-offset: 2px;
 	border-radius: 4px;
+}
+
+input, select, textarea, button, a {
+	-webkit-tap-highlight-color: transparent;
 }

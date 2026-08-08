@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-	/* config options here */
+	// The repo is nested under a shared workspace on some machines. Pinning the
+	// root keeps Next from walking upward and warning about the wrong lockfile.
+	turbopack: { root: process.cwd() },
 };
 
 export default nextConfig;

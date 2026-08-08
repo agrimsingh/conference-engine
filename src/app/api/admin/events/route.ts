@@ -6,11 +6,14 @@ import {
 import { getDb } from "@/lib/db/cloudflare";
 import { getEventBySlug } from "@/lib/db/queries";
 import { createEventWithDefaults } from "@/lib/events/create-event";
+import { validateEventSettings } from "@/lib/events/settings";
 
 type Body = {
 	name?: unknown;
 	slug?: unknown;
 	timezone?: unknown;
+	startDay?: unknown;
+	endDay?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -33,6 +36,8 @@ export async function POST(request: Request) {
 	const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
 	const timezone =
 		typeof body.timezone === "string" ? body.timezone.trim() : undefined;
+	const startDay = typeof body.startDay === "string" ? body.startDay.trim() : "";
+	const endDay = typeof body.endDay === "string" ? body.endDay.trim() : "";
 
 	if (!name || name.length < 2) {
 		return NextResponse.json(
@@ -48,6 +53,9 @@ export async function POST(request: Request) {
 		);
 	}
 
+	const schedule = validateEventSettings({ startDay, endDay, timezone });
+	if (!schedule.ok) return NextResponse.json({ ok: false, error: schedule.error }, { status: 400 });
+
 	const existing = await getEventBySlug(db, slug);
 	if (existing) {
 		return NextResponse.json(
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
 	const owner = account ?? null;
 	const created = await createEventWithDefaults(
 		db,
-		{ name, slug, timezone },
+		{ name, slug, timezone, startDay, endDay },
 		owner,
 	);
 

@@ -38,6 +38,7 @@ export async function loadCfpForm(
 		if (!isFieldType(row.field_type)) {
 			throw new Error(`Unknown field_type: ${row.field_type}`);
 		}
+		const config = parseFieldConfig(row.field_type, row.config);
 		return {
 			key: row.key,
 			label: row.label,
@@ -45,7 +46,12 @@ export async function loadCfpForm(
 			required: row.required === 1,
 			position: row.position,
 			visibilityRule: parseVisibilityRule(row.visibility_rule),
-			config: parseFieldConfig(row.field_type, row.config),
+			// Speaker bounds are form policy, so a later settings edit applies to
+			// every speaker block without mutating historical field definitions.
+			config:
+				config.kind === "speaker_block"
+					? { ...config, minSpeakers: form.min_speakers, maxSpeakers: form.max_speakers }
+					: config,
 			helpText: helpTextFromStoredConfig(row.config),
 		};
 	});

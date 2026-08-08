@@ -3,8 +3,8 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui";
 import { getDb } from "@/lib/db/cloudflare";
 import {
-	getEventById,
-	listAcceptedSubmissionsForPerson,
+	listEventsByIds,
+	listSubmissionsForPerson,
 	listTasksForPerson,
 } from "@/lib/db/queries";
 import { SPEAKER_TASK_TYPE_REGISTRY, isSpeakerTaskKey } from "@/lib/domain";
@@ -26,7 +26,7 @@ export default async function PortalPage({ searchParams }: Props) {
 				<PageHeader
 					eyebrow="Speaker portal"
 					title="Sign in"
-					description="Enter the email on your accepted talk. We'll email a one-time sign-in link — check your inbox (and spam) for conference-engine."
+					description="Enter the email used on any proposal. We'll email a one-time sign-in link — check your inbox (and spam) for conference-engine."
 				/>
 				<PortalLoginForm initialEmail={params.email ?? ""} />
 				<p className="mt-8 text-sm text-neutral-500">
@@ -66,87 +66,71 @@ export default async function PortalPage({ searchParams }: Props) {
 	}
 
 	const db = await getDb();
-	const submissions = await listAcceptedSubmissionsForPerson(db, session.personId);
+	const submissions = await listSubmissionsForPerson(db, session.personId);
 	const tasks = await listTasksForPerson(db, session.personId);
 
-	const eventIds = [...new Set(submissions.map((s) => s.event_id))];
-	const events = new Map<string, string>();
-	for (const eventId of eventIds) {
-		const event = await getEventById(db, eventId);
-		if (event) events.set(event.id, event.name);
-	}
+	const eventRows = await listEventsByIds(db, submissions.map((submission) => submission.event_id));
+	const events = new Map(eventRows.map((event) => [event.id, event.name]));
 
 	const completedCount = tasks.filter((t) => t.status === "completed").length;
+	const portalDescription = submissions.length === 0
+		? "Every proposal tied to this email will show here, and accepted talks include their onboarding work."
+		: tasks.length > 0
+			? `${completedCount}/${tasks.length} onboarding tasks complete.`
+			: `${submissions.length} proposal${submissions.length === 1 ? "" : "s"} on file. We’ll show speaker materials here when they’re ready.`;
 
 	return (
 		<main className="mx-auto max-w-2xl px-4 py-10">
 			<PageHeader
 				eyebrow="Speaker portal"
 				title={session.email}
-				description={
-					tasks.length === 0
-						? "Your accepted talks and onboarding checklist will show up here."
-						: `${completedCount}/${tasks.length} onboarding tasks complete.`
-				}
+				description={portalDescription}
 			/>
 
 			<section className="mb-10 space-y-3">
-				<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-					Your talks
+						<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+							Your submissions
 				</h2>
 				{submissions.length === 0 ? (
 					<EmptyState
-						title="No accepted talks yet"
-						description="Once organizers accept your proposal, it appears here with tasks."
+							title="No submissions yet"
+							description="Use the email from your proposal, then request another sign-in link if needed."
 					/>
 				) : (
-					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
-						{submissions.map((row) => {
-							const answers = parseAnswers(row.answers_json);
-							return (
-								<li key={row.id} className="px-4 py-3 text-sm">
-									<p className="font-medium text-neutral-100">
+						<ul className="space-y-3">
+							{submissions.map((row) => {
+								const answers = parseAnswers(row.answers_json);
+								const submissionTasks = tasks.filter((task) => task.submission_id === row.id);
+								const completed = submissionTasks.filter((task) => task.status === "completed").length;
+								return (
+									<li key={row.id} className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 text-sm">
+										<p className="font-medium text-neutral-100">
 										{typeof answers.title === "string" ? answers.title : "(untitled)"}
 									</p>
-									<p className="mt-1 text-neutral-400">
+										<p className="mt-1 text-neutral-400">
 										{events.get(row.event_id) ?? "Event"} ·{" "}
 										{row.status.replaceAll("_", " ")}
-									</p>
-								</li>
+										</p>
+										{row.status === "accepted" || row.status === "scheduled" || row.status === "published" ? (
+											<div className="mt-4 border-t border-neutral-800 pt-3">
+												<div className="mb-3 flex items-baseline justify-between gap-3">
+													<p className="font-medium text-neutral-200">Speaker materials</p>
+													<span className="text-xs text-neutral-500">{completed}/{submissionTasks.length} complete</span>
+												</div>
+												{submissionTasks.length === 0 ? (
+													<p className="text-neutral-500">Materials are being prepared by the organizers.</p>
+												) : (
+													<TaskChecklist token={token} compact tasks={submissionTasks.map((task) => {
+														const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
+														return { id: task.id, key: task.template_key, label: meta?.label ?? task.template_key, kind: meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id };
+														})} />
+												)}
+											</div>
+										) : null}
+									</li>
 							);
 						})}
 					</ul>
-				)}
-			</section>
-
-			<section className="space-y-3">
-				<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-					Onboarding checklist
-				</h2>
-				{tasks.length === 0 ? (
-					<EmptyState
-						title="No tasks yet"
-						description="Bio, headshot, slides, and docs will show up after acceptance."
-					/>
-				) : (
-					<TaskChecklist
-						token={token}
-						tasks={tasks.map((task) => {
-							const meta = isSpeakerTaskKey(task.template_key)
-								? SPEAKER_TASK_TYPE_REGISTRY[task.template_key]
-								: null;
-							return {
-								id: task.id,
-								key: task.template_key,
-								label: meta?.label ?? task.template_key,
-								kind: meta?.kind ?? "file",
-								status: task.status,
-								accept: meta?.accept ?? [],
-								textValue: task.text_value,
-								assetId: task.asset_id,
-							};
-						})}
-					/>
 				)}
 			</section>
 		</main>

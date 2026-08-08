@@ -38,6 +38,13 @@ type PatchBody = {
 	description?: unknown;
 	status?: unknown;
 	closesAt?: unknown;
+	minSpeakers?: unknown;
+	maxSpeakers?: unknown;
+	draftsEnabled?: unknown;
+	submissionLimit?: unknown;
+	welcomeCopy?: unknown;
+	confirmationCopy?: unknown;
+	reminderCopy?: unknown;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -84,6 +91,32 @@ export async function PATCH(request: Request, context: RouteContext) {
 					? null
 					: typeof body.closesAt === "number"
 						? body.closesAt
+					: undefined,
+			minSpeakers:
+				typeof body.minSpeakers === "number" ? body.minSpeakers : undefined,
+			maxSpeakers:
+				typeof body.maxSpeakers === "number" ? body.maxSpeakers : undefined,
+			draftsEnabled:
+				typeof body.draftsEnabled === "boolean" ? body.draftsEnabled : undefined,
+			submissionLimit:
+				typeof body.submissionLimit === "number" ? body.submissionLimit : undefined,
+			welcomeCopy:
+				body.welcomeCopy === null
+					? null
+					: typeof body.welcomeCopy === "string"
+						? body.welcomeCopy
+						: undefined,
+			confirmationCopy:
+				body.confirmationCopy === null
+					? null
+					: typeof body.confirmationCopy === "string"
+						? body.confirmationCopy
+						: undefined,
+			reminderCopy:
+				body.reminderCopy === null
+					? null
+					: typeof body.reminderCopy === "string"
+						? body.reminderCopy
 						: undefined,
 		});
 	} catch (error) {
