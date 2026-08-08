@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { DecisionButtons } from "@/components/decision-buttons";
 import {
 	buttonClasses,
 	EmptyState,
@@ -10,6 +11,7 @@ import {
 	StatusPill,
 	submissionStatusTone,
 } from "@/components/ui";
+import type { DecisionAction, RenderedMessage } from "@/lib/domain";
 
 type ScoreView = {
 	id: string;
@@ -24,6 +26,7 @@ type SubmissionView = {
 	submitterName: string | null;
 	submitterEmail: string | null;
 	title: string;
+	previews: Record<DecisionAction, RenderedMessage>;
 	scores: ScoreView[];
 };
 
@@ -63,27 +66,6 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 			const data = (await response.json()) as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) {
 				setError(data.error ?? "Score failed");
-				return;
-			}
-			router.refresh();
-		} catch {
-			setError("Network error");
-		} finally {
-			setPendingId(null);
-		}
-	}
-
-	async function decide(submissionId: string, action: "accept" | "reject") {
-		setPendingId(submissionId);
-		setError(null);
-		try {
-			const response = await fetch(
-				`/api/admin/events/${eventSlug}/submissions/${submissionId}/${action}`,
-				{ method: "POST" },
-			);
-			const data = (await response.json()) as { ok?: boolean; error?: string };
-			if (!response.ok || !data.ok) {
-				setError(data.error ?? `${action} failed`);
 				return;
 			}
 			router.refresh();
@@ -202,37 +184,14 @@ export function ReviewBoard({ eventSlug, token, canDecide, submissions }: Props)
 								</div>
 							</div>
 
-							{canDecide &&
-							(row.status === "submitted" ||
-								row.status === "under_review" ||
-								row.status === "accepted" ||
-								row.status === "rejected") ? (
-								<div className="flex gap-2 border-t border-neutral-800 pt-3">
-									{(row.status === "submitted" ||
-										row.status === "under_review" ||
-										row.status === "accepted") && (
-										<button
-											type="button"
-											disabled={busy || row.status === "accepted"}
-											onClick={() => void decide(row.id, "accept")}
-											className={`${buttonClasses("secondary", "sm")} text-emerald-400`}
-										>
-											Accept
-										</button>
-									)}
-									{(row.status === "submitted" ||
-										row.status === "under_review" ||
-										row.status === "accepted" ||
-										row.status === "rejected") && (
-										<button
-											type="button"
-											disabled={busy || row.status === "rejected"}
-											onClick={() => void decide(row.id, "reject")}
-											className={buttonClasses("secondary", "sm")}
-										>
-											Reject
-										</button>
-									)}
+							{canDecide ? (
+								<div className="border-t border-neutral-800 pt-3">
+									<DecisionButtons
+										eventSlug={eventSlug}
+										submissionId={row.id}
+										status={row.status}
+										previews={row.previews}
+									/>
 								</div>
 							) : null}
 						</li>

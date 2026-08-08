@@ -79,6 +79,18 @@ export {
 } from "./message-templates";
 
 export {
+	ACCEPTANCE_PORTAL_HINT,
+	DECISION_ACTIONS,
+	DECISION_REGISTRY,
+	isDecisionAction,
+	renderDecisionPreviews,
+	type DecisionAction,
+	type DecisionEmailChoice,
+	type DecisionMeta,
+	type DecisionTemplateKey,
+} from "./decisions";
+
+export {
 	PUBLIC_SCHEDULE_STATUSES,
 	SCHEDULABLE_STATUSES,
 	detectConflicts,

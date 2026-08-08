@@ -3,6 +3,7 @@ import {
 	isSubmissionStatus,
 	speakerTaskTypesInOrder,
 	transitionSubmission,
+	type DecisionEmailChoice,
 	type SubmissionStatus,
 } from "@/lib/domain";
 import {
@@ -27,6 +28,7 @@ export type AcceptResult =
 export async function acceptSubmission(
 	db: D1Database,
 	submissionId: string,
+	emailChoice: DecisionEmailChoice,
 ): Promise<AcceptResult> {
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission) {
@@ -102,12 +104,14 @@ export async function acceptSubmission(
 		for (const key of keys) spawnedTaskKeys.add(key);
 	}
 
-	const email = await notifySubmissionLifecycle(db, {
-		submissionId,
-		templateKey: "acceptance",
-		portalHint:
-			"Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs.",
-	});
+	const email = emailChoice.send
+		? await notifySubmissionLifecycle(db, {
+				submissionId,
+				templateKey: "acceptance",
+				override: { subject: emailChoice.subject, text: emailChoice.text },
+				force: true,
+			})
+		: null;
 
 	return {
 		ok: true,

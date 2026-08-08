@@ -2,6 +2,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"submission_received",
 	"acceptance",
 	"rejection",
+	"waitlist",
 	"calendar_invite",
 	"task_reminder",
 	"portal_magic_link",
@@ -59,6 +60,19 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`Thank you for submitting "${ctx.title}" to ${ctx.eventName}.`,
 			"We are unable to accept it for this program.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
+	// Deliberately promise-free: no ticket, comp, or timeline language.
+	waitlist: (ctx) => ({
+		subject: `Waitlist update: ${ctx.title}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`Thank you for submitting "${ctx.title}" to ${ctx.eventName}.`,
+			"Your proposal is currently on the waitlist. If a slot opens up, we may reach out with next steps.",
+			"No action is needed from you right now.",
 			"",
 			"— conference-engine",
 		].join("\n"),

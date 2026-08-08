@@ -10,6 +10,7 @@ import {
 	listEvaluationScoresForPlan,
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
+import { renderDecisionPreviews } from "@/lib/domain";
 import { resolveReviewIdentity } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
 
@@ -110,6 +111,11 @@ export default async function ReviewPage({ searchParams }: Props) {
 			submitterName: row.submitter_name,
 			submitterEmail: row.submitter_email,
 			title,
+			previews: renderDecisionPreviews({
+				eventName: event.name,
+				submitterName: row.submitter_name ?? "there",
+				title,
+			}),
 			scores: (scoresBySubmission.get(row.id) ?? []).map((s) => ({
 				id: s.id,
 				score: s.score,

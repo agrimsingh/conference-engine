@@ -4,6 +4,7 @@ import {
 	renderMessageTemplate,
 	type MessageTemplateContext,
 	type MessageTemplateKey,
+	type RenderedMessage,
 } from "@/lib/domain/message-templates";
 
 export type OutboundSendResult =
@@ -33,12 +34,15 @@ export async function sendTemplatedEmail(
 		templateKey: MessageTemplateKey;
 		toEmail: string;
 		context: MessageTemplateContext;
+		/** Organizer-edited subject/body; bypasses the template renderer. */
+		override?: RenderedMessage;
 		attachments?: Attachment[];
 		force?: boolean;
 	},
 ): Promise<OutboundSendResult> {
 	const toEmail = args.toEmail.trim().toLowerCase();
-	const rendered = renderMessageTemplate(args.templateKey, args.context);
+	const rendered =
+		args.override ?? renderMessageTemplate(args.templateKey, args.context);
 	const now = Date.now();
 	const messageId = crypto.randomUUID();
 

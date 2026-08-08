@@ -14,7 +14,7 @@ export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 
 const LEGAL_TRANSITIONS: Record<SubmissionStatus, readonly SubmissionStatus[]> = {
 	draft: ["submitted", "withdrawn"],
-	submitted: ["under_review", "accepted", "rejected", "withdrawn"],
+	submitted: ["under_review", "accepted", "rejected", "waitlisted", "withdrawn"],
 	under_review: ["accepted", "rejected", "waitlisted", "withdrawn"],
 	accepted: ["scheduled", "rejected", "withdrawn"],
 	rejected: ["under_review", "waitlisted"],

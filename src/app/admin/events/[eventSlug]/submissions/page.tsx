@@ -15,10 +15,10 @@ import {
 	AIE_CATEGORY_LABELS,
 	UNCATEGORIZED_CATEGORY,
 	displayCategory,
+	renderDecisionPreviews,
 } from "@/lib/domain";
-import { AcceptButton } from "./accept-button";
+import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
-import { RejectButton } from "./reject-button";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -148,21 +148,22 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						{filtered.map((row) => {
 							const answers = parseAnswers(row.answers_json);
 							const tasks = tasksBySubmission.get(row.id) ?? [];
-							const canDecide =
-								row.status === "submitted" || row.status === "under_review";
 							const completed = tasks.filter(
 								(t) => t.status === "completed",
 							).length;
 							const category = displayCategory(row.category);
+							const title =
+								typeof answers.title === "string" ? answers.title : "(untitled)";
+							const previews = renderDecisionPreviews({
+								eventName: event.name,
+								submitterName: row.submitter_name ?? "there",
+								title,
+							});
 							return (
 								<li key={row.id} className="px-4 py-3 text-sm">
 									<div className="flex flex-wrap items-start justify-between gap-3">
 										<div>
-											<p className="font-medium text-neutral-100">
-												{typeof answers.title === "string"
-													? answers.title
-													: "(untitled)"}
-											</p>
+											<p className="font-medium text-neutral-100">{title}</p>
 											<p className="mt-1 text-neutral-400">
 												{row.submitter_name} · {row.submitter_email}
 												{typeof answers.format === "string"
@@ -170,34 +171,20 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 													: ""}
 											</p>
 										</div>
-										<div className="flex flex-col items-end gap-2">
-											<div className="flex flex-wrap justify-end gap-1.5">
-												<Chip>{category}</Chip>
-												<StatusPill tone={submissionStatusTone(row.status)}>
-													{row.status.replaceAll("_", " ")}
-												</StatusPill>
-											</div>
-											{(canDecide ||
-												row.status === "accepted" ||
-												row.status === "rejected") && (
-												<div className="flex gap-2">
-													<AcceptButton
-														eventSlug={event.slug}
-														submissionId={row.id}
-														disabled={
-															!canDecide || row.status === "accepted"
-														}
-													/>
-													<RejectButton
-														eventSlug={event.slug}
-														submissionId={row.id}
-														disabled={
-															!canDecide || row.status === "rejected"
-														}
-													/>
-												</div>
-											)}
+										<div className="flex flex-wrap justify-end gap-1.5">
+											<Chip>{category}</Chip>
+											<StatusPill tone={submissionStatusTone(row.status)}>
+												{row.status.replaceAll("_", " ")}
+											</StatusPill>
 										</div>
+									</div>
+									<div className="mt-3">
+										<DecisionButtons
+											eventSlug={event.slug}
+											submissionId={row.id}
+											status={row.status}
+											previews={previews}
+										/>
 									</div>
 									{tasks.length > 0 ? (
 										<div className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-400">
