@@ -4,6 +4,7 @@ import {
 	listEventRooms,
 	listSpeakersForSubmission,
 	getSubmissionById,
+	getEventById,
 } from "@/lib/db/queries";
 import type { AgendaSlotRow } from "@/lib/db/types";
 import {
@@ -21,6 +22,7 @@ import { notifyCalendarInvite } from "@/lib/email/notify";
 import type { OutboundSendResult } from "@/lib/email/resend";
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
+import { validateEventScheduleBounds } from "./date-bounds";
 
 export type ScheduleResult =
 	| {
@@ -85,6 +87,10 @@ export async function scheduleSubmission(
 	if (!isSubmissionStatus(submission.status)) {
 		return { ok: false, error: `Unknown status: ${submission.status}`, status: 500 };
 	}
+	const event = await getEventById(db, submission.event_id);
+	if (!event) return { ok: false, error: "Event not found", status: 404 };
+	const boundsError = validateEventScheduleBounds(event, args.startsAtMs, args.endsAtMs);
+	if (boundsError) return { ok: false, error: boundsError, status: 400 };
 
 	const eventRooms = await listEventRooms(db, submission.event_id);
 	const matchedRoom = eventRooms.find((r) => r.name.trim() === roomName);

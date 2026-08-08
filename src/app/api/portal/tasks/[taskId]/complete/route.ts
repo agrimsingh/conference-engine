@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { completeTextTask } from "@/lib/speakers/complete-task";
-import { readPortalSession } from "@/lib/speakers/portal-session";
+import { readPortalSession, readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 
 type RouteContext = {
 	params: Promise<{ taskId: string }>;
@@ -24,7 +24,7 @@ export async function POST(request: Request, context: RouteContext) {
 
 	const token = typeof body.token === "string" ? body.token : "";
 	const text = typeof body.text === "string" ? body.text : "";
-	const session = await readPortalSession(token);
+	const session = await readPortalSessionFromCookie() ?? await readPortalSession(token);
 	if (!session) {
 		return NextResponse.json({ ok: false, error: "Invalid or expired token" }, { status: 401 });
 	}

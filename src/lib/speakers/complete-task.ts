@@ -114,6 +114,10 @@ export async function completeFileTask(
 	}
 
 	const assetId = crypto.randomUUID();
+	const supersededAssetId = task.asset_id;
+	const superseded = supersededAssetId
+		? await db.prepare("SELECT id, r2_key FROM assets WHERE id = ? AND event_id = ?").bind(supersededAssetId, task.event_id).first<{ id: string; r2_key: string }>()
+		: null;
 	const safeName = sanitizeFilename(args.file.name || `${key}.bin`);
 	const r2Key = `events/${task.event_id}/people/${task.person_id}/${key}/${assetId}-${safeName}`;
 	const body = await args.file.arrayBuffer();
@@ -171,6 +175,26 @@ export async function completeFileTask(
 
 	const updated = await getSpeakerTaskById(db, task.id);
 	if (!updated) return { ok: false, error: "Task missing after update", status: 500 };
+
+	// Only remove the prior R2 object after the new metadata/task pointer has
+	// committed. Keep metadata if deletion fails so a later repair can find it.
+	if (superseded && superseded.id !== assetId) {
+		const stillReferenced = await db.prepare(
+			`SELECT 1
+       FROM speaker_tasks WHERE asset_id = ?
+       UNION ALL
+       SELECT 1 FROM speaker_profiles WHERE headshot_asset_id = ?
+       LIMIT 1`,
+		).bind(superseded.id, superseded.id).first<{ 1: number }>();
+		if (!stillReferenced) {
+			try {
+				await files.delete(superseded.r2_key);
+				await db.prepare("DELETE FROM assets WHERE id = ?").bind(superseded.id).run();
+			} catch {
+				// The new upload remains committed; retain old metadata for repair.
+			}
+		}
+	}
 
 	return {
 		ok: true,

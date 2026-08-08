@@ -1,11 +1,6 @@
-import { createOrganizerLoginToken } from "@/lib/auth/organizer-session";
-import {
-	addEventMembership,
-	getEventMembership,
-	transferEventOwnership,
-	upsertAccountByEmail,
-} from "@/lib/db/queries";
-import type { AccountRow, EventMembershipRow, EventRow } from "@/lib/db/types";
+import { createAuthChallenge, hashAuthChallengeToken } from "@/lib/auth/challenges";
+import { upsertAccountByEmail } from "@/lib/db/queries";
+import type { AccountRow, EventRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
 
 export type InviteRole = "admin" | "owner";
@@ -14,14 +9,17 @@ export type InviteOrganizerResult =
 	| {
 			ok: true;
 			account: AccountRow;
-			membership: EventMembershipRow;
-			createdMembership: boolean;
-			transferredOwnership: boolean;
+			invitationId: string;
+			role: InviteRole;
 			emailStatus: "sent" | "failed";
 			loginUrl: string | null;
-	  }
+		  }
 	| { ok: false; error: string; status: number };
 
+/**
+ * An invitation deliberately creates no membership. This prevents a typo or a
+ * provider failure from changing an event's access list or canonical owner.
+ */
 export async function inviteOrganizerToEvent(
 	db: D1Database,
 	args: {
@@ -31,63 +29,46 @@ export async function inviteOrganizerToEvent(
 		role?: InviteRole;
 		origin: string;
 		exposeLoginUrl: boolean;
+		secret: string;
+		invitedByAccountId?: string | null;
 	},
 ): Promise<InviteOrganizerResult> {
 	const email = args.email.trim().toLowerCase();
-	if (!email.includes("@")) {
-		return { ok: false, error: "Valid email required", status: 400 };
-	}
-
+	if (!email.includes("@")) return { ok: false, error: "Valid email required", status: 400 };
 	const role: InviteRole = args.role ?? "admin";
-	if (role !== "admin" && role !== "owner") {
-		return { ok: false, error: "role must be admin or owner", status: 400 };
-	}
+	if (role !== "admin" && role !== "owner") return { ok: false, error: "role must be admin or owner", status: 400 };
 
-	const account = await upsertAccountByEmail(db, {
-		email,
-		name: args.name,
-	});
-
-	const existing = await getEventMembership(db, args.event.id, account.id);
-	let membership: EventMembershipRow;
-	let createdMembership = false;
-	let transferredOwnership = false;
-
-	if (existing) {
-		membership = existing;
-	} else {
-		// Always insert as admin first; owner invites promote via transfer below.
-		membership = await addEventMembership(db, {
-			eventId: args.event.id,
-			accountId: account.id,
-			role: "admin",
-		});
-		createdMembership = true;
-	}
-
-	if (role === "owner") {
-		if (membership.role !== "owner") {
-			membership = await transferEventOwnership(db, {
-				eventId: args.event.id,
-				toAccountId: account.id,
-			});
-			transferredOwnership = true;
-		}
-	}
-
-	const { token } = await createOrganizerLoginToken({
+	const account = await upsertAccountByEmail(db, { email, name: args.name });
+	const challenge = await createAuthChallenge(db, {
+		secret: args.secret,
+		kind: "event_invite",
 		accountId: account.id,
-		email: account.email,
+		eventId: args.event.id,
 	});
+	const invitationId = crypto.randomUUID();
+	const now = Date.now();
+	await db.prepare(
+		`INSERT INTO event_invitations (
+       id, event_id, account_id, email, name, role, token_hash, status,
+       invited_by_account_id, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+	).bind(
+		invitationId,
+		args.event.id,
+		account.id,
+		account.email,
+		account.name,
+		role,
+		challenge.tokenHash,
+		args.invitedByAccountId ?? null,
+		now,
+		now,
+	).run();
 
 	const callbackUrl = new URL("/auth/callback", args.origin);
-	callbackUrl.searchParams.set("token", token);
-	callbackUrl.searchParams.set(
-		"next",
-		`/admin/events/${args.event.slug}/team`,
-	);
+	callbackUrl.searchParams.set("token", challenge.token);
+	callbackUrl.searchParams.set("next", `/admin/events/${args.event.slug}/team`);
 	const loginUrl = callbackUrl.toString();
-
 	const emailResult = await sendAuthEmail({
 		toEmail: account.email,
 		templateKey: "organizer_invite",
@@ -97,15 +78,103 @@ export async function inviteOrganizerToEvent(
 			title: args.event.name,
 			loginUrl,
 		},
+		idempotencyKey: challenge.tokenHash,
 	});
 
-	return {
-		ok: true,
-		account,
-		membership,
-		createdMembership,
-		transferredOwnership,
-		emailStatus: emailResult.ok ? "sent" : "failed",
-		loginUrl: args.exposeLoginUrl ? loginUrl : null,
-	};
+	if (!emailResult.ok) {
+		await db.batch([
+			db.prepare("UPDATE event_invitations SET status = 'failed', updated_at = ? WHERE id = ? AND status = 'pending'").bind(Date.now(), invitationId),
+			db.prepare("UPDATE auth_challenges SET state = 'failed', failure_reason = ? WHERE token_hash = ? AND state = 'active'").bind(emailResult.error ?? "mail delivery failed", challenge.tokenHash),
+		]);
+		return { ok: true, account, invitationId, role, emailStatus: "failed", loginUrl: args.exposeLoginUrl ? loginUrl : null };
+	}
+
+	await db.prepare(
+		"UPDATE event_invitations SET status = 'delivered', delivered_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
+	).bind(Date.now(), Date.now(), invitationId).run();
+	return { ok: true, account, invitationId, role, emailStatus: "sent", loginUrl: args.exposeLoginUrl ? loginUrl : null };
+}
+
+/**
+ * Accept the invitation and move ownership in one D1 batch. The first update
+ * only succeeds while the challenge is still active, so a replay has no effect.
+ */
+export async function acceptEventInvitation(
+	db: D1Database,
+	args: { secret: string; token: string; now?: number },
+): Promise<{ accountId: string; eventId: string } | null> {
+	if (!args.token) return null;
+	const tokenHash = await hashAuthChallengeToken(args.secret, args.token);
+	const invitation = await db.prepare(
+		`SELECT id, event_id, account_id, role
+     FROM event_invitations WHERE token_hash = ? AND status = 'delivered'`,
+	).bind(tokenHash).first<{ id: string; event_id: string; account_id: string; role: InviteRole }>();
+	if (!invitation) return null;
+	const now = args.now ?? Date.now();
+	const membershipId = crypto.randomUUID();
+	const result = await db.batch([
+		db.prepare(
+			`UPDATE event_invitations
+       SET status = 'accepted', accepted_at = ?, updated_at = ?
+       WHERE id = ? AND status = 'delivered'
+         AND EXISTS (
+           SELECT 1 FROM auth_challenges
+           WHERE token_hash = ? AND kind = 'event_invite'
+             AND state = 'active' AND expires_at >= ?
+         )
+         AND (
+           role != 'owner' OR EXISTS (
+             SELECT 1 FROM event_ownership
+             WHERE event_id = event_invitations.event_id
+               AND account_id = event_invitations.invited_by_account_id
+           )
+         )`,
+		).bind(now, now, invitation.id, tokenHash, now),
+		db.prepare(
+			`INSERT OR IGNORE INTO event_memberships (id, event_id, account_id, role, created_at)
+       SELECT ?, ?, ?, 'admin', ?
+       WHERE EXISTS (
+         SELECT 1 FROM event_invitations
+         WHERE id = ? AND status = 'accepted' AND accepted_at = ?
+       )`,
+		).bind(membershipId, invitation.event_id, invitation.account_id, now, invitation.id, now),
+		db.prepare(
+			`UPDATE event_ownership
+       SET account_id = ?, updated_at = ?
+       WHERE event_id = ?
+         AND EXISTS (
+           SELECT 1 FROM event_invitations
+           WHERE id = ? AND role = 'owner' AND status = 'accepted' AND accepted_at = ?
+         )`,
+		).bind(invitation.account_id, now, invitation.event_id, invitation.id, now),
+		db.prepare(
+			`UPDATE auth_challenges
+       SET state = 'consumed', consumed_at = ?
+       WHERE token_hash = ? AND kind = 'event_invite' AND state = 'active' AND expires_at >= ?`,
+		).bind(now, tokenHash, now),
+	]);
+	if ((result[0]?.meta.changes ?? 0) === 0) {
+		// An older owner invite can no longer take ownership after the inviter
+		// has transferred it away. Record that terminal state for support/UI.
+		await db.batch([
+			db.prepare(
+				`UPDATE event_invitations
+       SET status = 'failed', updated_at = ?
+       WHERE id = ? AND status = 'delivered' AND role = 'owner'
+         AND NOT EXISTS (
+           SELECT 1 FROM event_ownership
+           WHERE event_id = event_invitations.event_id
+             AND account_id = event_invitations.invited_by_account_id
+				)`,
+			).bind(Date.now(), invitation.id),
+			db.prepare(
+				`UPDATE auth_challenges
+         SET state = 'failed', failure_reason = 'inviter no longer owns this event'
+         WHERE token_hash = ? AND state = 'active'
+           AND EXISTS (SELECT 1 FROM event_invitations WHERE id = ? AND status = 'failed')`,
+			).bind(tokenHash, invitation.id),
+		]);
+		return null;
+	}
+	return { accountId: invitation.account_id, eventId: invitation.event_id };
 }

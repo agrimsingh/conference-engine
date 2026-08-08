@@ -4,6 +4,7 @@ import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
 import { notifyCalendarInvite } from "@/lib/email/notify";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
+import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 
 type RouteContext = { params: Promise<{ eventSlug: string; submissionId: string }> };
 
@@ -28,6 +29,8 @@ export async function POST(request: Request, context: RouteContext) {
 	const db = await getDb();
 	const access = await authorizeEventAdminApi(db, eventSlug);
 	if (!access) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+	const boundsError = validateEventScheduleBounds(access.event, startsAtMs, endsAtMs);
+	if (boundsError) return NextResponse.json({ ok: false, error: boundsError }, { status: 400 });
 	const submission = await getSubmissionById(db, submissionId);
 	if (!submission || submission.event_id !== access.event.id) return NextResponse.json({ ok: false, error: "Submission not found" }, { status: 404 });
 	const env = await getCloudflareEnv();

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
-import {
-	mintOrganizerLoginToken,
-	persistOrganizerLoginToken,
-} from "@/lib/auth/organizer-session";
+import { createAuthChallenge, failAuthChallenge } from "@/lib/auth/challenges";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { upsertAccountByEmail } from "@/lib/db/queries";
 import type { AccountRow } from "@/lib/db/types";
@@ -43,22 +40,25 @@ export async function POST(request: Request) {
 	if (!isPlausibleEmail(email) || !emailAllowed || !ipAllowed) return accepted();
 
 	const existing = await db.prepare("SELECT * FROM accounts WHERE email = ?").bind(email).first<AccountRow>();
-	const accountId = existing?.id ?? crypto.randomUUID();
-	const token = await mintOrganizerLoginToken();
+	const account = await upsertAccountByEmail(db, { id: existing?.id ?? crypto.randomUUID(), email, name });
+	const challenge = await createAuthChallenge(db, {
+		secret,
+		kind: "organizer_login",
+		accountId: account.id,
+	});
 	const callbackUrl = new URL("/auth/callback", request.url);
-	callbackUrl.searchParams.set("token", token);
+	callbackUrl.searchParams.set("token", challenge.token);
 	callbackUrl.searchParams.set("next", next);
 	const loginUrl = callbackUrl.toString();
 	const delivery = await sendAuthEmail({
 		toEmail: email,
 		templateKey: "organizer_magic_link",
-		context: { eventName: "conference-engine", submitterName: existing?.name.trim() || name || "there", title: "Organizer admin", loginUrl },
+		context: { eventName: "conference-engine", submitterName: account.name.trim() || name || "there", title: "Organizer admin", loginUrl },
+		idempotencyKey: challenge.tokenHash,
 	});
-	if (!delivery.ok) return accepted();
-
-	// Delivery happens first. A provider failure or rejected rate limit therefore
-	// cannot create an account, login record, or usable token.
-	const account = await upsertAccountByEmail(db, { id: accountId, email, name });
-	await persistOrganizerLoginToken(token, { accountId: account.id, email: account.email });
+	if (!delivery.ok) {
+		await failAuthChallenge(db, { tokenHash: challenge.tokenHash, reason: delivery.error ?? "mail delivery failed" });
+		return accepted();
+	}
 	return accepted((await shouldExposeDevLoginUrl()) ? { loginUrl } : {});
 }

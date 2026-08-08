@@ -18,6 +18,24 @@ export type SubmitValidation =
 	| { ok: true; visibleAnswers: AnswerMap; speakers: SpeakerAnswer[] }
 	| { ok: false; errors: string[] };
 
+export const MAX_CFP_REQUEST_BYTES = 256 * 1024;
+export const MAX_CFP_ANSWERS_BYTES = 192 * 1024;
+
+/** Bounds storage and validation work even when a client supplies unknown keys. */
+export function validateCfpPayloadBounds(answers: AnswerMap): string | null {
+	let serialized: string;
+	try {
+		serialized = JSON.stringify(answers);
+	} catch {
+		return "answers must be serializable";
+	}
+	if (new TextEncoder().encode(serialized).byteLength > MAX_CFP_ANSWERS_BYTES) {
+		return "answers payload is too large";
+	}
+	if (Object.keys(answers).length > 100) return "answers has too many fields";
+	return null;
+}
+
 /** D1's trigger is the authority for a concurrent submission limit. */
 export function isSubmissionLimitReachedError(error: unknown): boolean {
 	return (

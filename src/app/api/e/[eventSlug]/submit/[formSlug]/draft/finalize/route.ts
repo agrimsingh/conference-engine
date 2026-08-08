@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { finalizeDraft, loadDraftForResume } from "@/lib/cfp/drafts";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
-import { isSubmissionLimitReachedError, validateSubmissionAnswers } from "@/lib/cfp/submit";
+import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -9,17 +9,21 @@ import { notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { repairSubmissionDelivery } from "@/lib/cfp/delivery";
+import { readBoundedCfpJson } from "@/lib/cfp/request";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function POST(request: Request, context: Context) {
 	const { eventSlug, formSlug } = await context.params;
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return NextResponse.json({ ok: false, errors: ["Invalid JSON"] }, { status: 400 }); }
+	const parsed = await readBoundedCfpJson(request);
+	if (!parsed.ok) return NextResponse.json({ ok: false, errors: [parsed.error] }, { status: parsed.status });
+	const raw = parsed.value;
 	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
 	const token = typeof body.token === "string" ? body.token : "";
 	const name = typeof body.submitterName === "string" ? body.submitterName.trim() : "";
 	const answers = body.answers && typeof body.answers === "object" && !Array.isArray(body.answers) ? body.answers as AnswerMap : null;
 	if (!token || !name || !answers) return NextResponse.json({ ok: false, errors: ["token, submitterName, answers required"] }, { status: 400 });
+	const payloadError = validateCfpPayloadBounds(answers);
+	if (payloadError) return NextResponse.json({ ok: false, errors: [payloadError] }, { status: 413 });
 	const db = await getDb();
 	const secret = await getAuthSecret();
 	const draft = await loadDraftForResume(db, { secret, token });

@@ -71,49 +71,23 @@ export function InviteTeamForm({
 			const data = (await response.json()) as {
 				ok?: boolean;
 				error?: string;
-				createdMembership?: boolean;
-				transferredOwnership?: boolean;
 				emailStatus?: string;
 				loginUrl?: string | null;
-				member?: Member;
+				pendingAcceptance?: boolean;
+				role?: InviteRole;
+				invitee?: { accountId: string; email: string; name: string };
 			};
-			if (!response.ok || !data.ok || !data.member) {
+			if (!response.ok || !data.ok || !data.invitee) {
 				setError(data.error ?? "Invite failed");
 				return;
 			}
 
-			setMembers((prev) => {
-				const without = prev.filter(
-					(row) => row.accountId !== data.member!.accountId,
-				);
-				const next = [
-					...without.map((row) =>
-						data.transferredOwnership && row.role === "owner"
-							? { ...row, role: "admin" as const }
-							: row,
-					),
-					{
-						accountId: data.member!.accountId,
-						email: data.member!.email,
-						name: data.member!.name,
-						role: data.member!.role,
-						createdAt: Date.now(),
-					},
-				];
-				return sortMembers(next);
-			});
-
-			const resent = data.createdMembership
-				? data.transferredOwnership
-					? "Invited as owner (ownership transferred)."
-					: "Invited as organizer."
-				: data.transferredOwnership
-					? "Member promoted to owner."
-					: "Already a member — resent sign-in link.";
+			const roleLabel = data.role === "owner" ? "ownership-transfer" : "organizer";
+			const resent = `Sent a pending ${roleLabel} invite to ${data.invitee.email}. Access changes after the link is accepted.`;
 			const emailBit =
 				data.emailStatus === "sent"
 					? " Magic link emailed."
-					: " Email failed to send — use the login URL if shown.";
+					: " Email failed to send; no access or ownership changed.";
 			setNotice(`${resent}${emailBit}`);
 			if (data.loginUrl) setDevLoginUrl(data.loginUrl);
 			setEmail("");
@@ -218,7 +192,7 @@ export function InviteTeamForm({
 				<p className="text-sm text-neutral-400">
 					Invite by email. Default role is{" "}
 					<code className="text-neutral-300">admin</code>. Inviting as{" "}
-					<code className="text-neutral-300">owner</code> transfers ownership.
+					<code className="text-neutral-300">owner</code> transfers ownership only after the recipient accepts the email link.
 				</p>
 				<div className="grid gap-3 sm:grid-cols-2">
 					<label className="block text-xs text-neutral-400">

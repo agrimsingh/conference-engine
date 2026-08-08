@@ -3,17 +3,22 @@ import { saveDraftForResume } from "@/lib/cfp/drafts";
 import { loadDraftForResume } from "@/lib/cfp/drafts";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
+import { validateCfpPayloadBounds } from "@/lib/cfp/submit";
+import { readBoundedCfpJson } from "@/lib/cfp/request";
 import type { AnswerMap } from "@/lib/domain";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function PUT(request: Request, context: Context) {
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
+	const parsed = await readBoundedCfpJson(request);
+	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
+	const raw = parsed.value;
 	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
 	const token = typeof body.token === "string" ? body.token : "";
 	const submitterName = typeof body.submitterName === "string" ? body.submitterName : "";
 	const answers = body.answers && typeof body.answers === "object" && !Array.isArray(body.answers) ? body.answers as AnswerMap : null;
 	if (!token || !answers) return NextResponse.json({ ok: false, error: "token and answers required" }, { status: 400 });
+	const payloadError = validateCfpPayloadBounds(answers);
+	if (payloadError) return NextResponse.json({ ok: false, error: payloadError }, { status: 413 });
 	const db = await getDb();
 	const secret = await getAuthSecret();
 	const draft = await loadDraftForResume(db, { secret, token });

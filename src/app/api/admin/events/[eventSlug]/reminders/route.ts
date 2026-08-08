@@ -17,11 +17,12 @@ export async function POST(request: Request, context: RouteContext) {
 	const event = access.event;
 
 	const env = await getCloudflareEnv();
-	const portalBaseUrl = new URL(request.url).origin;
 	const result = await sendTaskReminders(env, {
 		eventId: event.id,
-		portalBaseUrl,
 	});
+	if (result.configurationError) {
+		return NextResponse.json({ ok: false, error: result.configurationError }, { status: 503 });
+	}
 
 	return NextResponse.json({
 		ok: true,

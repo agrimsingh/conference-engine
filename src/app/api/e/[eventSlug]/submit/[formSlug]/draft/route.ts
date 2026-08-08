@@ -8,18 +8,22 @@ import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import type { AnswerMap } from "@/lib/domain";
 import { composeResumeDraftEmail } from "@/lib/cfp/form-copy";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
+import { validateCfpPayloadBounds } from "@/lib/cfp/submit";
+import { readBoundedCfpJson } from "@/lib/cfp/request";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 const accepted = () => NextResponse.json({ ok: true }, { status: 202 });
 
 export async function POST(request: Request, context: Context) {
 	const { eventSlug, formSlug } = await context.params;
-	let raw: unknown;
-	try { raw = await request.json(); } catch { return accepted(); }
+	const parsed = await readBoundedCfpJson(request);
+	if (!parsed.ok) return accepted();
+	const raw = parsed.value;
 	const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
 	const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
 	const name = typeof body.submitterName === "string" ? body.submitterName.trim().slice(0, 160) : "";
 	const answers: AnswerMap = body.answers && typeof body.answers === "object" && !Array.isArray(body.answers) ? body.answers as AnswerMap : {};
+	if (validateCfpPayloadBounds(answers)) return accepted();
 	const db = await getDb();
 	const secret = await getAuthSecret();
 	const ip = request.headers.get("cf-connecting-ip") ?? "unknown";

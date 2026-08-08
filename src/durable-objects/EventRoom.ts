@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { detectConflicts, formatScheduleConflicts, isSubmissionStatus, normalizeSpeakerKey, transitionSubmission, type ScheduleInterval } from "@/lib/domain";
 import { stableAgendaUid } from "@/lib/email/ics";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
+import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 
 type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string };
 
@@ -87,6 +88,10 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		}>();
 		if (!submission) return { ok: false, error: "Submission not found", status: 404 };
 		if (submission.event_id !== input.eventId) return { ok: false, error: "Submission does not belong to this event room", status: 404 };
+		const event = await this.env.DB.prepare("SELECT timezone, start_day, end_day FROM events WHERE id = ?").bind(submission.event_id).first<{ timezone: string; start_day: string | null; end_day: string | null }>();
+		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		const boundsError = validateEventScheduleBounds(event, input.startsAtMs, input.endsAtMs);
+		if (boundsError) return { ok: false, error: boundsError, status: 400 };
 		if (!isSubmissionStatus(submission.status)) return { ok: false, error: "Unknown submission status", status: 500 };
 		const room = await this.env.DB.prepare("SELECT id, name FROM event_rooms WHERE event_id = ? AND trim(name) = ?").bind(submission.event_id, roomName).first<{ id: string; name: string }>();
 		const roomCount = await this.env.DB.prepare("SELECT COUNT(*) AS count FROM event_rooms WHERE event_id = ?").bind(submission.event_id).first<{ count: number }>();

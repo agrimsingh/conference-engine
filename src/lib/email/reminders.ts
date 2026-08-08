@@ -2,26 +2,29 @@ import {
 	isSpeakerTaskKey,
 	SPEAKER_TASK_TYPE_REGISTRY,
 } from "../domain/speaker-tasks";
-import { fetchWithBoundedRetry } from "../security/fetch";
 import {
 	renderMessageTemplate,
-	type MessageTemplateKey,
 } from "../domain/message-templates";
 import { renderFormCopy } from "../cfp/form-copy";
+import { validatedAppOrigin } from "../security/origin";
+import { sendTemplatedEmail } from "./resend";
 
 const REMINDER_KV_TTL_SECONDS = 20 * 60 * 60;
-const DEFAULT_PORTAL_ORIGIN = "https://conference-engine.65labs.org";
+export const REMINDER_DELIVERY_WINDOW_MS = 20 * 60 * 60_000;
 
 export type ReminderEnv = {
 	DB: D1Database;
-	SESSIONS: KVNamespace;
+	SESSIONS?: KVNamespace;
 	RESEND_API_KEY?: string;
 	RESEND_FROM_EMAIL?: string;
+	AUTH_SECRET?: string;
+	APP_ORIGIN?: string;
 };
 
 export type ReminderRunResult = {
 	sent: number;
 	skipped: number;
+	configurationError?: string;
 };
 
 type PendingTaskRow = {
@@ -66,27 +69,24 @@ export async function sendTaskReminders(
 	env: ReminderEnv,
 	options?: {
 		eventId?: string;
-		portalBaseUrl?: string;
+		now?: number;
 	},
 ): Promise<ReminderRunResult> {
 	const rows = await loadPendingTaskRows(env.DB, options?.eventId);
 	const groups = groupByPersonEvent(rows);
-	const portalOrigin = (options?.portalBaseUrl ?? DEFAULT_PORTAL_ORIGIN).replace(
-		/\/$/,
-		"",
-	);
+	const portalOrigin = validatedAppOrigin(env.APP_ORIGIN);
+	if (!portalOrigin) {
+		return { sent: 0, skipped: groups.length, configurationError: "APP_ORIGIN must be an absolute http(s) origin without a path" };
+	}
+	if (!env.AUTH_SECRET) {
+		return { sent: 0, skipped: groups.length, configurationError: "AUTH_SECRET is required for durable reminder delivery" };
+	}
+	const reminderWindow = Math.floor((options?.now ?? Date.now()) / REMINDER_DELIVERY_WINDOW_MS);
 
 	let sent = 0;
 	let skipped = 0;
 
 	for (const group of groups) {
-		const kvKey = reminderKvKey(group.personId, group.eventId);
-		const existing = await env.SESSIONS.get(kvKey);
-		if (existing) {
-			skipped += 1;
-			continue;
-		}
-
 		const labels = group.templateKeys.map(taskLabel);
 		const count = labels.length;
 		const portalHint = `Sign in at ${portalOrigin}/portal to complete them.`;
@@ -99,27 +99,38 @@ export async function sendTaskReminders(
 			portalHint,
 		});
 
-		const sendResult = await sendReminderEmail(env, {
+		const text = composeReminderText(rendered.text, group.reminderCopy, {
+			eventName: group.eventName,
+			submitterName: group.personName?.trim() || "there",
+			title: `${count} outstanding tasks`,
+			resumeUrl: `${portalOrigin}/portal`,
+		});
+		const sendResult = await sendTemplatedEmail(env.DB, {
 			eventId: group.eventId,
+			submissionId: null,
 			toEmail: group.email,
-			subject: rendered.subject,
-			text: composeReminderText(rendered.text, group.reminderCopy, {
-				eventName: group.eventName,
-				submitterName: group.personName?.trim() || "there",
-				title: `${count} outstanding tasks`,
-				resumeUrl: `${portalOrigin}/portal`,
-			}),
 			templateKey: "task_reminder",
+			context: { eventName: group.eventName, submitterName: group.personName?.trim() || "there", title: `${count} outstanding tasks`, outstandingCount: count, taskLabels: labels, portalHint },
+			override: { subject: rendered.subject, text },
+			deliveryScope: `reminder-window:${reminderWindow}`,
+			runtime: { authSecret: env.AUTH_SECRET, resendApiKey: env.RESEND_API_KEY, resendFromEmail: env.RESEND_FROM_EMAIL },
 		});
 
 		if (!sendResult.ok) {
 			skipped += 1;
 			continue;
 		}
+		if (sendResult.status === "skipped") {
+			skipped += 1;
+			continue;
+		}
 
-		await env.SESSIONS.put(kvKey, String(Date.now()), {
-			expirationTtl: REMINDER_KV_TTL_SECONDS,
-		});
+		// Secondary cache only. D1 delivery_key is the authority for dedupe.
+		if (env.SESSIONS) {
+			await env.SESSIONS.put(reminderKvKey(group.personId, group.eventId), String(Date.now()), {
+				expirationTtl: REMINDER_KV_TTL_SECONDS,
+			});
+		}
 		sent += 1;
 	}
 
@@ -211,158 +222,4 @@ export function composeReminderText(
 ): string {
 	if (!reminderCopy?.trim()) return defaultText;
 	return `${renderFormCopy(reminderCopy, context).trim()}\n\n${defaultText}`;
-}
-
-type ReminderSendResult = { ok: true } | { ok: false; error: string };
-
-async function sendReminderEmail(
-	env: ReminderEnv,
-	args: {
-		eventId: string;
-		toEmail: string;
-		subject: string;
-		text: string;
-		templateKey: MessageTemplateKey;
-	},
-): Promise<ReminderSendResult> {
-	const toEmail = args.toEmail.trim().toLowerCase();
-	const messageId = crypto.randomUUID();
-	const now = Date.now();
-	const apiKey = env.RESEND_API_KEY;
-	const fromEmail = env.RESEND_FROM_EMAIL || "team@65labs.org";
-
-	if (!apiKey) {
-		await insertOutbound(env.DB, {
-			id: messageId,
-			eventId: args.eventId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: args.subject,
-			status: "failed",
-			providerId: null,
-			error: "RESEND_API_KEY missing",
-			createdAt: now,
-		});
-		return { ok: false, error: "RESEND_API_KEY missing" };
-	}
-
-	try {
-		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				"Content-Type": "application/json",
-				"Idempotency-Key": messageId,
-			},
-			body: JSON.stringify({
-				from: fromEmail,
-				to: [toEmail],
-				subject: args.subject,
-				text: args.text,
-			}),
-		});
-
-		const bodyText = await response.text();
-		let providerId: string | null = null;
-		let errorMessage: string | null = null;
-		try {
-			const parsed: unknown = JSON.parse(bodyText);
-			if (
-				typeof parsed === "object" &&
-				parsed !== null &&
-				"id" in parsed &&
-				typeof (parsed as { id: unknown }).id === "string"
-			) {
-				providerId = (parsed as { id: string }).id;
-			}
-			if (
-				typeof parsed === "object" &&
-				parsed !== null &&
-				"message" in parsed &&
-				typeof (parsed as { message: unknown }).message === "string"
-			) {
-				errorMessage = (parsed as { message: string }).message;
-			}
-		} catch {
-			errorMessage = bodyText || `HTTP ${response.status}`;
-		}
-
-		if (!response.ok) {
-			const error = errorMessage ?? `Resend HTTP ${response.status}`;
-			await insertOutbound(env.DB, {
-				id: messageId,
-				eventId: args.eventId,
-				templateKey: args.templateKey,
-				toEmail,
-				subject: args.subject,
-				status: "failed",
-				providerId: null,
-				error,
-				createdAt: now,
-			});
-			return { ok: false, error };
-		}
-
-		await insertOutbound(env.DB, {
-			id: messageId,
-			eventId: args.eventId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: args.subject,
-			status: "sent",
-			providerId,
-			error: null,
-			createdAt: now,
-		});
-		return { ok: true };
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "send failed";
-		await insertOutbound(env.DB, {
-			id: messageId,
-			eventId: args.eventId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: args.subject,
-			status: "failed",
-			providerId: null,
-			error: message,
-			createdAt: now,
-		});
-		return { ok: false, error: message };
-	}
-}
-
-async function insertOutbound(
-	db: D1Database,
-	row: {
-		id: string;
-		eventId: string;
-		templateKey: string;
-		toEmail: string;
-		subject: string;
-		status: "sent" | "failed" | "skipped";
-		providerId: string | null;
-		error: string | null;
-		createdAt: number;
-	},
-): Promise<void> {
-	await db
-		.prepare(
-			`INSERT INTO outbound_messages (
-				id, event_id, submission_id, template_key, to_email, subject,
-				status, provider_id, error, created_at
-			) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
-		)
-		.bind(
-			row.id,
-			row.eventId,
-			row.templateKey,
-			row.toEmail,
-			row.subject,
-			row.status,
-			row.providerId,
-			row.error,
-			row.createdAt,
-		)
-		.run();
 }

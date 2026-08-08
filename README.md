@@ -30,9 +30,9 @@ The application is Next.js App Router bundled by OpenNext into a Cloudflare Work
 
 | Component | Responsibility |
 |---|---|
-| D1 | Events, forms, submissions, people, review state, ownership, tasks, agenda slots, outbound-message records, and atomic rate-limit buckets |
+| D1 | Events, forms, submissions, people, review state, ownership, pending invites, one-time auth challenges, durable email deliveries, tasks, agenda slots, and atomic rate-limit buckets |
 | R2 | Headshots, slides, and supporting documents; D1 stores the asset metadata and pointer |
-| KV | Organizer and speaker session records; it is not used for concurrency-sensitive limits |
+| KV | Organizer and speaker session records; one-time login challenges and concurrency-sensitive limits stay in D1 |
 | `EventRoom` Durable Object | Per-event schedule serialization, one-time WebSocket ticket consumption, and realtime invalidation fanout |
 | Resend | Transactional messages and calendar attachments, with provider retries and idempotency keys |
 
@@ -43,7 +43,7 @@ A submission becomes the session after acceptance. `scheduled` remains private t
 Several boundaries are intentionally stronger than a normal demo implementation:
 
 - Event ownership has one canonical D1 relation. Claim, transfer, demotion, and leave operations preserve it, and migration preflight rejects ambiguous legacy data.
-- Magic-link and CFP abuse limits use atomic D1 buckets keyed by HMAC-derived identifiers. KV's eventual consistency is unsuitable for an authoritative limit.
+- Magic-link challenges and CFP abuse limits use atomic D1 state keyed by HMAC-derived identifiers. KV's eventual consistency is unsuitable for one-time consumption or an authoritative limit.
 - Draft resume tokens are random, stored only as hashes, rotated after saves, and finalized with a deterministic submission ID. Concurrent finalizers cannot create two submissions or overrun a form's submission cap.
 - Every schedule mutation enters one per-event Durable Object queue. Conflict reads and D1 writes cannot interleave with another mutation for that event.
 - R2 upload completion compensates for a failed D1 write by deleting only the newly uploaded object and retaining any prior asset.
@@ -58,7 +58,7 @@ npm ci
 cp .dev.vars.example .dev.vars
 ```
 
-Set a strong `AUTH_SECRET`. Add `RESEND_API_KEY` only when you intend to send real mail, and set `PUBLIC_API_KEY` before exercising the operator API. Never commit `.dev.vars`.
+Set a strong `AUTH_SECRET`, and set `APP_ORIGIN` to the exact public origin used in email links. Add `RESEND_API_KEY` only when you intend to send real mail, and set `PUBLIC_API_KEY` before exercising the operator API. Never commit `.dev.vars`.
 
 Create the local D1 schema and the `aie-sandbox` demo event:
 
@@ -185,6 +185,8 @@ npx wrangler secret put PUBLIC_API_KEY
 # Optional:
 # npx wrangler secret put AIRTABLE_API_KEY
 ```
+
+`APP_ORIGIN` is a non-secret Wrangler variable and must be an absolute `https://` (or local `http://`) origin without a path. Reminder links are disabled when it is invalid rather than falling back to a hard-coded domain.
 
 For an existing database, inspect legacy ownership before applying migrations:
 

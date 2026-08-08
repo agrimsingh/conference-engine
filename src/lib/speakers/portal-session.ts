@@ -1,9 +1,11 @@
-import { getAuthSecret, getSessionsKv } from "@/lib/db/cloudflare";
-import { hmacSha256, randomToken } from "@/lib/security/crypto";
+import { cookies } from "next/headers";
+import { getSessionsKv } from "@/lib/db/cloudflare";
+import { randomToken } from "@/lib/security/crypto";
 import type { SubmissionRow } from "@/lib/db/types";
 
 const PORTAL_TTL_SECONDS = 60 * 60 * 24 * 7;
 const KV_PREFIX = "portal_session:";
+export const PORTAL_SESSION_COOKIE = "ce_portal_session";
 
 export type PortalSession = {
 	email: string;
@@ -29,9 +31,7 @@ export async function createPortalSession(args: {
 }
 
 export async function mintPortalSessionToken(): Promise<string> {
-	const secret = await getAuthSecret();
-	const random = randomToken(24);
-	return `${random}.${(await hmacSha256(secret, random)).slice(0, 16)}`;
+	return randomToken(32);
 }
 
 export async function persistPortalSession(
@@ -84,4 +84,20 @@ export async function readPortalSession(
 	const createdAt = typeof record.createdAt === "number" ? record.createdAt : 0;
 
 	return { email: record.email, personId: record.personId, createdAt };
+}
+
+export async function readPortalSessionFromCookie(): Promise<PortalSession | null> {
+	const jar = await cookies();
+	return readPortalSession(jar.get(PORTAL_SESSION_COOKIE)?.value ?? "");
+}
+
+export async function setPortalSessionCookie(token: string): Promise<void> {
+	const jar = await cookies();
+	jar.set(PORTAL_SESSION_COOKIE, token, {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === "production",
+		sameSite: "lax",
+		path: "/",
+		maxAge: PORTAL_TTL_SECONDS,
+	});
 }

@@ -2,6 +2,7 @@ NEXTJS_ENV=development
 ADMIN_BYPASS_ENABLED=1
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=team@65labs.org
+APP_ORIGIN=http://localhost:3000
 AUTH_SECRET=
 PUBLIC_API_KEY=
 # Optional one-way Airtable export (D1 remains SoR; never read Airtable into D1)

@@ -98,6 +98,13 @@ export function validateFieldAnswer(
 		case "url":
 		case "email": {
 			if (typeof answer !== "string") return `${field.label} must be text`;
+			if (
+				(field.config.kind === "text" || field.config.kind === "textarea") &&
+				field.config.maxLength !== undefined &&
+				answer.length > field.config.maxLength
+			) {
+				return `${field.label} must be at most ${field.config.maxLength} characters`;
+			}
 			if (field.config.kind === "email" && !answer.includes("@")) {
 				return `${field.label} must be a valid email`;
 			}

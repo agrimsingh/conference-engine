@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { shouldExposeDevLoginUrl } from "@/lib/auth/admin";
+import { createAuthChallenge, failAuthChallenge } from "@/lib/auth/challenges";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { getEventById, getPersonByEmail, listSubmissionsForPerson } from "@/lib/db/queries";
 import { sendTemplatedEmail } from "@/lib/email/resend";
-import { hasPortalEligibility, mintPortalSessionToken, persistPortalSession } from "@/lib/speakers/portal-session";
+import { hasPortalEligibility } from "@/lib/speakers/portal-session";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
@@ -32,9 +33,14 @@ export async function POST(request: Request) {
 	const primary = submissions[0];
 	if (!primary) return accepted();
 	const event = await getEventById(db, primary.event_id);
-	const token = await mintPortalSessionToken();
-	const url = new URL("/portal", request.url);
-	url.searchParams.set("token", token);
+	const challenge = await createAuthChallenge(db, {
+		secret,
+		kind: "portal_login",
+		personId: person.id,
+		eventId: primary.event_id,
+	});
+	const url = new URL("/portal/authorize", request.url);
+	url.searchParams.set("token", challenge.token);
 	const delivery = await sendTemplatedEmail(db, {
 		eventId: primary.event_id,
 		submissionId: null,
@@ -43,10 +49,12 @@ export async function POST(request: Request) {
 		context: { eventName: event?.name ?? "conference-engine", submitterName: person.name?.trim() || "there", title: "Speaker portal", portalUrl: url.toString() },
 		force: true,
 	});
-	if (!delivery.ok) return accepted();
-	await persistPortalSession(token, { email: person.email, personId: person.id });
+	if (!delivery.ok) {
+		await failAuthChallenge(db, { tokenHash: challenge.tokenHash, reason: delivery.error ?? "mail delivery failed" });
+		return accepted();
+	}
 	if (await shouldExposeDevLoginUrl()) {
-		return accepted({ token, personId: person.id, email: person.email, portalUrl: `${url.pathname}?${url.searchParams}` });
+		return accepted({ personId: person.id, email: person.email, portalUrl: `${url.pathname}?${url.searchParams}` });
 	}
 	return accepted();
 }

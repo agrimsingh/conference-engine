@@ -1,4 +1,5 @@
-import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import { getAuthSecret, getCloudflareEnv } from "@/lib/db/cloudflare";
+import { hmacHash } from "@/lib/security/crypto";
 import { fetchWithBoundedRetry } from "@/lib/security/fetch";
 import {
 	isOneShotTemplate,
@@ -18,14 +19,163 @@ export type Attachment = {
 	contentType: string;
 };
 
-type ResendSuccess = {
-	id?: string;
+export type EmailDeliveryRuntime = {
+	authSecret: string;
+	resendApiKey?: string;
+	resendFromEmail?: string;
 };
 
-type ResendErrorBody = {
-	message?: string;
-	name?: string;
+type ResendSuccess = { id?: string };
+type ResendErrorBody = { message?: string; name?: string };
+type DeliveryState = "reserved" | "sending" | "provider_accepted" | "sent" | "failed";
+
+type DeliveryRow = {
+	delivery_key: string;
+	status: DeliveryState;
+	provider_id: string | null;
+	lease_expires_at: number | null;
 };
+
+const SEND_LEASE_MS = 2 * 60_000;
+
+/**
+ * A delivery key identifies the exact logical email, not an attempt. It is an
+ * HMAC so D1 and Resend never receive a recoverable recipient/payload tuple.
+ */
+export async function deterministicDeliveryKey(
+	secret: string,
+	args: {
+		eventId: string;
+		submissionId: string | null;
+		templateKey: string;
+		toEmail: string;
+		subject: string;
+		text: string;
+		attachments?: Attachment[];
+		deliveryScope?: string;
+	},
+): Promise<string> {
+	return hmacHash(secret, JSON.stringify({
+		v: 1,
+		eventId: args.eventId,
+		submissionId: args.submissionId,
+		templateKey: args.templateKey,
+		toEmail: args.toEmail.trim().toLowerCase(),
+		subject: args.subject,
+		text: args.text,
+		attachments: args.attachments?.map((file) => ({
+			filename: file.filename,
+			contentType: file.contentType,
+			content: file.content,
+		})) ?? [],
+		deliveryScope: args.deliveryScope ?? null,
+	}));
+}
+
+/**
+ * Atomically claim a delivery before provider I/O. A crashed worker leaves a
+ * short lease; a later retry reuses the exact same provider idempotency key.
+ */
+export async function reserveEmailDelivery(
+	db: D1Database,
+	args: {
+		deliveryKey: string;
+		eventId: string;
+		submissionId: string | null;
+		templateKey: string;
+		toEmail: string;
+		subject: string;
+		now?: number;
+	},
+): Promise<{ action: "send" | "sent" | "in_flight"; providerId: string | null }> {
+	const now = args.now ?? Date.now();
+	const leaseExpiresAt = now + SEND_LEASE_MS;
+	const inserted = await db.prepare(
+		`INSERT INTO email_deliveries (
+       delivery_key, event_id, submission_id, template_key, to_email, subject,
+       status, attempt_count, lease_expires_at, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, 'sending', 1, ?, ?, ?)
+     ON CONFLICT(delivery_key) DO NOTHING
+     RETURNING delivery_key, status, provider_id, lease_expires_at`,
+	).bind(
+		args.deliveryKey,
+		args.eventId,
+		args.submissionId,
+		args.templateKey,
+		args.toEmail,
+		args.subject,
+		leaseExpiresAt,
+		now,
+		now,
+	).first<DeliveryRow>();
+	if (inserted) return { action: "send", providerId: null };
+
+	const existing = await db.prepare(
+		`SELECT delivery_key, status, provider_id, lease_expires_at
+       FROM email_deliveries WHERE delivery_key = ?`,
+	).bind(args.deliveryKey).first<DeliveryRow>();
+	if (!existing) throw new Error("Email reservation disappeared");
+	if (existing.status === "sent") return { action: "sent", providerId: existing.provider_id };
+
+	// Provider acceptance is durable enough to finish locally without another
+	// provider call. This is the recovery path for a failed final DB write.
+	if (existing.status === "provider_accepted") {
+		await db.prepare(
+			`UPDATE email_deliveries
+       SET status = 'sent', sent_at = COALESCE(sent_at, ?), updated_at = ?, lease_expires_at = NULL
+       WHERE delivery_key = ? AND status = 'provider_accepted'`,
+		).bind(now, now, args.deliveryKey).run();
+		return { action: "sent", providerId: existing.provider_id };
+	}
+
+	const claimed = await db.prepare(
+		`UPDATE email_deliveries
+       SET status = 'sending', attempt_count = attempt_count + 1, error = NULL,
+           lease_expires_at = ?, updated_at = ?
+       WHERE delivery_key = ?
+         AND (status IN ('reserved', 'failed') OR (status = 'sending' AND COALESCE(lease_expires_at, 0) <= ?))
+       RETURNING provider_id`,
+	).bind(leaseExpiresAt, now, args.deliveryKey, now).first<{ provider_id: string | null }>();
+	if (claimed) return { action: "send", providerId: claimed.provider_id };
+	return { action: "in_flight", providerId: existing.provider_id };
+}
+
+export async function markEmailDeliveryFailed(
+	db: D1Database,
+	args: { deliveryKey: string; error: string; now?: number },
+): Promise<void> {
+	const now = args.now ?? Date.now();
+	await db.prepare(
+		`UPDATE email_deliveries
+     SET status = 'failed', error = ?, lease_expires_at = NULL, updated_at = ?
+     WHERE delivery_key = ? AND status = 'sending'`,
+	).bind(args.error.slice(0, 1_000), now, args.deliveryKey).run();
+}
+
+export async function markEmailDeliveryAccepted(
+	db: D1Database,
+	args: { deliveryKey: string; providerId: string | null; now?: number },
+): Promise<void> {
+	const now = args.now ?? Date.now();
+	await db.prepare(
+		`UPDATE email_deliveries
+     SET status = 'provider_accepted', provider_id = COALESCE(?, provider_id),
+         provider_accepted_at = COALESCE(provider_accepted_at, ?), updated_at = ?
+     WHERE delivery_key = ? AND status = 'sending'`,
+	).bind(args.providerId, now, now, args.deliveryKey).run();
+}
+
+export async function finalizeEmailDelivery(
+	db: D1Database,
+	args: { deliveryKey: string; now?: number },
+): Promise<void> {
+	const now = args.now ?? Date.now();
+	await db.prepare(
+		`UPDATE email_deliveries
+     SET status = 'sent', sent_at = COALESCE(sent_at, ?), lease_expires_at = NULL, updated_at = ?
+     WHERE delivery_key = ? AND status = 'provider_accepted'`,
+	).bind(now, now, args.deliveryKey).run();
+}
 
 export async function sendTemplatedEmail(
 	db: D1Database,
@@ -35,73 +185,60 @@ export async function sendTemplatedEmail(
 		templateKey: MessageTemplateKey;
 		toEmail: string;
 		context: MessageTemplateContext;
-		/** Organizer-edited subject/body; bypasses the template renderer. */
 		override?: RenderedMessage;
 		attachments?: Attachment[];
+		/** Distinguishes intentional repeatable windows, such as daily reminders. */
+		deliveryScope?: string;
+		/** Supply Worker bindings directly for cron-safe callers. */
+		runtime?: EmailDeliveryRuntime;
+		/** Kept for callers; payload-specific delivery keys still dedupe retries. */
 		force?: boolean;
 	},
 ): Promise<OutboundSendResult> {
 	const toEmail = args.toEmail.trim().toLowerCase();
-	const rendered =
-		args.override ?? renderMessageTemplate(args.templateKey, args.context);
-	const now = Date.now();
-	const messageId = crypto.randomUUID();
+	const rendered = args.override ?? renderMessageTemplate(args.templateKey, args.context);
+	// Preserve the pre-migration one-shot history. New sends use the durable
+	// reservation below; old audit rows cannot be assigned a payload hash safely.
+	if (!args.force && args.submissionId && isOneShotTemplate(args.templateKey)) {
+		const historic = await db.prepare(
+			`SELECT provider_id FROM outbound_messages
+       WHERE submission_id = ? AND template_key = ? AND status = 'sent' LIMIT 1`,
+		).bind(args.submissionId, args.templateKey).first<{ provider_id: string | null }>();
+		if (historic) return { ok: true, status: "skipped", providerId: historic.provider_id, messageId: `legacy:${args.submissionId}:${args.templateKey}` };
+	}
+	const runtime = args.runtime ?? await loadDeliveryRuntime();
+	if (!runtime.authSecret) {
+		return { ok: false, status: "failed", error: "AUTH_SECRET missing", messageId: "unreserved" };
+	}
+	const deliveryKey = await deterministicDeliveryKey(runtime.authSecret, {
+		eventId: args.eventId,
+		submissionId: args.submissionId,
+		templateKey: args.templateKey,
+		toEmail,
+		subject: rendered.subject,
+		text: rendered.text,
+		attachments: args.attachments,
+		deliveryScope: args.deliveryScope,
+	});
 
-	if (
-		!args.force &&
-		args.submissionId &&
-		isOneShotTemplate(args.templateKey)
-	) {
-		const existing = await db
-			.prepare(
-				`SELECT id FROM outbound_messages
-         WHERE submission_id = ? AND template_key = ? AND status = 'sent'
-         LIMIT 1`,
-			)
-			.bind(args.submissionId, args.templateKey)
-			.first<{ id: string }>();
-
-		if (existing) {
-			await db
-				.prepare(
-					`INSERT INTO outbound_messages (
-            id, event_id, submission_id, template_key, to_email, subject,
-            status, provider_id, error, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, 'skipped', NULL, 'already sent', ?)`,
-				)
-				.bind(
-					messageId,
-					args.eventId,
-					args.submissionId,
-					args.templateKey,
-					toEmail,
-					rendered.subject,
-					now,
-				)
-				.run();
-			return { ok: true, status: "skipped", providerId: null, messageId };
-		}
+	const reservation = await reserveEmailDelivery(db, {
+		deliveryKey,
+		eventId: args.eventId,
+		submissionId: args.submissionId,
+		templateKey: args.templateKey,
+		toEmail,
+		subject: rendered.subject,
+	});
+	if (reservation.action !== "send") {
+		return { ok: true, status: "skipped", providerId: reservation.providerId, messageId: deliveryKey };
 	}
 
-	const env = await getCloudflareEnv();
-	const apiKey = env.RESEND_API_KEY;
-	const fromEmail = env.RESEND_FROM_EMAIL || "team@65labs.org";
-
+	const apiKey = runtime.resendApiKey;
+	const fromEmail = runtime.resendFromEmail || "team@65labs.org";
 	if (!apiKey) {
 		const error = "RESEND_API_KEY missing";
-		await insertOutbound(db, {
-			id: messageId,
-			eventId: args.eventId,
-			submissionId: args.submissionId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: rendered.subject,
-			status: "failed",
-			providerId: null,
-			error,
-			createdAt: now,
-		});
-		return { ok: false, status: "failed", error, messageId };
+		await markEmailDeliveryFailed(db, { deliveryKey, error });
+		return { ok: false, status: "failed", error, messageId: deliveryKey };
 	}
 
 	const payload: Record<string, unknown> = {
@@ -110,7 +247,6 @@ export async function sendTemplatedEmail(
 		subject: rendered.subject,
 		text: rendered.text,
 	};
-
 	if (args.attachments?.length) {
 		payload.attachments = args.attachments.map((file) => ({
 			filename: file.filename,
@@ -125,164 +261,76 @@ export async function sendTemplatedEmail(
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
-				"Idempotency-Key": messageId,
+				"Idempotency-Key": deliveryKey,
 			},
 			body: JSON.stringify(payload),
 		});
-
 		const bodyText = await response.text();
-		let parsed: ResendSuccess | ResendErrorBody = {};
-		try {
-			parsed = JSON.parse(bodyText) as ResendSuccess | ResendErrorBody;
-		} catch {
-			parsed = { message: bodyText || `HTTP ${response.status}` };
-		}
-
+		const parsed = parseProviderResponse(bodyText, response.status);
 		if (!response.ok) {
-			const error =
-				("message" in parsed && typeof parsed.message === "string"
-					? parsed.message
-					: null) ?? `Resend HTTP ${response.status}`;
-			await insertOutbound(db, {
-				id: messageId,
-				eventId: args.eventId,
-				submissionId: args.submissionId,
-				templateKey: args.templateKey,
-				toEmail,
-				subject: rendered.subject,
-				status: "failed",
-				providerId: null,
-				error,
-				createdAt: now,
-			});
-			return { ok: false, status: "failed", error, messageId };
+			await markEmailDeliveryFailed(db, { deliveryKey, error: parsed.error });
+			return { ok: false, status: "failed", error: parsed.error, messageId: deliveryKey };
 		}
-
-		const providerId =
-			"id" in parsed && typeof parsed.id === "string" ? parsed.id : null;
-
-		await insertOutbound(db, {
-			id: messageId,
-			eventId: args.eventId,
-			submissionId: args.submissionId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: rendered.subject,
-			status: "sent",
-			providerId,
-			error: null,
-			createdAt: now,
-		});
-
-		return { ok: true, status: "sent", providerId, messageId };
+		await markEmailDeliveryAccepted(db, { deliveryKey, providerId: parsed.providerId });
+		await finalizeEmailDelivery(db, { deliveryKey });
+		return { ok: true, status: "sent", providerId: parsed.providerId, messageId: deliveryKey };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "send failed";
-		await insertOutbound(db, {
-			id: messageId,
-			eventId: args.eventId,
-			submissionId: args.submissionId,
-			templateKey: args.templateKey,
-			toEmail,
-			subject: rendered.subject,
-			status: "failed",
-			providerId: null,
-			error: message,
-			createdAt: now,
-		});
-		return { ok: false, status: "failed", error: message, messageId };
+		await markEmailDeliveryFailed(db, { deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: deliveryKey };
 	}
 }
 
+async function loadDeliveryRuntime(): Promise<EmailDeliveryRuntime> {
+	const [env, authSecret] = await Promise.all([getCloudflareEnv(), getAuthSecret()]);
+	return {
+		authSecret,
+		resendApiKey: env.RESEND_API_KEY,
+		resendFromEmail: env.RESEND_FROM_EMAIL,
+	};
+}
+
+/** Auth links use the challenge hash as the provider key and have no event row. */
 export async function sendAuthEmail(args: {
 	toEmail: string;
-	templateKey: Extract<
-		MessageTemplateKey,
-		"organizer_magic_link" | "organizer_invite" | "portal_magic_link"
-	>;
+	templateKey: Extract<MessageTemplateKey, "organizer_magic_link" | "organizer_invite" | "portal_magic_link">;
 	context: MessageTemplateContext;
-}): Promise<{ ok: boolean; error?: string }> {
+	idempotencyKey: string;
+}): Promise<{ ok: boolean; error?: string; providerId?: string }> {
 	const toEmail = args.toEmail.trim().toLowerCase();
 	const rendered = renderMessageTemplate(args.templateKey, args.context);
-	const idempotencyKey = crypto.randomUUID();
-
 	const env = await getCloudflareEnv();
-	const apiKey = env.RESEND_API_KEY;
-	const fromEmail = env.RESEND_FROM_EMAIL || "team@65labs.org";
-
-	if (!apiKey) {
-		return { ok: false, error: "RESEND_API_KEY missing" };
-	}
-
+	if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY missing" };
 	try {
 		const response = await fetchWithBoundedRetry("https://api.resend.com/emails", {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${apiKey}`,
+				Authorization: `Bearer ${env.RESEND_API_KEY}`,
 				"Content-Type": "application/json",
-				"Idempotency-Key": idempotencyKey,
+				"Idempotency-Key": args.idempotencyKey,
 			},
-			body: JSON.stringify({
-				from: fromEmail,
-				to: [toEmail],
-				subject: rendered.subject,
-				text: rendered.text,
-			}),
+			body: JSON.stringify({ from: env.RESEND_FROM_EMAIL || "team@65labs.org", to: [toEmail], subject: rendered.subject, text: rendered.text }),
 		});
-
-		if (!response.ok) {
-			const bodyText = await response.text();
-			return { ok: false, error: bodyText || `Resend HTTP ${response.status}` };
-		}
-
-		return { ok: true };
+		const parsed = parseProviderResponse(await response.text(), response.status);
+		return response.ok ? { ok: true, providerId: parsed.providerId ?? undefined } : { ok: false, error: parsed.error };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : "send failed";
-		return { ok: false, error: message };
+		return { ok: false, error: error instanceof Error ? error.message : "send failed" };
 	}
+}
+
+function parseProviderResponse(bodyText: string, status: number): { providerId: string | null; error: string } {
+	let parsed: ResendSuccess | ResendErrorBody = {};
+	try { parsed = JSON.parse(bodyText) as ResendSuccess | ResendErrorBody; }
+	catch { parsed = { message: bodyText || `Resend HTTP ${status}` }; }
+	return {
+		providerId: "id" in parsed && typeof parsed.id === "string" ? parsed.id : null,
+		error: "message" in parsed && typeof parsed.message === "string" ? parsed.message : `Resend HTTP ${status}`,
+	};
 }
 
 function utf8ToBase64(text: string): string {
 	const bytes = new TextEncoder().encode(text);
 	let binary = "";
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
+	for (const byte of bytes) binary += String.fromCharCode(byte);
 	return btoa(binary);
-}
-
-async function insertOutbound(
-	db: D1Database,
-	row: {
-		id: string;
-		eventId: string;
-		submissionId: string | null;
-		templateKey: string;
-		toEmail: string;
-		subject: string;
-		status: "sent" | "failed" | "skipped";
-		providerId: string | null;
-		error: string | null;
-		createdAt: number;
-	},
-): Promise<void> {
-	await db
-		.prepare(
-			`INSERT INTO outbound_messages (
-        id, event_id, submission_id, template_key, to_email, subject,
-        status, provider_id, error, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		)
-		.bind(
-			row.id,
-			row.eventId,
-			row.submissionId,
-			row.templateKey,
-			row.toEmail,
-			row.subject,
-			row.status,
-			row.providerId,
-			row.error,
-			row.createdAt,
-		)
-		.run();
 }

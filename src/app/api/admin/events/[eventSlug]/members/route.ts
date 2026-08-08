@@ -4,7 +4,7 @@ import {
 	isAdminBypass,
 	shouldExposeDevLoginUrl,
 } from "@/lib/auth/admin";
-import { getDb } from "@/lib/db/cloudflare";
+import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import {
 	listEventMembers,
 	removeEventMembership,
@@ -91,6 +91,8 @@ export async function POST(request: Request, context: RouteContext) {
 		role,
 		origin: new URL(request.url).origin,
 		exposeLoginUrl,
+		secret: await getAuthSecret(),
+		invitedByAccountId: access.account?.id,
 	});
 
 	if (!result.ok) {
@@ -102,16 +104,12 @@ export async function POST(request: Request, context: RouteContext) {
 
 	return NextResponse.json({
 		ok: true,
-		createdMembership: result.createdMembership,
-		transferredOwnership: result.transferredOwnership,
+		invitationId: result.invitationId,
+		pendingAcceptance: true,
+		role: result.role,
 		emailStatus: result.emailStatus,
 		loginUrl: result.loginUrl,
-		member: {
-			accountId: result.account.id,
-			email: result.account.email,
-			name: result.account.name,
-			role: result.membership.role,
-		},
+		invitee: { accountId: result.account.id, email: result.account.email, name: result.account.name },
 	});
 }
 

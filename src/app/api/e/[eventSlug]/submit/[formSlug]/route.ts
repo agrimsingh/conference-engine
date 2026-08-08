@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
-import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
+import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
+import { readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -21,12 +22,9 @@ type Body = {
 
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, formSlug } = await context.params;
-	let body: Body;
-	try {
-		body = (await request.json()) as Body;
-	} catch {
-		return NextResponse.json({ ok: false, errors: ["Invalid JSON"] }, { status: 400 });
-	}
+	const parsed = await readBoundedCfpJson(request);
+	if (!parsed.ok) return NextResponse.json({ ok: false, errors: [parsed.error] }, { status: parsed.status });
+	const body = parsed.value as Body;
 
 	const identity = validateSubmitterIdentity({
 		name: typeof body.submitterName === "string" ? body.submitterName : "",
@@ -43,6 +41,8 @@ export async function POST(request: Request, context: RouteContext) {
 			{ status: 400 },
 		);
 	}
+	const payloadError = validateCfpPayloadBounds(answers);
+	if (payloadError) return NextResponse.json({ ok: false, errors: [payloadError] }, { status: 413 });
 	const { name: submitterName, email: submitterEmail } = identity;
 
 	const db = await getDb();

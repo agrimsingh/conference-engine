@@ -8,19 +8,18 @@ import {
 	listTasksForPerson,
 } from "@/lib/db/queries";
 import { SPEAKER_TASK_TYPE_REGISTRY, isSpeakerTaskKey } from "@/lib/domain";
-import { readPortalSession } from "@/lib/speakers/portal-session";
+import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
 import { TaskChecklist } from "./task-checklist";
 
 type Props = {
-	searchParams: Promise<{ token?: string; email?: string }>;
+	searchParams: Promise<{ email?: string; error?: string }>;
 };
 
 export default async function PortalPage({ searchParams }: Props) {
 	const params = await searchParams;
-	const token = typeof params.token === "string" ? params.token : "";
-
-	if (!token) {
+	const session = await readPortalSessionFromCookie();
+	if (!session) {
 		return (
 			<main className="mx-auto max-w-lg px-4 py-10">
 				<PageHeader
@@ -37,30 +36,6 @@ export default async function PortalPage({ searchParams }: Props) {
 						← Home
 					</Link>
 				</p>
-			</main>
-		);
-	}
-
-	const session = await readPortalSession(token);
-	if (!session) {
-		return (
-			<main className="mx-auto max-w-lg px-4 py-10">
-				<div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-6">
-					<p className="text-sm font-medium text-red-300">
-						This sign-in link is invalid or expired
-					</p>
-					<p className="mt-1 text-sm text-red-400">
-						Request a fresh link — they expire for security.
-					</p>
-					<p className="mt-4">
-						<Link
-							className="text-sm font-medium text-red-300 underline underline-offset-2"
-							href="/portal"
-						>
-							Request a new link
-						</Link>
-					</p>
-				</div>
 			</main>
 		);
 	}
@@ -120,7 +95,7 @@ export default async function PortalPage({ searchParams }: Props) {
 												{submissionTasks.length === 0 ? (
 													<p className="text-neutral-500">Materials are being prepared by the organizers.</p>
 												) : (
-													<TaskChecklist token={token} compact tasks={submissionTasks.map((task) => {
+													<TaskChecklist token="" compact tasks={submissionTasks.map((task) => {
 														const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
 														return { id: task.id, key: task.template_key, label: meta?.label ?? task.template_key, kind: meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id };
 														})} />

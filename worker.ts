@@ -5,8 +5,6 @@ import { handleEventRoomUpgrade } from "./src/lib/realtime/room-upgrade";
 
 export { EventRoom } from "./src/durable-objects/EventRoom";
 
-const PORTAL_ORIGIN = "https://conference-engine.65labs.org";
-
 export default {
 	async fetch(request, env, ctx) {
 		const roomResponse = await handleEventRoomUpgrade(request, env);
@@ -16,9 +14,7 @@ export default {
 
 	async scheduled(event, env, ctx) {
 		ctx.waitUntil(
-			sendTaskReminders(env, {
-				portalBaseUrl: PORTAL_ORIGIN,
-			}),
+			sendTaskReminders(env),
 		);
 	},
 };

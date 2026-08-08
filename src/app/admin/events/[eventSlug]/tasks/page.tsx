@@ -128,6 +128,11 @@ export default async function AdminTasksPage({ params }: Props) {
 										? ` · ${task.text_value.slice(0, 80)}${task.text_value.length > 80 ? "…" : ""}`
 										: ""}
 								</p>
+								{task.asset_id ? (
+									<Link className="mt-2 inline-block text-xs font-medium text-neutral-200 underline underline-offset-2 hover:text-white" href={`/api/admin/events/${event.slug}/tasks/${task.id}/asset`}>
+										Download uploaded file
+									</Link>
+								) : null}
 							</li>
 						))}
 					</ul>

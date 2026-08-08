@@ -8,6 +8,7 @@ import {
 	type LiveSyncTransport,
 	type OutstandingTasksSnapshot,
 } from "@/lib/domain";
+import { bootstrapRoomTicket } from "@/lib/realtime/room-client";
 
 type Props = {
 	eventSlug: string;
@@ -35,6 +36,7 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 	useEffect(() => {
 		let cancelled = false;
 		let pollTimer: ReturnType<typeof setInterval> | null = null;
+		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 		let ws: WebSocket | null = null;
 		let refetching = false;
 
@@ -73,6 +75,14 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 			}
 		}
 
+		function scheduleReconnect(): void {
+			if (cancelled || reconnectTimer !== null) return;
+			reconnectTimer = setTimeout(() => {
+				reconnectTimer = null;
+				void connectWs();
+			}, POLL_MS);
+		}
+
 		function startPolling(): void {
 			if (cancelled || pollTimer !== null) return;
 			setTransport("polling");
@@ -81,7 +91,15 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 			}, POLL_MS);
 		}
 
-		function connectWs(): void {
+		async function connectWs(): Promise<void> {
+			const bootstrap = await bootstrapRoomTicket(eventSlug);
+			if (cancelled) return;
+			if (!bootstrap.ok) {
+				setLastError(bootstrap.error);
+				startPolling();
+				scheduleReconnect();
+				return;
+			}
 			const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 			const url = `${protocol}//${window.location.host}/api/admin/events/${eventSlug}/room`;
 
@@ -89,6 +107,7 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 				ws = new WebSocket(url);
 			} catch {
 				startPolling();
+				scheduleReconnect();
 				return;
 			}
 
@@ -115,6 +134,7 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 			ws.addEventListener("close", () => {
 				if (cancelled) return;
 				startPolling();
+				scheduleReconnect();
 			});
 
 			ws.addEventListener("error", () => {
@@ -124,11 +144,12 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 
 		void refetch();
 		startPolling();
-		connectWs();
+		void connectWs();
 
 		return () => {
 			cancelled = true;
 			stopPolling();
+			if (reconnectTimer !== null) clearTimeout(reconnectTimer);
 			if (ws) {
 				ws.close();
 				ws = null;
