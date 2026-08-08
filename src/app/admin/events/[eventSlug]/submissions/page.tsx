@@ -9,6 +9,7 @@ import {
 	getEventBySlug,
 	getPersonById,
 	listLabelsForEvent,
+	listSpeakersForSubmission,
 	listSubmissionsForEvent,
 	listTasksForSubmission,
 } from "@/lib/db/queries";
@@ -21,6 +22,7 @@ import {
 import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
 import { SubmissionLabels } from "./submission-labels";
+import { SubmissionSpeakers, type SpeakerSummary } from "./submission-speakers";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -81,9 +83,22 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		string,
 		Awaited<ReturnType<typeof listTasksForSubmission>>
 	>();
+	const speakersBySubmission = new Map<string, SpeakerSummary[]>();
 	const personNames = new Map<string, string>();
 
 	for (const row of filtered) {
+		const speakers = await listSpeakersForSubmission(db, row.id);
+		speakersBySubmission.set(
+			row.id,
+			speakers.map((speaker) => ({
+				id: speaker.id,
+				name: speaker.name,
+				email: speaker.email,
+				position: speaker.position,
+				status: speaker.status,
+				addedAfterAcceptance: speaker.added_after_acceptance === 1,
+			})),
+		);
 		const tasks = await listTasksForSubmission(db, row.id);
 		tasksBySubmission.set(row.id, tasks);
 		for (const task of tasks) {
@@ -218,6 +233,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 												{row.status.replaceAll("_", " ")}
 											</StatusPill>
 										</div>
+									</div>
+									<div className="mt-2">
+										<SubmissionSpeakers
+											eventSlug={event.slug}
+											submissionId={row.id}
+											speakers={speakersBySubmission.get(row.id) ?? []}
+										/>
 									</div>
 									<div className="mt-2">
 										<SubmissionLabels
