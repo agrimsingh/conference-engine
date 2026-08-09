@@ -21,8 +21,6 @@ import {
 	EmptyState,
 } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
-import { PublicSessionsDiscover } from "@/components/public-sessions-discover";
-import { ScheduleQuerySelect } from "@/components/schedule-query-select";
 import { PublicItinerary } from "@/components/public-itinerary";
 import {
 	defaultScheduleDayKey,
@@ -35,7 +33,7 @@ import {
 } from "@/lib/schedule/time";
 import { speakerRoleLine } from "@/lib/speakers/public-directory";
 
-export type ScheduleView = "itinerary" | "my-schedule" | "list" | "day" | "week" | "track" | "room";
+export type ScheduleView = "itinerary" | "my-schedule" | "day" | "week" | "track" | "room";
 
 export type PublicScheduleBasePath = "/e" | "/embed";
 
@@ -91,10 +89,11 @@ function parseView(value: string | undefined): ScheduleView {
 		case "week":
 		case "track":
 		case "room":
-		case "list":
 			return value;
+		case "list":
+			return "itinerary";
 		default:
-			return "list";
+			return "itinerary";
 	}
 }
 
@@ -104,8 +103,6 @@ function viewLabel(view: ScheduleView): string {
 			return "Itinerary";
 		case "my-schedule":
 			return "My Schedule";
-		case "list":
-			return "List";
 		case "day":
 			return "Day";
 		case "week":
@@ -235,15 +232,15 @@ export async function PublicSchedule({
 	});
 	// eslint-disable-next-line react-hooks/purity -- request-time default day in a server component
 	const todayKey = dayKeyInTimeZone(Date.now(), event.timezone);
-	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
-		? "list"
+	const view = basePath === "/embed" && requestedView === "my-schedule"
+		? "itinerary"
 		: requestedView;
-	const allDaysSelected = view === "list" && dayParam?.trim() === "all";
+	const allDaysSelected = (view === "itinerary" || view === "my-schedule") && dayParam?.trim() === "all";
 	const requestedDay = parseDayKey(dayParam);
 	const dayKey = requestedDay && days.includes(requestedDay)
 		? requestedDay
 		: defaultScheduleDayKey(days, scheduledDayKeys, todayKey);
-	/** URL day for list discover: concrete key or `"all"`. Other views always use a concrete day. */
+	/** URL day for itinerary browse: concrete key or `"all"`. Grid views always use a concrete day. */
 	const dayQuery = allDaysSelected ? "all" : dayKey;
 	const roomFilter = roomParam?.trim() || "all";
 
@@ -368,8 +365,8 @@ export async function PublicSchedule({
 	);
 
 	const views: ScheduleView[] = basePath === "/e"
-		? ["itinerary", "my-schedule", "list", "day", "week", "track", "room"]
-		: ["list", "day", "week", "track", "room"];
+		? ["itinerary", "my-schedule", "day", "week", "track", "room"]
+		: ["itinerary", "day", "week", "track", "room"];
 
 	return (
 		<main className="mx-auto max-w-5xl px-4 py-10">
@@ -405,8 +402,10 @@ export async function PublicSchedule({
 									role="tab"
 									aria-selected={active}
 										href={hrefFor(basePath, event.slug, {
-											// Leaving list+all days restores a concrete day for grid views.
-											day: v === "list" && allDaysSelected ? "all" : dayKey,
+											day:
+												(v === "itinerary" || v === "my-schedule") && allDaysSelected
+													? "all"
+													: dayKey,
 											view: v,
 											room: roomFilter,
 											embed: itineraryEmbed?.slug,
@@ -427,7 +426,7 @@ export async function PublicSchedule({
 
 			<nav aria-label="Event days" className="mb-6 flex flex-wrap items-center gap-2">
 				<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Event days</span>
-				{view === "list" ? (
+				{view === "itinerary" || view === "my-schedule" ? (
 					<Link
 						href={hrefFor(basePath, event.slug, {
 							day: "all",
@@ -462,69 +461,49 @@ export async function PublicSchedule({
 			</nav>
 
 			{view === "itinerary" || view === "my-schedule" ? (
-				<PublicItinerary
-					eventSlug={event.slug}
-					timezone={event.timezone}
-					mode={view}
-					eventSessionIds={enriched.map((slot) => slot.submissionId)}
-					sessions={(view === "itinerary" ? applyRoom(itinerarySlots.filter((slot) => slot.dayKey === dayKey)) : itinerarySlots).map((slot) => ({
-						id: slot.id,
-						sessionId: slot.submissionId,
-						title: slot.title,
-						abstract: slot.abstract,
-						format: slot.format,
-						roomName: slot.roomName,
-						trackName: slot.track.name,
-						startsAtMs: slot.startsAtMs,
-						endsAtMs: slot.endsAtMs,
-						dayKey: slot.dayKey,
-						detailHref: slot.detailHref,
-						speakers: slot.speakers.map((speaker) => ({
-							name: speaker.name,
-							jobTitle: speaker.jobTitle,
-							company: speaker.company,
-						})),
-					}))}
-				/>
-			) : null}
-
-			{view === "list" ? (
-				enriched.length === 0 ? (
+				itinerarySlots.length === 0 && view === "itinerary" ? (
 					<EmptyState
 						title="Nothing scheduled yet"
 						description="Check back once organizers publish the program, or try another view."
 					/>
 				) : (
-					<PublicSessionsDiscover
-						sessions={enriched.map((slot) => ({
+					<PublicItinerary
+						eventSlug={event.slug}
+						timezone={event.timezone}
+						mode={view}
+						basePath={basePath}
+						selectionEnabled={basePath === "/e"}
+						initialDayKey={dayQuery}
+						initialRoom={roomFilter}
+						eventSessionIds={enriched.map((slot) => slot.submissionId)}
+						roomOptions={
+							view === "itinerary"
+								? ["all", ...roomsForDay].map((room) => ({
+										value: room,
+										label: room === "all" ? "All rooms" : room,
+										href: hrefFor(basePath, event.slug, {
+											day: dayQuery,
+											view,
+											room,
+											embed: itineraryEmbed?.slug,
+										}),
+									}))
+								: undefined
+						}
+						sessions={itinerarySlots.map((slot) => ({
 							id: slot.id,
+							sessionId: slot.submissionId,
 							title: slot.title,
 							abstract: slot.abstract,
+							format: slot.format,
+							roomName: slot.roomName,
 							trackId: slot.track.id,
 							trackName: slot.track.name,
-							format: slot.format,
-							location: slot.roomName,
-							speakerNames: slot.speakers.map((speaker) => speaker.name),
 							startsAtMs: slot.startsAtMs,
 							endsAtMs: slot.endsAtMs,
 							dayKey: slot.dayKey,
 							detailHref: slot.detailHref,
 							speakers: slot.speakers,
-						}))}
-						timezone={event.timezone}
-						eventSlug={event.slug}
-						basePath={basePath}
-						initialDayKey={dayQuery}
-						initialRoom={roomFilter}
-						roomOptions={["all", ...roomsForDay].map((room) => ({
-							value: room,
-							label: room === "all" ? "All rooms" : room,
-							href: hrefFor(basePath, event.slug, {
-								day: dayQuery,
-								view,
-								room,
-								embed: itineraryEmbed?.slug,
-							}),
 						}))}
 					/>
 				)

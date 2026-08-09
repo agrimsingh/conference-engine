@@ -52,6 +52,7 @@ async function renderFilteredItinerary(mode: "itinerary" | "my-schedule" = "itin
 					abstract: "",
 					format: "Stage",
 					roomName: "Main",
+					trackId: null,
 					trackName: "Agents",
 					startsAtMs: Date.parse("2026-01-01T10:00:00Z"),
 					endsAtMs: Date.parse("2026-01-01T10:30:00Z"),
