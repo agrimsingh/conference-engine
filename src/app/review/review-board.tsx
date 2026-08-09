@@ -3,15 +3,17 @@
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DecisionButtons } from "@/components/decision-buttons";
+import { SubmissionAnswersList } from "@/components/submission-answers-list";
 import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
 import type { DecisionAction, RenderedMessage } from "@/lib/domain";
+import type { SubmissionAnswerDisplay } from "@/lib/cfp/submission-answers";
 
 type CriterionView = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number };
 type CriterionScoreView = { id: string; criterionId: string; score: number; comment: string | null; reviewerId: string | null };
 type ScoreView = { id: string; score: number; comment: string | null; scoredBy: string };
 type SubmissionView = {
 	id: string; status: string; submitterName: string | null; submitterEmail: string | null; title: string; category: string; format: string | null;
-	answers: Array<{ label: string; value: string }>; assignment: string; previews: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
+	answers: SubmissionAnswerDisplay[]; assignment: string; previews: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
 };
 type Props = { eventSlug: string; token: string; canDecide: boolean; reviewerId: string | null; criteria: CriterionView[]; submissions: SubmissionView[] };
 
@@ -140,14 +142,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 						{row.scores.length ? <ul className="space-y-1 text-xs text-neutral-400">{row.scores.map((score) => <li key={score.id}>{score.scoredBy}: {score.score}/5{score.comment ? ` — ${score.comment}` : ""}</li>)}</ul> : null}
 						<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2">
 							<summary className="cursor-pointer font-medium text-neutral-200">Proposal details</summary>
-							<dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-								{row.answers.map((answer) => (
-									<div key={answer.label}>
-										<dt className="text-neutral-500">{answer.label}</dt>
-										<dd className="mt-0.5 whitespace-pre-wrap text-neutral-300">{answer.value}</dd>
-									</div>
-								))}
-							</dl>
+							<SubmissionAnswersList answers={row.answers} />
 						</details>
 						<div className="space-y-3 rounded-md border border-neutral-800 bg-neutral-950/30 p-3">
 							<div>
