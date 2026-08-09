@@ -19,3 +19,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:21:27Z	wave1	Merged public surface to main	headshots ICS share speakers; wave1 almost closed	0931221	tests green
 2026-08-09T08:21:39Z	wave1	Launched builder/applicant/platform/verify worktrees	Phases 3,4,8,9 after wave1 merges	1cfd127	running
 2026-08-09T08:25:35Z	wave1	Merged applicant Phase 4 to main	RL+autosave+progress+review step; section stub for P3	7ba2d76	tests green
+2026-08-09T08:26:15Z	wave1	Merged platform Phase 8 to main	public JSON strip PII + Airtable opt-in cron; queues deferred if noted	8fc90e2	tests green
