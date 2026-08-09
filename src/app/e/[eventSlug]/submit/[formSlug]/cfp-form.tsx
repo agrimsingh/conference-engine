@@ -1,17 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CfpFieldInput } from "@/components/cfp-field-input";
 import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
 import {
 	evaluateVisibilityRule,
+	groupFieldsBySection,
 	type AnswerMap,
 	type FormFieldDef,
-	type FormSectionDef,
+	type FormSection,
 	type SpeakerAnswer,
 } from "@/lib/domain";
 import { renderFormCopy } from "@/lib/cfp/form-copy";
 import { computeCfpProgress } from "@/lib/cfp/form-progress";
-import { groupVisibleFieldsBySection } from "@/lib/cfp/form-sections";
 import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";
 import { CfpReviewStep } from "./cfp-review-step";
 
@@ -29,7 +30,7 @@ type Props = {
 	draftsEnabled: boolean;
 	submissionLimit: number;
 	fields: FormFieldDef[];
-	sections: FormSectionDef[];
+	sections?: FormSection[];
 };
 
 type FormStep = "edit" | "review";
@@ -47,7 +48,7 @@ export function CfpForm({
 	draftsEnabled,
 	submissionLimit,
 	fields,
-	sections,
+	sections = [],
 }: Props) {
 	const [answers, setAnswers] = useState<AnswerMap>(() => initialAnswers(fields));
 	const [submitterName, setSubmitterName] = useState("");
@@ -59,6 +60,7 @@ export function CfpForm({
 	const [submissionId, setSubmissionId] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [draftPending, setDraftPending] = useState(false);
+	const [uploadBusyKey, setUploadBusyKey] = useState<string | null>(null);
 	const [invalidMultiselectKey, setInvalidMultiselectKey] = useState<string | null>(null);
 	const [step, setStep] = useState<FormStep>("edit");
 	const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
@@ -66,7 +68,8 @@ export function CfpForm({
 	const fieldRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
 	const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const autosaveSnapshot = useRef<string>("");
-	const busy = submitting || draftPending || resuming;
+	const busy = submitting || draftPending || resuming || uploadBusyKey !== null;
+	const uploadBaseUrl = `/api/e/${eventSlug}/submit/${formSlug}/upload`;
 
 	const visibleFields = useMemo(
 		() => fields.filter((f) => evaluateVisibilityRule(f.visibilityRule, answers)),
@@ -74,8 +77,8 @@ export function CfpForm({
 	);
 
 	const sectionGroups = useMemo(
-		() => groupVisibleFieldsBySection(sections, visibleFields),
-		[sections, visibleFields],
+		() => groupFieldsBySection(visibleFields, sections),
+		[visibleFields, sections],
 	);
 
 	const showSectionNav = sections.length > 0 && sectionGroups.some((group) => group.section !== null);
@@ -221,6 +224,26 @@ export function CfpForm({
 		setSubmissionId(body.submissionId);
 		} catch { setErrors(["Submission failed. Check your connection and try again."]); }
 		finally { setSubmitting(false); }
+	}
+
+	function renderFieldInput(field: FormFieldDef) {
+		return (
+			<CfpFieldInput
+				key={field.key}
+				field={field}
+				value={answers[field.key]}
+				fieldsetRef={(element) => { fieldRefs.current[field.key] = element; }}
+				errorMessage={invalidMultiselectKey === field.key ? `${field.label} is required` : undefined}
+				uploadBaseUrl={uploadBaseUrl}
+				uploadBusyKey={uploadBusyKey}
+				onUploadStart={setUploadBusyKey}
+				onUploadEnd={() => setUploadBusyKey(null)}
+				onChange={(value) => {
+					setAnswers((prev) => ({ ...prev, [field.key]: value }));
+					if (invalidMultiselectKey === field.key) setInvalidMultiselectKey(null);
+				}}
+			/>
+		);
 	}
 
 	if (submissionId) {
@@ -388,22 +411,23 @@ export function CfpForm({
 				</label>
 			</section>
 
-			{fieldsForStep.map((field) => (
-				<FieldInput
-					key={field.key}
-					field={field}
-					value={answers[field.key]}
-					fieldsetRef={(element) => { fieldRefs.current[field.key] = element; }}
-					errorMessage={invalidMultiselectKey === field.key ? `${field.label} is required` : undefined}
-					onChange={(value) => {
-						setAnswers((prev) => ({
-							...prev,
-							[field.key]: value,
-						}));
-						if (invalidMultiselectKey === field.key) setInvalidMultiselectKey(null);
-					}}
-				/>
-			))}
+			{showSectionNav ? (
+				fieldsForStep.map((field) => renderFieldInput(field))
+			) : (
+				sectionGroups.map((group, index) => (
+					<section key={group.section?.key ?? `ungrouped-${index}`} className="space-y-4">
+						{group.section ? (
+							<div className="border-b border-neutral-800 pb-2">
+								<h2 className="text-sm font-medium text-neutral-200">{group.section.title}</h2>
+								{group.section.description ? (
+									<p className="mt-1 text-xs text-neutral-500">{group.section.description}</p>
+								) : null}
+							</div>
+						) : null}
+						{group.fields.map((field) => renderFieldInput(field))}
+					</section>
+				))
+			)}
 
 			{errors.length > 0 ? (
 				<ul className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -453,6 +477,8 @@ function initialAnswers(fields: FormFieldDef[]): AnswerMap {
 			answers[field.key] = Array.from({ length: Math.max(1, field.config.minSpeakers ?? 1) }, () => ({ name: "", email: "", bio: "" })) satisfies SpeakerAnswer[];
 		} else if (field.fieldType === "multiselect") {
 			answers[field.key] = [];
+		} else if (field.config.kind === "file_upload") {
+			answers[field.key] = null;
 		} else {
 			answers[field.key] = "";
 		}
@@ -477,253 +503,4 @@ async function readJson<T>(response: Response): Promise<T | null> {
 
 function isPlausibleEmail(value: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function FieldInput({
-	field,
-	value,
-	onChange,
-	fieldsetRef,
-	errorMessage,
-}: {
-	field: FormFieldDef;
-	value: unknown;
-	onChange: (value: unknown) => void;
-	fieldsetRef?: (element: HTMLFieldSetElement | null) => void;
-	errorMessage?: string;
-}) {
-	const label = (
-		<span className="font-medium">
-			{field.label}
-			{field.required ? " *" : ""}
-		</span>
-	);
-
-	switch (field.config.kind) {
-		case "text":
-		case "url":
-		case "video":
-		case "email": {
-			const textValue = typeof value === "string" ? value : "";
-			const maxLength = field.config.kind === "text" ? field.config.maxLength : undefined;
-			return (
-				<label className="flex flex-col gap-1 text-sm">
-					{label}
-					{field.helpText ? (
-						<span className="text-xs text-neutral-500">{field.helpText}</span>
-					) : null}
-					<input
-						required={field.required}
-						aria-required={field.required || undefined}
-						type={
-							field.config.kind === "email"
-								? "email"
-								: field.config.kind === "url" || field.config.kind === "video"
-									? "url"
-									: "text"
-						}
-						className={INPUT_CLASSES}
-						placeholder={field.config.placeholder}
-						maxLength={maxLength}
-						value={textValue}
-						onChange={(e) => onChange(e.target.value)}
-					/>
-					{maxLength != null ? (
-						<span className="text-xs text-neutral-500 tabular-nums">
-							{textValue.length}/{maxLength}
-						</span>
-					) : null}
-				</label>
-			);
-		}
-		case "textarea": {
-			const textValue = typeof value === "string" ? value : "";
-			const maxLength = field.config.maxLength;
-			return (
-				<label className="flex flex-col gap-1 text-sm">
-					{label}
-					<textarea
-						required={field.required}
-						aria-required={field.required || undefined}
-						className={INPUT_CLASSES}
-						rows={field.config.rows ?? 4}
-						placeholder={field.config.placeholder}
-						maxLength={maxLength}
-						value={textValue}
-						onChange={(e) => onChange(e.target.value)}
-					/>
-					{maxLength != null ? (
-						<span className="text-xs text-neutral-500 tabular-nums">
-							{textValue.length}/{maxLength}
-						</span>
-					) : null}
-				</label>
-			);
-		}
-		case "number":
-			return (
-				<label className="flex flex-col gap-1 text-sm">
-					{label}
-					{field.helpText ? (
-						<span className="text-xs text-neutral-500">{field.helpText}</span>
-					) : null}
-					<input
-						required={field.required}
-						aria-required={field.required || undefined}
-						type="number"
-						className={INPUT_CLASSES}
-						min={field.config.min}
-						max={field.config.max}
-						step={field.config.step}
-						value={typeof value === "number" ? value : value === "" ? "" : Number(value)}
-						onChange={(e) => {
-							const raw = e.target.value;
-							onChange(raw === "" ? "" : Number(raw));
-						}}
-					/>
-				</label>
-			);
-		case "select":
-			return (
-				<label className="flex flex-col gap-1 text-sm">
-					{label}
-					{field.helpText ? (
-						<span className="text-xs text-neutral-500">{field.helpText}</span>
-					) : null}
-					<select
-						required={field.required}
-						aria-required={field.required || undefined}
-						className={INPUT_CLASSES}
-						value={typeof value === "string" ? value : ""}
-						onChange={(e) => onChange(e.target.value)}
-					>
-						<option value="">Select…</option>
-						{field.config.options.map((opt) => (
-							<option key={opt.value} value={opt.value}>
-								{opt.label}
-							</option>
-						))}
-					</select>
-				</label>
-			);
-		case "multiselect":
-			return (
-				<fieldset
-					ref={fieldsetRef}
-					tabIndex={-1}
-					className="flex flex-col gap-2 text-sm"
-					aria-required={field.required || undefined}
-					aria-invalid={errorMessage ? true : undefined}
-					aria-describedby={errorMessage ? `cfp-field-error-${field.key}` : undefined}
-				>
-					<legend className="font-medium">{field.label}</legend>
-					{errorMessage ? (
-						<p id={`cfp-field-error-${field.key}`} role="alert" aria-live="assertive" className="text-sm text-red-300">
-							{errorMessage}
-						</p>
-					) : null}
-					{field.config.options.map((opt) => {
-						const selected = Array.isArray(value) ? (value as string[]) : [];
-						const checked = selected.includes(opt.value);
-						return (
-							<label key={opt.value} className="flex items-center gap-2">
-								<input
-									type="checkbox"
-									checked={checked}
-									onChange={(e) => {
-										if (e.target.checked) onChange([...selected, opt.value]);
-										else onChange(selected.filter((v) => v !== opt.value));
-									}}
-								/>
-								{opt.label}
-							</label>
-						);
-					})}
-				</fieldset>
-			);
-		case "speaker_block": {
-			const speakers = Array.isArray(value) ? (value as SpeakerAnswer[]) : [];
-			const min = Math.max(1, field.config.minSpeakers ?? 1);
-			const max = field.config.maxSpeakers ?? 4;
-			return (
-				<fieldset className="flex flex-col gap-3 text-sm" aria-required="true">
-					<legend className="font-medium">{field.label} *</legend>
-					<p className="text-xs text-neutral-500">
-						Add {min}–{max} speakers. The first speaker is the primary contact. Co-speakers are listed
-						immediately and get an email to confirm their participation.
-					</p>
-					{speakers.map((speaker, index) => (
-						<div
-							key={index}
-							className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-900 p-3 sm:grid-cols-2"
-						>
-							<p className="col-span-full text-xs font-medium uppercase tracking-wide text-neutral-500">
-								{index === 0 ? "Primary speaker" : `Co-speaker ${index}`}
-							</p>
-							<label className="flex flex-col gap-1">
-								<span>Name</span>
-								<input
-									required
-									aria-required="true"
-									className={INPUT_CLASSES}
-									value={speaker.name}
-									onChange={(e) => {
-										const next = [...speakers];
-										next[index] = { ...speaker, name: e.target.value };
-										onChange(next);
-									}}
-								/>
-							</label>
-							<label className="flex flex-col gap-1">
-								<span>Email</span>
-								<input
-									type="email"
-									required
-									aria-required="true"
-									className={INPUT_CLASSES}
-									value={speaker.email}
-									onChange={(e) => {
-										const next = [...speakers];
-										next[index] = { ...speaker, email: e.target.value };
-										onChange(next);
-									}}
-								/>
-							</label>
-							<label className="col-span-full flex flex-col gap-1">
-								<span>Bio</span>
-								<textarea
-									className={INPUT_CLASSES}
-									rows={2}
-									value={speaker.bio ?? ""}
-									onChange={(e) => {
-										const next = [...speakers];
-										next[index] = { ...speaker, bio: e.target.value };
-										onChange(next);
-									}}
-								/>
-							</label>
-							{index > 0 && speakers.length > min ? (
-								<button type="button" className="justify-self-start text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-100" onClick={() => onChange(speakers.filter((_, speakerIndex) => speakerIndex !== index))}>Remove co-speaker</button>
-							) : null}
-						</div>
-					))}
-					{speakers.length < max ? (
-						<button
-							type="button"
-							className="self-start text-sm text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
-							onClick={() =>
-								onChange([...speakers, { name: "", email: "", bio: "" }])
-							}
-						>
-							Add co-speaker
-						</button>
-					) : null}
-				</fieldset>
-			);
-		}
-		default: {
-			const _exhaustive: never = field.config;
-			return _exhaustive;
-		}
-	}
 }

@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
-import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswers } from "@/lib/cfp/submit";
+import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswersWithAssets } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -52,7 +52,12 @@ export async function submitCfpAction(input: {
 	if (!name) return { ok: false, errors: ["Your name is required"] };
 	if (!email.includes("@")) return { ok: false, errors: ["Valid email required"] };
 
-	const validated = validateSubmissionAnswers(loaded.fields, input.answers);
+	const validated = await validateSubmissionAnswersWithAssets(db, {
+		eventId: loaded.event.id,
+		formId: loaded.form.id,
+		fields: loaded.fields,
+		answers: input.answers,
+	});
 	if (!validated.ok) return validated;
 
 	const category = resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers);

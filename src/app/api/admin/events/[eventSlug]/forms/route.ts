@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/auth/admin";
-import { createForm, listFormsForEvent, updateFormMeta } from "@/lib/cfp/form-admin";
+import { createForm, listFormsForEvent, updateFormMeta, validateFormSectionsInput } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug } from "@/lib/db/queries";
-import { isCategoryRoute, parseCategoryRoute } from "@/lib/domain";
+import { isCategoryRoute, parseCategoryRoute, type FormSection } from "@/lib/domain";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -49,6 +49,7 @@ type PatchBody = {
 	confirmationCopy?: unknown;
 	reminderCopy?: unknown;
 	thankYouCopy?: unknown;
+	sections?: unknown;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -87,6 +88,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 	}
 	if (body.categoryRoute !== undefined && body.categoryRoute !== null && !isCategoryRoute(body.categoryRoute)) {
 		return NextResponse.json({ ok: false, error: "categoryRoute is invalid" }, { status: 400 });
+	}
+	let sections: FormSection[] | undefined;
+	if (body.sections !== undefined) {
+		const parsedSections = validateFormSectionsInput(body.sections);
+		if (typeof parsedSections === "string") {
+			return NextResponse.json({ ok: false, error: parsedSections }, { status: 400 });
+		}
+		sections = parsedSections;
 	}
 
 	try {
@@ -135,6 +144,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 					: typeof body.thankYouCopy === "string"
 						? body.thankYouCopy
 						: undefined,
+			sections: sections === undefined ? undefined : sections,
 		});
 	} catch (error) {
 		return NextResponse.json(

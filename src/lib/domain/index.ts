@@ -21,18 +21,26 @@ export {
 	FIELD_TYPES,
 	isFieldConfig,
 	isFieldType,
+	isFileUploadAnswer,
 	parseFieldConfig,
 	validateFieldAnswer,
 	type FieldConfig,
 	type FieldType,
+	type FileUploadAnswer,
 	type FormFieldDef,
 	type SpeakerAnswer,
 } from "./form-fields";
 
 export {
+	groupFieldsBySection,
+	isFormSection,
 	isFormSectionDef,
 	parseFormSections,
+	serializeFormSections,
+	validateFormSectionsInput,
+	type FormSection,
 	type FormSectionDef,
+	type GroupedFormFields,
 } from "./form-sections";
 
 export { createConferenceCfpPreset, type ConferenceCfpPreset } from "./conference-cfp-preset";

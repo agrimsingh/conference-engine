@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
-import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
+import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswersWithAssets, validateSubmitterIdentity } from "@/lib/cfp/submit";
 import { isJsonObject, readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
@@ -81,7 +81,12 @@ export async function POST(request: Request, context: RouteContext) {
 	]);
 	if (!emailAllowed || !ipAllowed) return NextResponse.json({ ok: false, errors: ["Too many submission attempts. Please wait a few minutes and try again."] }, { status: 429 });
 
-	const validated = validateSubmissionAnswers(loaded.fields, answers);
+	const validated = await validateSubmissionAnswersWithAssets(db, {
+		eventId: loaded.event.id,
+		formId: loaded.form.id,
+		fields: loaded.fields,
+		answers,
+	});
 	if (!validated.ok) {
 		return NextResponse.json(validated, { status: 400 });
 	}
