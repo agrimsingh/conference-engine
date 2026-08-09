@@ -1,5 +1,6 @@
 // @ts-nocheck — OpenNext emits .open-next/worker.js after next build; next typecheck runs first.
 import { default as handler } from "./.open-next/worker.js";
+import { syncOptInEventsToAirtable } from "./src/lib/export/airtable-sync";
 import { sendTaskReminders } from "./src/lib/email/reminders";
 import { handleEventRoomUpgrade } from "./src/lib/realtime/room-upgrade";
 import { pruneExpiredRateLimitBuckets } from "./src/lib/security/rate-limit";
@@ -19,6 +20,9 @@ export default {
 		);
 		ctx.waitUntil(
 			pruneExpiredRateLimitBuckets(env.DB),
+		);
+		ctx.waitUntil(
+			syncOptInEventsToAirtable(env),
 		);
 	},
 };
