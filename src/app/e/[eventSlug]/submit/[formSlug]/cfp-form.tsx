@@ -63,7 +63,7 @@ export function CfpForm({
 	const [uploadBusyKey, setUploadBusyKey] = useState<string | null>(null);
 	const [invalidMultiselectKey, setInvalidMultiselectKey] = useState<string | null>(null);
 	const [step, setStep] = useState<FormStep>("edit");
-	const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
+	const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 	const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
 	const fieldRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
 	const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,16 +83,16 @@ export function CfpForm({
 
 	const showSectionNav = sections.length > 0 && sectionGroups.some((group) => group.section !== null);
 
-	useEffect(() => {
-		if (!showSectionNav) {
-			setActiveSectionKey(null);
-			return;
+	const activeSectionKey = useMemo(() => {
+		if (!showSectionNav) return null;
+		if (
+			selectedSectionKey &&
+			sectionGroups.some((group) => group.section?.key === selectedSectionKey)
+		) {
+			return selectedSectionKey;
 		}
-		setActiveSectionKey((current) => {
-			if (current && sectionGroups.some((group) => group.section?.key === current)) return current;
-			return sectionGroups.find((group) => group.section)?.section?.key ?? null;
-		});
-	}, [showSectionNav, sectionGroups]);
+		return sectionGroups.find((group) => group.section)?.section?.key ?? null;
+	}, [showSectionNav, selectedSectionKey, sectionGroups]);
 
 	const fieldsForStep = useMemo(() => {
 		if (!showSectionNav || !activeSectionKey) return visibleFields;
@@ -371,7 +371,7 @@ export function CfpForm({
 								type="button"
 								aria-current={selected ? "step" : undefined}
 								className={`rounded-full px-3 py-1.5 text-sm transition-colors ${selected ? "bg-indigo-500/20 text-indigo-100 ring-1 ring-indigo-400/40" : "bg-neutral-900 text-neutral-400 ring-1 ring-neutral-800 hover:text-neutral-200"}`}
-								onClick={() => setActiveSectionKey(group.section?.key ?? null)}
+								onClick={() => setSelectedSectionKey(group.section?.key ?? null)}
 							>
 								{group.section.title}
 							</button>
