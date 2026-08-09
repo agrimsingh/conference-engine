@@ -37,3 +37,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T09:18:41Z	eval	Merged CFP edit + review depth + speaker roster	migrations 0026 roster 0027 recusal; all top-5 eval units on main	448f5fb+	182 unit green
 2026-08-09T09:31:48Z	release	Opened fixes for mid70s release blockers	profile sync lint bypass due-reminders public meta then migrate+deploy	2c3ce1a	running
 2026-08-09T09:34:07Z	release	Merged portal lint + bypass cookie fix	client useState now; secure from https protocol	87412cf	lint green
+2026-08-09T09:35:00Z	release	Merged public session meta	title/company on discover; Format on detail	5736fe3	unit+workers green in agent
