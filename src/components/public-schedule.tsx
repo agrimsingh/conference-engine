@@ -432,7 +432,7 @@ export async function PublicSchedule({
 					eventSlug={event.slug}
 					timezone={event.timezone}
 					mode={view}
-					sessions={(view === "itinerary" ? applyRoom(enriched) : enriched).map((slot) => ({
+					sessions={(view === "itinerary" ? applyRoom(enriched.filter((slot) => slot.dayKey === dayKey)) : enriched).map((slot) => ({
 						id: slot.id,
 						sessionId: slot.submissionId,
 						title: slot.title,
