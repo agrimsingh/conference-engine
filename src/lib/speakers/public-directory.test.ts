@@ -4,6 +4,7 @@ import {
 	filterSpeakersByQuery,
 	sortSpeakersBySurname,
 	speakerAffiliation,
+	speakerRoleLine,
 	speakerSurname,
 } from "./public-directory";
 
@@ -48,5 +49,13 @@ describe("public speaker directory helpers", () => {
 		expect(speakerAffiliation({ jobTitle: "CTO", company: null })).toBe("CTO");
 		expect(speakerAffiliation({ jobTitle: null, company: "Acme" })).toBe("Acme");
 		expect(speakerAffiliation({ jobTitle: null, company: null })).toBeNull();
+	});
+
+	it("formats schedule/discover role line under speaker name", () => {
+		expect(speakerRoleLine({ jobTitle: "CTO", company: "Acme" })).toBe("CTO · Acme");
+		expect(speakerRoleLine({ jobTitle: "CTO", company: null })).toBe("CTO");
+		expect(speakerRoleLine({ jobTitle: null, company: "Acme" })).toBe("Acme");
+		expect(speakerRoleLine({ jobTitle: "  ", company: null })).toBeNull();
+		expect(speakerRoleLine({ jobTitle: null, company: null })).toBeNull();
 	});
 });

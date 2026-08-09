@@ -1,5 +1,6 @@
 import { getEventBySlug, getSubmissionById, listAgendaTracks, listSpeakersForSubmission } from "@/lib/db/queries";
 import type { SubmissionRow } from "@/lib/db/types";
+import { displayCategory } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { ensureTaskTemplates, materializeAcceptedSpeaker, prepareMaterializationWriteFence, MaterializationClaimLostError, MATERIALIZATION_WRITE_FENCE_PREDICATE, type MaterializationWriteFence, type MaterializedSpeakerResources } from "@/lib/speakers/materialize";
 import { hasFormulaPrefix, parseBoundedCsv, type CsvRecord } from "./csv";
@@ -403,6 +404,8 @@ export type PublicSessionSpeaker = {
 export type PublicSession = {
 	event: { id: string; slug: string; name: string; timezone: string };
 	submission: SubmissionRow;
+	/** Display label for submission.category (session format). */
+	format: string;
 	slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null; trackName: string };
 	speakers: PublicSessionSpeaker[];
 };
@@ -443,6 +446,7 @@ export async function loadPublicSession(db: D1Database, eventSlug: string, submi
 	return {
 		event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone },
 		submission: row,
+		format: displayCategory(row.category),
 		slot: {
 			id: row.agenda_slot_id,
 			roomName: row.agenda_room_name,

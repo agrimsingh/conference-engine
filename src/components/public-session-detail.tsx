@@ -55,7 +55,7 @@ export async function PublicSessionDetail({
 				<p className="font-mono text-xs tabular-nums text-neutral-500">
 					{formatClock(session.slot.startsAt, session.event.timezone)}–
 					{formatClock(session.slot.endsAt, session.event.timezone)} · {session.slot.roomName} ·{" "}
-					{session.slot.trackName}
+					{session.slot.trackName} · Format {session.format}
 				</p>
 				<h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					{title}

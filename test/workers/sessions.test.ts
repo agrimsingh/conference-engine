@@ -275,7 +275,15 @@ describe("organizer session creation, lineage, and publication", () => {
 	it("denies cross-event bulk selection, only publishes placed sessions, and exposes media after publication", async () => {
 		const created = await event("Public");
 		const other = await event("Other");
-		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Public session", supportingUrl: "https://resources.example.test/public" } });
+		const session = await createSession(env.DB, {
+			eventId: created.eventId,
+			origin: "manual",
+			input: {
+				title: "Public session",
+				category: "Lightning",
+				supportingUrl: "https://resources.example.test/public",
+			},
+		});
 		const foreign = await createSession(env.DB, { eventId: other.eventId, origin: "manual", input: { title: "Foreign" } });
 		const room = env.EVENT_ROOM.getByName(created.eventId);
 		expect((await bulk(room, created.eventId, "publish", [foreign.id])).status).toBe(404);
@@ -286,7 +294,15 @@ describe("organizer session creation, lineage, and publication", () => {
 		]);
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toBeNull();
 		expect((await bulk(room, created.eventId, "publish", [session.id])).status).toBe(200);
-		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ submission: { id: session.id, supporting_url: "https://resources.example.test/public" }, slot: { roomName: "Main", trackId: null, trackName: "Unassigned" } });
+		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({
+			submission: {
+				id: session.id,
+				category: "Lightning",
+				supporting_url: "https://resources.example.test/public",
+			},
+			format: "Lightning",
+			slot: { roomName: "Main", trackId: null, trackName: "Unassigned" },
+		});
 		const track = await env.DB.prepare("SELECT id, name FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0").bind(created.eventId).first<{ id: string; name: string }>();
 		expect(track).not.toBeNull();
 		await env.DB.prepare("UPDATE agenda_slots SET track_id = ? WHERE submission_id = ?").bind(track!.id, session.id).run();

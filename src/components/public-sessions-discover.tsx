@@ -11,6 +11,7 @@ import {
 	type PublicDiscoverSession,
 } from "@/lib/schedule/public-discover";
 import { formatClock } from "@/lib/schedule/time";
+import { speakerRoleLine } from "@/lib/speakers/public-directory";
 
 export type DiscoverListSession = PublicDiscoverSession & {
 	detailHref: string;
@@ -18,6 +19,8 @@ export type DiscoverListSession = PublicDiscoverSession & {
 	speakers: Array<{
 		personId: string | null;
 		name: string;
+		jobTitle: string | null;
+		company: string | null;
 		hasHeadshot: boolean;
 	}>;
 };
@@ -144,22 +147,28 @@ export function PublicSessionsDiscover({
 								</h2>
 								{full.speakers.length > 0 ? (
 									<ul className="mt-1 flex flex-wrap gap-3">
-										{full.speakers.map((speaker, index) => (
-											<li key={`${speaker.personId ?? speaker.name}-${index}`}>
-												<PublicSpeakerAvatar
-													eventSlug={eventSlug}
-													personId={speaker.personId}
-													name={speaker.name}
-													hasHeadshot={speaker.hasHeadshot}
-													size="sm"
-													profileHref={
-														basePath === "/e" && speaker.personId
-															? `/e/${eventSlug}/speakers/${speaker.personId}`
-															: null
-													}
-												/>
-											</li>
-										))}
+										{full.speakers.map((speaker, index) => {
+											const role = speakerRoleLine(speaker);
+											return (
+												<li key={`${speaker.personId ?? speaker.name}-${index}`}>
+													<PublicSpeakerAvatar
+														eventSlug={eventSlug}
+														personId={speaker.personId}
+														name={speaker.name}
+														hasHeadshot={speaker.hasHeadshot}
+														size="sm"
+														profileHref={
+															basePath === "/e" && speaker.personId
+																? `/e/${eventSlug}/speakers/${speaker.personId}`
+																: null
+														}
+													/>
+													{role ? (
+														<p className="mt-0.5 text-xs text-neutral-500">{role}</p>
+													) : null}
+												</li>
+											);
+										})}
 									</ul>
 								) : null}
 								{session.abstract ? (

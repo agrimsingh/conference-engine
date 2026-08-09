@@ -61,3 +61,13 @@ export function speakerAffiliation(
 	if (company) return company;
 	return null;
 }
+
+/** Schedule / discover card line under the speaker name. */
+export function speakerRoleLine(
+	speaker: Pick<PublicDirectorySpeaker, "jobTitle" | "company">,
+): string | null {
+	const parts = [speaker.jobTitle?.trim(), speaker.company?.trim()].filter(
+		(part): part is string => Boolean(part),
+	);
+	return parts.length > 0 ? parts.join(" · ") : null;
+}
