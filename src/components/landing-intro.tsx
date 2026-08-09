@@ -83,9 +83,9 @@ export function LandingHero() {
 				<span className="text-emerald-400">From CFP to stage.</span>
 			</h1>
 			<p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-neutral-400">
-				Create your organizer workspace now. Collect proposals, review them,
-				manage speakers, build the agenda, and publish it without installing
-				anything.
+			One workspace from open call to live schedule. Stage decisions before
+			they send, collect everything speakers owe through a portal, and
+			publish when the programme is settled. Nothing to install.
 			</p>
 			<div className="mt-6 flex flex-wrap items-center gap-5 text-sm font-medium">
 				<Link
