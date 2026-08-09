@@ -47,3 +47,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T17:22:05Z	p0	Merged draft reminders + export + status queues; P0 closed	72h draft cron; xlsx+cfp zip; decide≠notify tabs	2c12aa4,897a4b6,5ce61aa	workers 8/8; tsc/lint green
 2026-08-09T17:24:39Z	p1	P0 already on origin/main; starting P1 fan-out	tip 8830e84	8830e84	p0 closed
 2026-08-09T17:29:00Z	p1	Merged Sessionboard session import aliases	CSV aliases + fixture; XLSX skipped	bd63351	unit green
+2026-08-09T17:29:38Z	p1	Merged submission pacing chart	cumulative series above cockpit; prior null	1cebf96	unit green
