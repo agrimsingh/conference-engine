@@ -81,14 +81,14 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 ## What you get
 
-- **CFP form builder** — fields, required rules, conditionals, sections, uploads, draft/resume, limits, category → track routing. Labels you author show up on submission answers. Drafts get a reminder when the form is within 72 hours of closing; submitters get a confirmation email when a proposal lands.
-- **Review** — named reviewers, criteria, scores/comments, accept / waitlist / reject. Empty assignment list means empty board (fail closed).
-- **Decide ≠ notify** — stage accept / waitlist / reject on the submission detail page, then bulk-send (or send one) when you mean to. Queues keep pending, to-notify, notified, withdrawn, and drafts apart.
-- **Program cockpit** — live blocker tiles with links into the work, plus a cumulative submissions pacing chart so you can see whether intake is on track. Realtime refresh when the event room updates.
-- **Speaker operations** — roster, owners/tags/private notes, contact timeline, announcements, structured tasks and reminders. Portal covers bio, headshot, slides, identity fields (salutation, pronouns, honorific), co-speaker confirm, and speaker-initiated withdraw. Outstanding gaps stay on the cockpit.
-- **Scheduling** — rooms and tracks; conflict checks serialised per event; calendar invites that land as real Gmail RSVP prompts (`.ics` `METHOD:REQUEST`); bulk publish/unpublish; content approval during publish where configured. Sessionboard session CSVs import with their column names aliased.
-- **Public surfaces** — schedule (defaults to today / next session day), speakers, session pages, iframe embed, headshot and `.ics` for published sessions.
-- **Exports and integrations** — CSV and XLSX for submissions, zip of CFP uploads, deliverables zip for speaker files; **Airtable mirror mode** (manual one-way push + optional nightly cron; never Airtable→D1); optional one-way Accelevents push; keyed `/api/v1` for submissions, schedule, and speakers (OpenAPI at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity).
+- **CFP form builder.** Build the form in the database (conditionals, sections, uploads, draft/resume). Labels you author show up on answers. When the form is within 72 hours of closing, unfinished drafts get a reminder; a landed proposal gets a confirmation email.
+- **Review.** Named reviewers score assigned talks against the rubric. Empty assignment list means empty board (fail closed).
+- **Decide ≠ notify.** Stage accept, waitlist, or reject on the submission detail page. Send the email later (one-by-one or bulk). Queues keep pending, to-notify, notified, withdrawn, and drafts apart so the two jobs never blur.
+- **Program cockpit.** The live “who is blocking the programme?” board links into each gap, with a cumulative submissions chart above it so you can see whether intake is on track. It refreshes when the event room updates.
+- **Speaker operations.** Roster, notes, announcements, and task reminders without turning into a CRM. The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific); speakers can withdraw themselves. Gaps stay on the cockpit until they land.
+- **Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Sessionboard session CSVs import with their column names aliased; publish and content approval stay on the same path.
+- **Public surfaces.** Published schedule (defaults to today or the next session day), speakers, session pages, and an iframe embed. Headshots and `.ics` ship for published sessions.
+- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, and push one-way to Airtable (mirror mode: manual or nightly opt-in, never Airtable→D1) or Accelevents. The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
 
 ## Day-to-day use
 
