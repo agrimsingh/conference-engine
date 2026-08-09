@@ -11,4 +11,9 @@ describe("AdminEventNav paths", () => {
 		expect(ADMIN_EVENT_LINKS).toContainEqual({ segment: "speakers", label: "Speakers" });
 		expect(adminEventPath("ai-summit", "speakers")).toBe("/admin/events/ai-summit/speakers");
 	});
+
+	it("exposes the embed builder under the event admin chrome", () => {
+		expect(ADMIN_EVENT_LINKS).toContainEqual({ segment: "embeds", label: "Embeds" });
+		expect(adminEventPath("ai-summit", "embeds")).toBe("/admin/events/ai-summit/embeds");
+	});
 });
