@@ -6,8 +6,9 @@ export type IcsEventInput = {
 	startsAtMs: number;
 	endsAtMs: number;
 	organizerEmail: string;
-	attendeeEmail: string;
-	method?: "REQUEST" | "CANCEL";
+	/** Required for REQUEST/CANCEL invites; omitted for public METHOD:PUBLISH downloads. */
+	attendeeEmail?: string;
+	method?: "REQUEST" | "CANCEL" | "PUBLISH";
 	/** RFC 5545 sequence increases when an existing meeting is revised. */
 	sequence?: number;
 	dtstampMs?: number;
@@ -49,6 +50,10 @@ export function buildIcsInvite(input: IcsEventInput): string {
 	const method = input.method ?? "REQUEST";
 	const now = toIcsUtc(input.dtstampMs ?? Date.now());
 	const cancelled = method === "CANCEL";
+	const attendee =
+		method === "PUBLISH" || !input.attendeeEmail
+			? null
+			: `ATTENDEE;CN=${escapeText(input.attendeeEmail)};CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${input.attendeeEmail}`;
 	const lines = [
 		"BEGIN:VCALENDAR",
 		"PRODID:-//conference-engine//EN",
@@ -66,7 +71,7 @@ export function buildIcsInvite(input: IcsEventInput): string {
 			? `DESCRIPTION:${escapeText(input.description)}`
 			: null,
 		`ORGANIZER;CN=conference-engine:mailto:${input.organizerEmail}`,
-		`ATTENDEE;CN=${escapeText(input.attendeeEmail)};CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${input.attendeeEmail}`,
+		attendee,
 		`STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
 		`SEQUENCE:${Math.max(0, Math.floor(input.sequence ?? 0))}`,
 		"TRANSP:OPAQUE",

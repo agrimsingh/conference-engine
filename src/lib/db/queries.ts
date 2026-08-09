@@ -872,6 +872,128 @@ export async function getSpeakerProfile(
 		.first<SpeakerProfileRow>();
 }
 
+/** Headshot asset only when the person is a confirmed speaker on a published session. */
+export async function resolvePublicHeadshotAsset(
+	db: D1Database,
+	eventId: string,
+	personId: string,
+): Promise<AssetRow | null> {
+	return db
+		.prepare(
+			`SELECT a.*
+       FROM speaker_profiles sp
+       INNER JOIN assets a ON a.id = sp.headshot_asset_id AND a.event_id = sp.event_id
+       WHERE sp.event_id = ?
+         AND sp.person_id = ?
+         AND sp.headshot_asset_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1
+           FROM submission_speakers ss
+           INNER JOIN submissions s ON s.id = ss.submission_id
+           WHERE ss.person_id = sp.person_id
+             AND s.event_id = sp.event_id
+             AND ss.status = 'confirmed'
+             AND s.status = 'published'
+         )`,
+		)
+		.bind(eventId, personId)
+		.first<AssetRow>();
+}
+
+export type PublicSpeakerDirectoryRow = {
+	person_id: string;
+	display_name: string;
+	bio: string | null;
+	has_headshot: number;
+};
+
+/** Confirmed speakers on published sessions, one row per person_id. */
+export async function listPublicSpeakersForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<PublicSpeakerDirectoryRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT
+         ss.person_id AS person_id,
+         COALESCE(NULLIF(TRIM(sp.display_name), ''), NULLIF(TRIM(ss.name), ''), 'Speaker') AS display_name,
+         COALESCE(sp.bio, ss.bio) AS bio,
+         CASE WHEN sp.headshot_asset_id IS NOT NULL THEN 1 ELSE 0 END AS has_headshot
+       FROM submission_speakers ss
+       INNER JOIN submissions s ON s.id = ss.submission_id
+       LEFT JOIN speaker_profiles sp ON sp.event_id = s.event_id AND sp.person_id = ss.person_id
+       WHERE s.event_id = ?
+         AND s.status = 'published'
+         AND ss.status = 'confirmed'
+         AND ss.person_id IS NOT NULL
+       GROUP BY ss.person_id
+       ORDER BY display_name COLLATE NOCASE ASC`,
+		)
+		.bind(eventId)
+		.all<PublicSpeakerDirectoryRow>();
+	return result.results;
+}
+
+export type PublicSpeakerSessionRow = {
+	submission_id: string;
+	title_json: string;
+	starts_at: number;
+	ends_at: number;
+	room_name: string;
+};
+
+export async function listPublishedSessionsForPublicSpeaker(
+	db: D1Database,
+	eventId: string,
+	personId: string,
+): Promise<PublicSpeakerSessionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT
+         s.id AS submission_id,
+         s.answers_json AS title_json,
+         a.starts_at AS starts_at,
+         a.ends_at AS ends_at,
+         a.room_name AS room_name
+       FROM submission_speakers ss
+       INNER JOIN submissions s ON s.id = ss.submission_id
+       INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
+       WHERE s.event_id = ?
+         AND ss.person_id = ?
+         AND ss.status = 'confirmed'
+         AND s.status = 'published'
+       ORDER BY a.starts_at ASC`,
+		)
+		.bind(eventId, personId)
+		.all<PublicSpeakerSessionRow>();
+	return result.results;
+}
+
+export async function getPublicSpeakerDirectoryEntry(
+	db: D1Database,
+	eventId: string,
+	personId: string,
+): Promise<PublicSpeakerDirectoryRow | null> {
+	return db
+		.prepare(
+			`SELECT
+         ss.person_id AS person_id,
+         COALESCE(NULLIF(TRIM(sp.display_name), ''), NULLIF(TRIM(ss.name), ''), 'Speaker') AS display_name,
+         COALESCE(sp.bio, ss.bio) AS bio,
+         CASE WHEN sp.headshot_asset_id IS NOT NULL THEN 1 ELSE 0 END AS has_headshot
+       FROM submission_speakers ss
+       INNER JOIN submissions s ON s.id = ss.submission_id
+       LEFT JOIN speaker_profiles sp ON sp.event_id = s.event_id AND sp.person_id = ss.person_id
+       WHERE s.event_id = ?
+         AND ss.person_id = ?
+         AND s.status = 'published'
+         AND ss.status = 'confirmed'
+       GROUP BY ss.person_id`,
+		)
+		.bind(eventId, personId)
+		.first<PublicSpeakerDirectoryRow>();
+}
+
 export async function getAssetById(
 	db: D1Database,
 	assetId: string,
