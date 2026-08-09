@@ -33,3 +33,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T09:00:07Z	release	Fable adjudicated release blockers MET	live routes+migrations+lint+uploads+cockpit spot-checked	1149a2f4	yes
 2026-08-09T09:10:56Z	eval	Opened 5 parallel eval gap worktrees	score-per-effort order 1-5; content-mgmt deferred	9b3516d2385af9d1c06bb511910036090b88912f	running
 2026-08-09T09:15:48Z	eval	Merged public discover	search facets gallery surname sort	be2c2e6	green
+2026-08-09T09:17:45Z	eval	Merged speaker-task fields after public rebase	0025 + portal profile + task due/instructions	3dcc3a5	green
