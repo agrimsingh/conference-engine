@@ -14,7 +14,10 @@ function isLoopback(url: string): boolean {
 async function screenshot(testName: string, testInfo: TestInfo, page: Page) {
 	await page.screenshot({
 		path: testInfo.outputPath(`${testName}.png`),
-		fullPage: true,
+		// WebKit rejects screenshots when a long page exceeds its 32,767 px
+		// bitmap limit. The smoke test only needs visual evidence of the active
+		// viewport; individual assertions cover the rest of each journey.
+		fullPage: false,
 	});
 }
 
