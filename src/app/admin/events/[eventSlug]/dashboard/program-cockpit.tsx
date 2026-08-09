@@ -288,7 +288,15 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 									<span className="font-medium text-neutral-200">
 										{item.name || item.email}
 									</span>
-									<span className="text-neutral-500"> · {item.submissionTitle}</span>
+									<span className="text-neutral-500">
+										{" · "}
+										<Link
+											href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+											className="text-neutral-500 hover:text-neutral-100 hover:underline"
+										>
+											{item.submissionTitle}
+										</Link>
+									</span>
 									{item.addedAfterAcceptance ? (
 										<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-400">
 											added late
@@ -338,7 +346,14 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							<li key={group.key} className="rounded-md border border-neutral-800 px-3 py-2">
 								<div className="flex flex-wrap items-baseline justify-between gap-2">
 									<p className="font-medium text-neutral-100">
-										{group.submissionTitle} · {group.personName ?? group.personEmail}
+										<Link
+											href={`/admin/events/${eventSlug}/submissions/${group.submissionId}`}
+											className="font-medium text-neutral-100 hover:underline"
+										>
+											{group.submissionTitle}
+										</Link>
+										{" · "}
+										{group.personName ?? group.personEmail}
 									</p>
 									<Button
 										size="sm"
@@ -415,7 +430,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500"> · {item.submitter}</span>
 								</span>
 								<StatusPill tone="warning">awaiting plan</StatusPill>
@@ -467,7 +487,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500"> · {item.submitter}</span>
 								</span>
 								{snapshot.activePlanId && selectedReviewerId ? (
@@ -510,7 +535,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500">
 										{" "}
 										· {item.reviewerName} · {item.submitter}
@@ -536,7 +566,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500"> · {item.submitter}</span>
 								</span>
 								<span className="flex gap-2">
@@ -595,7 +630,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500"> · {item.submitter}</span>
 								</span>
 								<StatusPill tone="warning">needs slot</StatusPill>
@@ -634,7 +674,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 							>
 								<span>
-									<span className="font-medium text-neutral-200">{item.title}</span>
+									<Link
+										href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+										className="font-medium text-neutral-200 hover:text-neutral-100 hover:underline"
+									>
+										{item.title}
+									</Link>
 									<span className="text-neutral-500"> · {item.submitter}</span>
 								</span>
 								<Button
