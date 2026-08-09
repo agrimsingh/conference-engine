@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildEmbedUrls,
+	parseStoredEmbedConfig,
 	parseEmbedInput,
 } from "./embed";
 
@@ -32,5 +33,30 @@ describe("embed configuration", () => {
 		expect(urls.xmlUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/xml");
 		expect(urls.iframeSnippet).toContain('sandbox="allow-same-origin allow-popups"');
 		expect(urls.iframeSnippet).not.toContain("<script");
+		expect(urls.loaderUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/loader.js");
+		expect(urls.scriptSnippet).toContain("<conference-engine-embed");
+		expect(urls.scriptSnippet).toContain('<script type="module"');
+	});
+
+	it("uses widget-appropriate defaults and sanitizes stored configuration", () => {
+		expect(parseEmbedInput({
+			name: "Speaker gallery",
+			slug: "gallery",
+			widgetType: "speaker_gallery",
+		})).toMatchObject({
+			ok: true,
+			value: { visibleFields: ["headshot", "jobTitle", "company", "bio"] },
+		});
+		expect(parseStoredEmbedConfig("sessions", {
+			brandColor: "red; background:url(javascript:alert(1))",
+			trackIds: ["valid", "<script>"],
+			visibleFields: ["title", "email", "abstract"],
+		})).toEqual({
+			brandColor: "#2563eb",
+			trackIds: [],
+			formats: [],
+			rooms: [],
+			visibleFields: ["title", "abstract"],
+		});
 	});
 });

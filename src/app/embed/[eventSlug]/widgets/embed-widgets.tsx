@@ -1,0 +1,364 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { PublicEmbedPayload } from "@/lib/embeds/embed";
+import { truncatePreview } from "@/lib/schedule/public-discover";
+
+type Session = PublicEmbedPayload["sessions"][number];
+type Speaker = PublicEmbedPayload["speakers"][number];
+
+function formatDateTime(value: number, timezone: string): string {
+	return new Intl.DateTimeFormat("en", {
+		timeZone: timezone,
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(value);
+}
+
+function formatTime(value: number, timezone: string): string {
+	return new Intl.DateTimeFormat("en", {
+		timeZone: timezone,
+		timeStyle: "short",
+	}).format(value);
+}
+
+function dayKey(value: number, timezone: string): string {
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone: timezone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(value);
+	const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+	return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function dayLabel(value: number, timezone: string): string {
+	return new Intl.DateTimeFormat("en", {
+		timeZone: timezone,
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+	}).format(value);
+}
+
+function uniqueValues(sessions: Session[], field: "track" | "format" | "room"): string[] {
+	return [...new Set(sessions.map((session) => session[field]).filter(Boolean))]
+		.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+function countLabel(count: number, noun: string): string {
+	return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function SpeakerLine({ speaker }: { speaker: Session["speakers"][number] }) {
+	const affiliation = [speaker.jobTitle, speaker.company].filter(Boolean).join(" at ");
+	return (
+		<li>
+			{speaker.url ? (
+				<Link className="font-medium text-neutral-200 hover:underline" href={speaker.url} target="_blank">
+					{speaker.name}
+				</Link>
+			) : (
+				<span className="font-medium text-neutral-200">{speaker.name}</span>
+			)}
+			{affiliation ? <span className="text-neutral-500"> · {affiliation}</span> : null}
+		</li>
+	);
+}
+
+function SessionDescription({ text }: { text: string }) {
+	const summary = truncatePreview(text, 180);
+	const [expanded, setExpanded] = useState(false);
+	if (!text) return null;
+	return (
+		<div className="mt-3 text-sm leading-6 text-neutral-400">
+			<p>{expanded ? text : summary.preview}</p>
+			{summary.truncated ? (
+				<button
+					type="button"
+					className="mt-1 font-medium text-[var(--embed-accent)] hover:underline"
+					onClick={() => setExpanded((current) => !current)}
+				>
+					{expanded ? "Show less" : "Show more"}
+				</button>
+			) : null}
+		</div>
+	);
+}
+
+function SessionCard({ payload, session }: { payload: PublicEmbedPayload; session: Session }) {
+	const fields = new Set(payload.embed.config.visibleFields);
+	return (
+		<article className="h-full rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+			<div className="h-1 w-12 rounded bg-[var(--embed-accent)]" />
+			{fields.has("time") ? (
+				<p className="mt-3 font-mono text-xs text-neutral-500">
+					{formatDateTime(session.startsAt, payload.event.timezone)}–{formatTime(session.endsAt, payload.event.timezone)}
+				</p>
+			) : null}
+			{fields.has("title") ? (
+				<Link className="mt-1 block text-lg font-semibold text-neutral-100 hover:underline" href={session.url} target="_blank">
+					{session.title}
+				</Link>
+			) : null}
+			<div className="mt-2 flex flex-wrap gap-2 text-xs">
+				{fields.has("track") ? <span className="rounded-full bg-neutral-800 px-2 py-1">Track: {session.track}</span> : null}
+				{fields.has("format") ? <span className="rounded-full bg-neutral-800 px-2 py-1">Format: {session.format}</span> : null}
+			</div>
+			{fields.has("room") ? <p className="mt-3 text-sm text-neutral-400">Room: {session.room}</p> : null}
+			{fields.has("abstract") ? <SessionDescription text={session.abstract} /> : null}
+			{fields.has("speakers") && session.speakers.length > 0 ? (
+				<ul className="mt-3 space-y-1 text-sm" aria-label={`Speakers for ${session.title}`}>
+					{session.speakers.map((speaker, index) => (
+						<SpeakerLine key={speaker.id ?? `${session.id}-${index}`} speaker={speaker} />
+					))}
+				</ul>
+			) : null}
+		</article>
+	);
+}
+
+export function SessionsWidget({ payload }: { payload: PublicEmbedPayload }) {
+	const [query, setQuery] = useState("");
+	const [track, setTrack] = useState("all");
+	const [format, setFormat] = useState("all");
+	const [room, setRoom] = useState("all");
+	const sessions = useMemo(() => payload.sessions.filter((session) => {
+		const needle = query.trim().toLowerCase();
+		const searchMatches = !needle || [session.title, ...session.speakers.map((speaker) => speaker.name)]
+			.join("\0")
+			.toLowerCase()
+			.includes(needle);
+		return searchMatches
+			&& (track === "all" || session.track === track)
+			&& (format === "all" || session.format === format)
+			&& (room === "all" || session.room === room);
+	}), [format, payload.sessions, query, room, track]);
+
+	return (
+		<section className="mt-6">
+		<div className="grid gap-3 rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 md:grid-cols-[minmax(12rem,1fr)_repeat(3,minmax(8rem,auto))]">
+			<label className="text-xs font-medium text-neutral-400">
+				Search sessions or speakers
+				<input
+					type="search"
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+					placeholder="Title or speaker name"
+					className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+				/>
+			</label>
+			<Facet label="Track" value={track} values={uniqueValues(payload.sessions, "track")} onChange={setTrack} />
+			<Facet label="Format" value={format} values={uniqueValues(payload.sessions, "format")} onChange={setFormat} />
+			<Facet label="Room" value={room} values={uniqueValues(payload.sessions, "room")} onChange={setRoom} />
+		</div>
+		<p className="mt-4 text-sm text-neutral-400" aria-live="polite">{countLabel(sessions.length, "result")}</p>
+		<ul className="mt-3 grid gap-4 sm:grid-cols-2">
+			{sessions.map((session) => (
+				<li key={session.id}><SessionCard payload={payload} session={session} /></li>
+			))}
+		</ul>
+	</section>
+	);
+}
+
+function Facet({ label, value, values, onChange }: { label: string; value: string; values: string[]; onChange: (value: string) => void }) {
+	return (
+		<label className="text-xs font-medium text-neutral-400">
+			{label}
+			<select
+				aria-label={label}
+				value={value}
+				onChange={(event) => onChange(event.target.value)}
+				className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+			>
+				<option value="all">All {label.toLowerCase()}s</option>
+				{values.map((item) => <option key={item} value={item}>{item}</option>)}
+			</select>
+		</label>
+	);
+}
+
+function initials(name: string): string {
+	return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "SP";
+}
+
+function SpeakerImage({ speaker, gallery }: { speaker: Speaker; gallery: boolean }) {
+	const sizeClass = gallery ? "h-24 w-24" : "h-16 w-16";
+	if (speaker.headshotUrl) {
+		return (
+			<Image
+				src={speaker.headshotUrl}
+				width={96}
+				height={96}
+				alt={`${speaker.name} headshot`}
+				className={`${sizeClass} shrink-0 rounded-full object-cover`}
+				unoptimized
+			/>
+		);
+	}
+	return (
+		<div className={`${sizeClass} grid shrink-0 place-items-center rounded-full bg-neutral-800 font-semibold text-neutral-300`} aria-label={`${speaker.name} photo fallback`}>
+			{initials(speaker.name)}
+		</div>
+	);
+}
+
+function SpeakerCard({ payload, speaker, gallery }: { payload: PublicEmbedPayload; speaker: Speaker; gallery: boolean }) {
+	const fields = new Set(payload.embed.config.visibleFields);
+	return (
+		<article className={gallery ? "h-full rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-center" : "grid gap-4 py-5 sm:grid-cols-[auto_1fr]"}>
+			<div className={gallery ? "flex justify-center" : ""}>
+				<SpeakerImage speaker={speaker} gallery={gallery} />
+			</div>
+			<div>
+				<Link className="font-semibold text-neutral-100 hover:underline" href={speaker.url} target="_blank">
+					{speaker.name}
+				</Link>
+				{fields.has("jobTitle") || fields.has("company") ? (
+					<p className="mt-1 text-sm text-neutral-400">
+						{[fields.has("jobTitle") ? speaker.jobTitle : null, fields.has("company") ? speaker.company : null].filter(Boolean).join(" · ")}
+					</p>
+				) : null}
+				{fields.has("bio") && speaker.bio ? <p className="mt-2 text-sm leading-6 text-neutral-400">{speaker.bio}</p> : null}
+				{speaker.sessions.length > 0 ? (
+					<div className="mt-4 text-left">
+						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Sessions ({speaker.sessions.length})</p>
+						<ul className="mt-2 space-y-2">
+							{speaker.sessions.map((session) => (
+								<li key={session.id} className="text-sm">
+									<Link className="font-medium text-neutral-200 hover:underline" href={session.url} target="_blank">{session.title}</Link>
+									<p className="text-xs text-neutral-500">{formatDateTime(session.startsAt, payload.event.timezone)}–{formatTime(session.endsAt, payload.event.timezone)} · {session.room}</p>
+								</li>
+							))}
+						</ul>
+					</div>
+				) : null}
+			</div>
+		</article>
+	);
+}
+
+export function SpeakersWidget({ payload, gallery }: { payload: PublicEmbedPayload; gallery: boolean }) {
+	const [query, setQuery] = useState("");
+	const speakers = payload.speakers.filter((speaker) => speaker.name.toLowerCase().includes(query.trim().toLowerCase()));
+	return (
+		<section className="mt-6">
+		<label className="block max-w-md text-xs font-medium text-neutral-400">
+			Search speakers by name
+			<input
+				type="search"
+				value={query}
+				onChange={(event) => setQuery(event.target.value)}
+				placeholder="Speaker name"
+				className="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+			/>
+		</label>
+		<p className="mt-4 text-sm text-neutral-400" aria-live="polite">{countLabel(speakers.length, "speaker")}</p>
+		<ul className={gallery ? "mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" : "mt-3 divide-y divide-neutral-800"}>
+			{speakers.map((speaker) => (
+				<li key={speaker.id}><SpeakerCard payload={payload} speaker={speaker} gallery={gallery} /></li>
+			))}
+		</ul>
+	</section>
+	);
+}
+
+function useSessionDays(payload: PublicEmbedPayload) {
+	return useMemo(() => {
+		const grouped = new Map<string, { label: string; sessions: Session[] }>();
+		for (const session of [...payload.sessions].sort((a, b) => a.startsAt - b.startsAt)) {
+			const key = dayKey(session.startsAt, payload.event.timezone);
+			const existing = grouped.get(key) ?? { label: dayLabel(session.startsAt, payload.event.timezone), sessions: [] };
+			existing.sessions.push(session);
+			grouped.set(key, existing);
+		}
+		return [...grouped.entries()].map(([key, value]) => ({ key, ...value }));
+	}, [payload.event.timezone, payload.sessions]);
+}
+
+function DayNavigation({ days, activeDay, onChange }: { days: Array<{ key: string; label: string }>; activeDay: string; onChange: (day: string) => void }) {
+	return (
+		<nav className="mt-6 flex flex-wrap gap-2" aria-label="Event days">
+			{days.map((day) => (
+				<button
+					key={day.key}
+					type="button"
+					aria-pressed={day.key === activeDay}
+					onClick={() => onChange(day.key)}
+					className={day.key === activeDay ? "rounded bg-[var(--embed-accent)] px-3 py-2 text-sm font-medium text-white" : "rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300"}
+				>
+					{day.label}
+				</button>
+			))}
+		</nav>
+	);
+}
+
+function AgendaDetail({ payload, session, onClose }: { payload: PublicEmbedPayload; session: Session; onClose: () => void }) {
+	return (
+		<aside className="mt-6 rounded-lg border border-[var(--embed-accent)] bg-neutral-900 p-5" aria-label={`${session.title} details`}>
+			<div className="flex items-start justify-between gap-4">
+				<div>
+					<p className="font-mono text-xs text-neutral-400">{formatDateTime(session.startsAt, payload.event.timezone)}–{formatTime(session.endsAt, payload.event.timezone)}</p>
+					<h2 className="mt-1 text-xl font-semibold text-neutral-100">{session.title}</h2>
+				</div>
+				<button type="button" className="rounded border border-neutral-700 px-3 py-1 text-sm" onClick={onClose}>Close details</button>
+			</div>
+			<p className="mt-3 text-sm text-neutral-300">Room: {session.room}</p>
+			<p className="mt-1 text-sm text-neutral-300">Format: {session.format} · Track: {session.track}</p>
+			{session.abstract ? <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-neutral-400">{session.abstract}</p> : null}
+			<Link className="mt-4 inline-block text-sm font-medium text-[var(--embed-accent)] hover:underline" href={session.url} target="_blank">View full session</Link>
+		</aside>
+	);
+}
+
+export function AgendaWidget({ payload }: { payload: PublicEmbedPayload }) {
+	const days = useSessionDays(payload);
+	const [activeDay, setActiveDay] = useState(days[0]?.key ?? "");
+	const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+	const sessions = days.find((day) => day.key === activeDay)?.sessions ?? [];
+	return (
+		<section className="mt-6">
+		<DayNavigation days={days} activeDay={activeDay} onChange={(day) => { setActiveDay(day); setSelectedSession(null); }} />
+		<div className="mt-5 space-y-4">
+			{sessions.map((session) => (
+				<div key={session.id} className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+					<time className="pt-3 font-mono text-xs text-neutral-500">{formatTime(session.startsAt, payload.event.timezone)}</time>
+					<button type="button" onClick={() => setSelectedSession(session)} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-left hover:border-neutral-600">
+						<span className="font-semibold text-neutral-100">{session.title}</span>
+						<span className="mt-1 block text-sm text-neutral-400">{session.room} · {session.track} · {session.format}</span>
+					</button>
+				</div>
+			))}
+		</div>
+		{selectedSession ? <AgendaDetail payload={payload} session={selectedSession} onClose={() => setSelectedSession(null)} /> : null}
+	</section>
+	);
+}
+
+export function ItineraryWidget({ payload }: { payload: PublicEmbedPayload }) {
+	const days = useSessionDays(payload);
+	const [activeDay, setActiveDay] = useState(days[0]?.key ?? "");
+	const sessions = days.find((day) => day.key === activeDay)?.sessions ?? [];
+	return (
+		<section className="mt-6">
+		<div className="flex flex-wrap items-end justify-between gap-4">
+			<div>
+				<h2 className="text-xl font-semibold text-neutral-100">Browse the itinerary</h2>
+				<p className="mt-1 text-sm text-neutral-400">Sessions are ordered by start time for each event day.</p>
+			</div>
+			<Link className="rounded bg-[var(--embed-accent)] px-4 py-2 text-sm font-medium text-white" href={payload.itineraryUrl} target="_blank">Open filtered full itinerary</Link>
+		</div>
+		<DayNavigation days={days} activeDay={activeDay} onChange={setActiveDay} />
+		<ul className="mt-5 space-y-4">
+			{sessions.map((session) => (
+				<li key={session.id}><SessionCard payload={payload} session={session} /></li>
+			))}
+		</ul>
+	</section>
+	);
+}

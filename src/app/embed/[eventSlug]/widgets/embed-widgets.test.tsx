@@ -1,0 +1,187 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { PublicEmbedPayload } from "@/lib/embeds/embed";
+import {
+	AgendaWidget,
+	ItineraryWidget,
+	SessionsWidget,
+	SpeakersWidget,
+} from "./embed-widgets";
+
+let container: HTMLDivElement;
+let root: Root;
+
+const payload: PublicEmbedPayload = {
+	ok: true,
+	event: { slug: "devflow", name: "DevFlow Conf", timezone: "UTC" },
+	embed: {
+		slug: "program",
+		name: "Program",
+		widgetType: "sessions",
+		config: {
+			brandColor: "#2563eb",
+			trackIds: [],
+			formats: [],
+			rooms: [],
+			visibleFields: [
+				"title",
+				"time",
+				"room",
+				"track",
+				"speakers",
+				"abstract",
+				"format",
+				"bio",
+				"jobTitle",
+				"company",
+				"headshot",
+			],
+		},
+	},
+	sessions: [
+		{
+			id: "session-1",
+			title: "Taming CI",
+			abstract: "A sufficiently long description that should start collapsed and expand when requested. ".repeat(4),
+			format: "Talk",
+			room: "Hall A",
+			trackId: "platform",
+			track: "Platform & Infra",
+			startsAt: Date.parse("2027-05-12T09:00:00Z"),
+			endsAt: Date.parse("2027-05-12T10:00:00Z"),
+			speakers: [{ id: "speaker-1", name: "Priya Raman", jobTitle: "Staff Engineer", company: "Acme", headshotUrl: null, url: "/e/devflow/speakers/speaker-1" }],
+			url: "/e/devflow/sessions/session-1",
+		},
+		{
+			id: "session-2",
+			title: "Designing Reliable Agents",
+			abstract: "Practical agent evaluation patterns.",
+			format: "Workshop",
+			room: "Room B",
+			trackId: "ai",
+			track: "Applied AI",
+			startsAt: Date.parse("2027-05-13T11:00:00Z"),
+			endsAt: Date.parse("2027-05-13T12:30:00Z"),
+			speakers: [{ id: "speaker-2", name: "Sam Lee", jobTitle: "Founder", company: "Build Co", headshotUrl: "/headshot", url: "/e/devflow/speakers/speaker-2" }],
+			url: "/e/devflow/sessions/session-2",
+		},
+	],
+	speakers: [
+		{
+			id: "speaker-1",
+			name: "Priya Raman",
+			bio: "Priya builds dependable delivery platforms.",
+			jobTitle: "Staff Engineer",
+			company: "Acme",
+			headshotUrl: null,
+			url: "/e/devflow/speakers/speaker-1",
+			sessions: [{ id: "session-1", title: "Taming CI", startsAt: Date.parse("2027-05-12T09:00:00Z"), endsAt: Date.parse("2027-05-12T10:00:00Z"), room: "Hall A", url: "/e/devflow/sessions/session-1" }],
+		},
+		{
+			id: "speaker-2",
+			name: "Sam Lee",
+			bio: "Sam designs agent products.",
+			jobTitle: "Founder",
+			company: "Build Co",
+			headshotUrl: "/headshot",
+			url: "/e/devflow/speakers/speaker-2",
+			sessions: [{ id: "session-2", title: "Designing Reliable Agents", startsAt: Date.parse("2027-05-13T11:00:00Z"), endsAt: Date.parse("2027-05-13T12:30:00Z"), room: "Room B", url: "/e/devflow/sessions/session-2" }],
+		},
+	],
+	itineraryUrl: "/e/devflow/schedule?view=itinerary&embed=program",
+};
+
+beforeEach(() => {
+	container = document.createElement("div");
+	document.body.appendChild(container);
+	root = createRoot(container);
+});
+
+afterEach(async () => {
+	await act(async () => root.unmount());
+	container.remove();
+});
+
+function setValue(element: HTMLInputElement | HTMLSelectElement, value: string) {
+	const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLSelectElement.prototype;
+	Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, value);
+	element.dispatchEvent(new Event(element instanceof HTMLInputElement ? "input" : "change", { bubbles: true }));
+}
+
+describe("public embed widgets", () => {
+	it("searches sessions by title and speaker, updates the count, filters every facet, and expands descriptions", async () => {
+		await act(async () => root.render(<SessionsWidget payload={payload} />));
+		const search = container.querySelector('input[type="search"]') as HTMLInputElement;
+		await act(async () => setValue(search, "Raman"));
+		expect(container.textContent).toContain("1 result");
+		expect(container.textContent).toContain("Taming CI");
+		expect(container.textContent).not.toContain("Designing Reliable Agents");
+		await act(async () => setValue(search, ""));
+		for (const [label, value] of [["Track", "Applied AI"], ["Format", "Workshop"], ["Room", "Room B"]]) {
+			const select = container.querySelector(`select[aria-label="${label}"]`) as unknown as HTMLSelectElement;
+			await act(async () => setValue(select, value));
+			expect(container.textContent).toContain("1 result");
+			await act(async () => setValue(select, "all"));
+		}
+		const button = [...container.querySelectorAll("button")].find((item) => item.textContent === "Show more");
+		expect(button).toBeDefined();
+		await act(async () => button?.click());
+		expect(container.textContent).toContain("Show less");
+		expect(container.textContent).toContain("Staff Engineer");
+		expect(container.textContent).toContain("Acme");
+	});
+
+	it("renders a searchable speaker list with a fallback, biography, affiliation, and rich detail links", async () => {
+		await act(async () => root.render(<SpeakersWidget payload={payload} gallery={false} />));
+		expect(container.textContent).toContain("PR");
+		expect(container.textContent).toContain("Priya builds dependable delivery platforms.");
+		expect(container.textContent).toContain("Staff Engineer");
+		expect(container.querySelector('a[href="/e/devflow/speakers/speaker-1"]')).not.toBeNull();
+		expect(container.querySelector('a[href="/e/devflow/sessions/session-1"]')?.textContent).toContain("Taming CI");
+		const search = container.querySelector('input[type="search"]') as HTMLInputElement;
+		await act(async () => setValue(search, "Priya Raman"));
+		expect(container.textContent).toContain("1 speaker");
+		expect(container.textContent).not.toContain("Sam Lee");
+	});
+
+	it("renders a searchable speaker gallery with headshots, graceful fallback, and details", async () => {
+		await act(async () => root.render(<SpeakersWidget payload={payload} gallery />));
+		expect(container.querySelector('img[src="/headshot"]')).not.toBeNull();
+		expect(container.textContent).toContain("PR");
+		const search = container.querySelector('input[type="search"]') as HTMLInputElement;
+		await act(async () => setValue(search, "Sam"));
+		expect(container.textContent).toContain("Sam designs agent products.");
+		expect(container.querySelector('a[href="/e/devflow/speakers/speaker-2"]')).not.toBeNull();
+	});
+
+	it("navigates agenda days and opens a rich session detail", async () => {
+		await act(async () => root.render(<AgendaWidget payload={payload} />));
+		expect(container.textContent).toContain("Taming CI");
+		expect(container.textContent).not.toContain("Designing Reliable Agents");
+		const secondDay = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("May 13"));
+		await act(async () => secondDay?.click());
+		expect(container.textContent).toContain("Designing Reliable Agents");
+		const session = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("Designing Reliable Agents"));
+		await act(async () => session?.click());
+		expect(container.textContent).toContain("11:00 AM–12:30 PM");
+		expect(container.textContent).toContain("Practical agent evaluation patterns.");
+		expect(container.textContent).toContain("Workshop");
+		expect(container.textContent).toContain("Applied AI");
+		expect(container.textContent).toContain("Close details");
+	});
+
+	it("renders chronological itinerary day navigation and rich cards linked to the filtered itinerary", async () => {
+		await act(async () => root.render(<ItineraryWidget payload={payload} />));
+		expect(container.querySelector('a[href="/e/devflow/schedule?view=itinerary&embed=program"]')).not.toBeNull();
+		expect(container.textContent).toContain("A sufficiently long description");
+		expect(container.textContent).toContain("Staff Engineer");
+		expect(container.textContent).toContain("Platform & Infra");
+		const secondDay = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("May 13"));
+		await act(async () => secondDay?.click());
+		expect(container.textContent).toContain("Designing Reliable Agents");
+		expect(container.textContent).not.toContain("Taming CI");
+	});
+});
