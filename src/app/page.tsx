@@ -157,35 +157,35 @@ const PIPELINE: {
 	{
 		stage: "Review",
 		description:
-			"Named reviewers give each assigned proposal a 1–5 score and optional comment against the active rubric.",
+			"Reviewers score only what they're assigned, 1–5 against the rubric. The board starts empty; nothing appears until you assign it.",
 		href: "/demo?perspective=reviewer",
 		linkLabel: "Explore reviewer view",
 	},
 	{
 		stage: "Accept",
 		description:
-			"Decisions use templated email, while calendar attachments are sent when a session is scheduled or rescheduled.",
+			"Open a submission to triage it — proposal text, all reviewer scores, and all comments on one page. Accept, waitlist, or reject fires a templated email.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "Explore organizer view",
 	},
 	{
-		stage: "Speaker tasks",
+		stage: "Speaker ops",
 		description:
-			"Accepted speakers get a magic-link portal for bio, headshot, slides, and supporting docs. Every upload lands in object storage, every gap stays visible.",
+			"The portal takes a magic link and collects bio, headshot, and slides — no account needed. Outstanding work stays visible in the cockpit until it lands, so you are not piecing it together from email.",
 		href: "/demo?perspective=speaker",
 		linkLabel: "Explore speaker view",
 	},
 	{
 		stage: "Schedule",
 		description:
-			"Drag talks onto the grid. Room clashes and double-booked speakers flag themselves before you drop.",
+			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. The cockpit shows who still needs a slot.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "See schedule readiness",
 	},
 	{
 		stage: "Publish",
 		description:
-			"A public schedule in list, day, week, track, and room views — plus a read-only JSON API for your site and apps.",
+			"Publishes a schedule that defaults to today or the nearest session day. Multiple views and a read-only JSON API — works standalone or embedded.",
 		href: `/e/${DEMO_EVENT}/schedule`,
 		linkLabel: "View published schedule",
 	},
