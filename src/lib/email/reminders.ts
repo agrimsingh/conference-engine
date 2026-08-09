@@ -189,9 +189,9 @@ async function loadPendingTaskRows(
 	const selectedPeople = [...new Set(args.personIds?.filter(Boolean) ?? [])];
 	// An explicit empty segment is never an alias for every speaker.
 	if (args.personIds !== undefined && selectedPeople.length === 0) return [];
-	const personClause = selectedPeople.length
-		? ` AND st.person_id IN (${selectedPeople.map(() => "?").join(", ")})`
-		: "";
+	const personPlaceholders = selectedPeople.map(() => "?").join(", ");
+	const speakerTaskPersonClause = selectedPeople.length ? ` AND st.person_id IN (${personPlaceholders})` : "";
+	const actionTaskPersonClause = selectedPeople.length ? ` AND a.person_id IN (${personPlaceholders})` : "";
 	const hasDueAtColumn = await speakerTasksHaveDueAtColumn(db);
 	const dueFilter = dueAwarePendingFilter({
 		hasDueAtColumn,
@@ -219,14 +219,14 @@ async function loadPendingTaskRows(
 				INNER JOIN events e ON e.id = st.event_id
 				INNER JOIN submissions s ON s.id = st.submission_id
 				INNER JOIN cfp_forms f ON f.id = s.form_id
-					WHERE st.status = 'pending' AND st.template_required = 1 AND st.event_id = ? AND e.mode <> 'demo'${personClause}${dueFilter.clause}
+					WHERE st.status = 'pending' AND st.template_required = 1 AND st.event_id = ? AND e.mode <> 'demo'${speakerTaskPersonClause}${dueFilter.clause}
 					UNION ALL
 					SELECT a.person_id, a.event_id, 'speaker_action' AS template_key,
 						t.title || CASE WHEN t.due_at IS NULL THEN '' ELSE ' — due ' || strftime('%Y-%m-%d', t.due_at / 1000, 'unixepoch') END AS template_label,
 						'text' AS template_task_kind, 1 AS template_required, p.email, p.name, e.name, e.slug, NULL AS reminder_copy
 					FROM speaker_action_task_assignments a JOIN speaker_action_tasks t ON t.id = a.task_id AND t.event_id = a.event_id
 					JOIN people p ON p.id = a.person_id JOIN events e ON e.id = a.event_id
-					WHERE a.status = 'pending' AND a.event_id = ? AND e.mode <> 'demo'${personClause}
+					WHERE a.status = 'pending' AND a.event_id = ? AND e.mode <> 'demo'${actionTaskPersonClause}
 						${actionDueFilter.clause}
 					ORDER BY person_id, event_id`,
 			)
@@ -254,14 +254,14 @@ async function loadPendingTaskRows(
 			INNER JOIN events e ON e.id = st.event_id
 			INNER JOIN submissions s ON s.id = st.submission_id
 			INNER JOIN cfp_forms f ON f.id = s.form_id
-			WHERE st.status = 'pending' AND st.template_required = 1 AND e.mode <> 'demo'${personClause}${dueFilter.clause}
+			WHERE st.status = 'pending' AND st.template_required = 1 AND e.mode <> 'demo'${speakerTaskPersonClause}${dueFilter.clause}
 			UNION ALL
 			SELECT a.person_id, a.event_id, 'speaker_action' AS template_key,
 				t.title || CASE WHEN t.due_at IS NULL THEN '' ELSE ' — due ' || strftime('%Y-%m-%d', t.due_at / 1000, 'unixepoch') END AS template_label,
 				'text' AS template_task_kind, 1 AS template_required, p.email, p.name, e.name, e.slug, NULL AS reminder_copy
 			FROM speaker_action_task_assignments a JOIN speaker_action_tasks t ON t.id = a.task_id AND t.event_id = a.event_id
 			JOIN people p ON p.id = a.person_id JOIN events e ON e.id = a.event_id
-			WHERE a.status = 'pending' AND e.mode <> 'demo'${personClause}
+			WHERE a.status = 'pending' AND e.mode <> 'demo'${actionTaskPersonClause}
 				${actionDueFilter.clause}
 			ORDER BY person_id, event_id`,
 		)
