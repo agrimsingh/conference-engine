@@ -102,6 +102,18 @@ export function ExportButtons({ eventSlug }: Props) {
 				>
 					Download CSV
 				</a>
+				<a
+					href={`/api/admin/events/${eventSlug}/export/submissions.xlsx`}
+					className="font-medium text-neutral-200 underline underline-offset-2"
+				>
+					Export .XLSX
+				</a>
+				<a
+					href={`/api/admin/events/${eventSlug}/export/submission-uploads.zip`}
+					className="font-medium text-neutral-200 underline underline-offset-2"
+				>
+					Download files bundle
+				</a>
 				<button
 					type="button"
 					onClick={() => void pushAirtable()}
@@ -111,6 +123,9 @@ export function ExportButtons({ eventSlug }: Props) {
 					{pending ? "Pushing…" : "Push to Airtable"}
 				</button>
 			</div>
+			<p className="text-xs text-neutral-500">
+				Files bundle is CFP submission uploads. Latest speaker deliverables stay on the Files page.
+			</p>
 			{syncConfigured ? (
 				<label className="flex items-center gap-2 text-neutral-300">
 					<input
