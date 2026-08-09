@@ -330,7 +330,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 				).map(([label, count, anchorKey]) => (
 					<li
 						key={label}
-						className={`rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 last:col-span-2 sm:last:col-span-1${count === 0 ? " opacity-50" : ""}`}
+						className={`rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2${count === 0 ? " opacity-50" : ""}`}
 					>
 						{count > 0 ? (
 							<a href={`#cockpit-${anchorKey}`} className="block hover:opacity-90">
