@@ -2,34 +2,41 @@
 
 Run a conference programme without renting a $40k suite.
 
-**conference-engine** covers the path from call for proposals to a published schedule: CFP → review → decisions → speaker prep → rooms and tracks → publish. It is an open-source alternative to the *program* side of tools like Sessionboard or Sessionize, built to feel fast for organisers under time pressure.
+**conference-engine** takes you from call for proposals to a published schedule: CFP → review → decisions → speaker prep → rooms and tracks → publish. It is an open-source alternative to the *program* side of tools like Sessionboard or Sessionize — built to feel fast for organisers mid-cycle, with hundreds of submissions and no patience for ceremony.
 
-Live demo (read-only): [conference-engine.65labs.org/demo](https://conference-engine.65labs.org/demo)
+- **Live product:** [conference-engine.65labs.org](https://conference-engine.65labs.org) — create a real event from the homepage
+- **Read-only demo:** [conference-engine.65labs.org/demo](https://conference-engine.65labs.org/demo)
 
 ```text
 Event → CFP → Submission → Review → Decision → Speaker tasks → Agenda slot → Published schedule
 ```
 
-An accepted proposal becomes a session. Attendees only see sessions you publish.
+An accepted proposal becomes a session. Attendees only see what you publish. The admin **program cockpit** shows what is still blocking the programme (unreviewed, undecided, incomplete speaker work, unscheduled accepts) and links straight into each item.
 
 ## Who it is for
 
-- **Organisers** who need intake, review, speaker chasing, and a public agenda — not another CRM.
-- **Reviewers** who score assigned talks through a link (no full admin login).
-- **Speakers** who submit, then finish bio / headshot / slides in a magic-link portal.
-- **Attendees** (and embeds) who read the published schedule.
+- **Organisers** — intake, review, speaker chasing, scheduling, and a public agenda. Not another CRM with a schedule bolted on.
+- **Reviewers** — score assigned talks through a token link (no full admin login).
+- **Speakers** — submit, then finish bio / headshot / slides (and other tasks) in a magic-link portal.
+- **Attendees** (and embeds) — read the published schedule; it defaults to today or the next session day.
 
-It deliberately does **not** do ticketing, payments, marketing, or create a second system of record. [D1](https://developers.cloudflare.com/d1/) is the source of truth; CSV, a keyed API, and optional one-way Airtable or Accelevents pushes are exits, not forks of the truth.
-
-## Why it exists
-
-Sessionboard-shaped products often bundle programme + CRM + marketing and move slowly. This project ships only the programme job, on your own Cloudflare account, with a realtime “who is blocking the schedule?” dashboard and a form builder that lives in the database (no seed-SQL edits to change a CFP).
+It deliberately does **not** do ticketing, payments, or marketing. [D1](https://developers.cloudflare.com/d1/) is the source of truth. CSV, a keyed API, and optional one-way **Airtable** or **Accelevents** sync are exits — they never write back into the programme database.
 
 More product context: [PRODUCT.md](./PRODUCT.md).
 
+## Why it exists
+
+Sessionboard-shaped products often bundle programme + CRM + marketing and move slowly. This project ships only the programme job, on your own Cloudflare account:
+
+- a form builder that lives in the database (no seed-SQL edits to change a CFP)
+- a live cockpit for “who is blocking the schedule?”
+- submission detail pages for triage (not an endless spreadsheet row)
+- speaker operations (roster, notes, announcements, reminders) without becoming a full CRM
+- self-hosting so the data stays on your account
+
 ## Try it in five minutes
 
-Needs **Node.js 22** and a Cloudflare-oriented local setup.
+Needs **Node.js 22**.
 
 ```bash
 npm ci
@@ -40,15 +47,16 @@ npm run db:reset:local
 npm run preview
 ```
 
-`npm run db:reset:local` **wipes local D1**, applies migrations, and seeds fixtures. Export anything you care about first.
+`npm run db:reset:local` **wipes local D1**, applies every migration, and re-seeds fixtures. It is safe to repeat on a disposable local database; export anything you care about first.
 
 | What | Local URL |
 | --- | --- |
 | Writable CFP sandbox | `/e/aie-sandbox/submit/cfp` |
 | Form builder | `/admin/events/aie-sandbox/forms` |
-| Review and decisions | `/admin/events/aie-sandbox/submissions` |
+| Submissions list → detail | `/admin/events/aie-sandbox/submissions` |
+| Program cockpit | `/admin/events/aie-sandbox/dashboard` |
+| Speaker roster / ops | `/admin/events/aie-sandbox/speakers` |
 | Schedule editor | `/admin/events/aie-sandbox/schedule` |
-| Outstanding-work dashboard | `/admin/events/aie-sandbox/dashboard` |
 | Speaker portal | `/portal` |
 | Public schedule | `/e/aie-sandbox/schedule` |
 | Public speakers | `/e/aie-sandbox/speakers` |
@@ -57,7 +65,7 @@ npm run preview
 
 With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` once for a local organiser cookie. Keep bypass **off** in production.
 
-**`npm run preview`** builds the OpenNext Worker with local D1, R2, KV, and Durable Objects — best smoke environment. **`npm run dev`** is faster for UI work but does not match the full Cloudflare runtime (the dashboard falls back to polling if the WebSocket is unavailable).
+**`npm run preview`** builds the OpenNext Worker with local D1, R2, KV, and Durable Objects — best smoke environment. **`npm run dev`** is faster for UI work but does not match the full Cloudflare runtime (the cockpit falls back to polling if the WebSocket is unavailable).
 
 ### Sandbox vs `/demo` vs a real event
 
@@ -65,21 +73,22 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 | --- | --- |
 | **`aie-sandbox`** | Writable local fixture. Submit → review → schedule → publish without creating an event first. |
 | **`/demo`** | Read-only seeded walkthrough. Safe to show publicly; mutations are blocked. |
-| **Real event** | Create from `/admin` after sign-in. Owned by you; never replace with seed scripts. |
+| **Real event** | Primary path in production: **Create your event** on the homepage / `/admin` after magic-link sign-in. Owned by you; never replace with seed scripts. |
 
 ## What you get
 
-- **CFP form builder** — fields, required rules, conditionals, sections, uploads, draft/resume, limits, category → track routing.
+- **CFP form builder** — fields, required rules, conditionals, sections, uploads, draft/resume, limits, category → track routing. Labels you author show up on submission answers.
 - **Review** — named reviewers, criteria, scores/comments, accept / waitlist / reject. Empty assignment list means empty board (fail closed).
-- **Speaker operations** — roster, owner/tags/private notes, contact timeline, announcements, and task reminders.
-- **Speaker portal** — bio, tasks, headshots/slides, co-speaker confirmation, and published guides or sandboxed embeds.
-- **Scheduling** — rooms and tracks; conflict checks serialised per event; `.ics` invites; bulk publish/unpublish.
-- **Public surfaces** — schedule, speakers, session pages, iframe embed, headshot and `.ics` for published sessions.
-- **Exports and integrations** — organiser CSV; optional one-way Airtable or Accelevents sync; keyed `/api/v1` for submissions, schedule, and speakers.
+- **Submission triage** — compact list rows that open a full detail page with navigation between proposals; decision hierarchy stays clear.
+- **Program cockpit** — live blocker tiles (capped previews with expanders), links into the work, realtime refresh when the event room updates.
+- **Speaker operations** — roster, owners/tags/private notes, contact timeline, announcements, structured tasks and reminders; portal for bios, headshots, slides, co-speaker confirm, guides/embeds.
+- **Scheduling** — rooms and tracks; conflict checks serialised per event; `.ics` invites; bulk publish/unpublish; content approval during publish where configured.
+- **Public surfaces** — schedule (defaults to today / next session day), speakers, session pages, iframe embed, headshot and `.ics` for published sessions.
+- **Exports and integrations** — organiser CSV; optional one-way Airtable or Accelevents sync; keyed `/api/v1` for submissions, schedule, and speakers (OpenAPI at `/api/v1/openapi.json`).
 
 ## Day-to-day use
 
-**Organiser.** Sign in at `/login` → create or open an event in `/admin` → finish setup (dates, rooms, tracks, tasks) → build the form → open the CFP → assign reviewers → decide → chase tasks on the dashboard → place sessions → publish.
+**Organiser.** Sign in (magic link) → create or open an event → finish setup (dates, rooms, tracks, tasks) → build the form → open the CFP → assign reviewers → decide on the submission detail pages → clear blockers on the cockpit → chase speakers → place sessions → publish.
 
 **Reviewer.** Open the emailed or copied `/review?token=...` link. Score only what you were assigned.
 
@@ -94,11 +103,12 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | Key | Notes |
 | --- | --- |
 | `AUTH_SECRET` | Required. Strong random value (HMAC / login challenges). |
-| `APP_ORIGIN` | Exact public origin for email links (`http://127.0.0.1:8787` for preview). |
+| `APP_ORIGIN` | Exact public origin for email links (`http://127.0.0.1:8787` for preview; example file may say `localhost:3000` for `npm run dev`). |
 | `ADMIN_BYPASS_ENABLED` | `1` local only; `0` in production. |
 | `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
-| `AIRTABLE_*` | Optional one-way export only. |
+| `AIRTABLE_*` | Optional one-way Airtable export. |
+| Accelevents | Configured per event under **Integrations** (one-way push; D1 stays source of record). |
 
 ```bash
 npx wrangler secret put AUTH_SECRET
@@ -108,7 +118,7 @@ npx wrangler secret put PUBLIC_API_KEY
 
 ## Deploy (sketch)
 
-Stack: Next.js App Router → OpenNext → Cloudflare Worker, with D1, R2, KV, and a per-event Durable Object for schedule writes.
+Stack: Next.js App Router → OpenNext → Cloudflare Worker, with D1, R2, KV, and a per-event Durable Object for schedule writes and cockpit live updates.
 
 1. Create D1 / R2 / KV (and DO) resources in *your* Cloudflare account — do not reuse this project’s production IDs.
 2. Point `wrangler.jsonc` at those resources; set `APP_ORIGIN` and Resend from-address as vars.
@@ -116,19 +126,19 @@ Stack: Next.js App Router → OpenNext → Cloudflare Worker, with D1, R2, KV, a
 4. Apply D1 migrations in order (`migrations/`), then `npm run deploy`.
 5. Optionally `npm run db:seed:demo:remote` for a read-only `/demo` (additive; leaves live events alone).
 
-Before production migrations, export D1 (and back up R2). Details and rollback notes live in the longer ops history if you need them; the rule of thumb is: roll back the Worker first, then repair data with a forward migration — do not reseed production to undo a bad release.
+Before production migrations, export D1 (and back up R2). Roll back the Worker first if a release is bad, then repair data with a forward migration — do not reseed production to undo a deploy.
 
 ## API (short)
 
-`/api/v1` is a small, read-only operator API. Authenticate every data request with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`; responses include email addresses, so keep them out of logs. The machine-readable contract is available without a key at `/api/v1/openapi.json`.
+`/api/v1` is a small, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`. Responses can include emails — keep them out of logs. Contract: `/api/v1/openapi.json` (no key).
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /api/v1/events/{eventSlug}/submissions` | Submission and speaker records. |
-| `GET /api/v1/events/{eventSlug}/schedule` | Published schedule slots. |
-| `GET /api/v1/events/{eventSlug}/speakers` | Speaker roster, task status, and uploaded-resource metadata. It never includes file bytes, R2 object keys, or private logistics notes. |
+| `GET /api/v1/events/{eventSlug}/submissions` | Submission and speaker records |
+| `GET /api/v1/events/{eventSlug}/schedule` | Published schedule slots |
+| `GET /api/v1/events/{eventSlug}/speakers` | Roster, task status, uploaded-resource metadata (no file bytes, R2 keys, or private logistics notes) |
 
-Public, no-key endpoints remain under `/api/e/[eventSlug]/...` for published schedule JSON, headshots, and session `.ics`.
+Public, no-key routes under `/api/e/[eventSlug]/...` serve published schedule JSON, headshots, and session `.ics`.
 
 ```bash
 curl -sS http://127.0.0.1:8787/api/v1/events/aie-sandbox/speakers \
@@ -144,7 +154,7 @@ npm run lint
 npx opennextjs-cloudflare build
 ```
 
-After a behaviour change, click through one real path in `npm run preview` (submit, decide, portal task, or publish).
+After a behaviour change, click through one real path in `npm run preview` (submit, open submission detail, clear a cockpit blocker, portal task, or publish).
 
 ## Repo map
 
@@ -153,7 +163,7 @@ After a behaviour change, click through one real path in `npm run preview` (subm
 | `migrations/` | D1 schema |
 | `scripts/` | local + demo seeds, preflights |
 | `src/app/` | public, portal, review, admin, API |
-| `src/lib/` | CFP, evaluation, events, sessions, speakers |
+| `src/lib/` | CFP, evaluation, events, sessions, speakers, integrations |
 | `src/durable-objects/` | schedule serialisation + live updates |
 | `PRODUCT.md` / `DESIGN.md` / `DECISIONS.md` | product, design, decision log |
 
