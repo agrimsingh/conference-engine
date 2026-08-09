@@ -20,7 +20,7 @@ An accepted proposal becomes a session. Attendees only see what you publish. The
 - **Speakers** — submit, then finish bio / headshot / slides (and other tasks) in a magic-link portal.
 - **Attendees** (and embeds) — read the published schedule; it defaults to today or the next session day.
 
-It deliberately does **not** do ticketing, payments, or marketing. [D1](https://developers.cloudflare.com/d1/) is the source of truth. CSV, a keyed API, and optional one-way **Airtable** or **Accelevents** sync are exits — they never write back into the programme database.
+It deliberately does **not** do ticketing, payments, or marketing. [D1](https://developers.cloudflare.com/d1/) is the source of truth. CSV, a keyed API, optional **Accelevents** push, and **Airtable mirror mode** (one-way push, optional nightly opt-in) are exits. They never write back into the programme database, and Airtable never syncs into D1.
 
 More product context: [PRODUCT.md](./PRODUCT.md).
 
@@ -84,7 +84,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 - **Speaker operations** — roster, owners/tags/private notes, contact timeline, announcements, structured tasks and reminders; portal for bios, headshots, slides, co-speaker confirm, guides/embeds.
 - **Scheduling** — rooms and tracks; conflict checks serialised per event; `.ics` invites; bulk publish/unpublish; content approval during publish where configured.
 - **Public surfaces** — schedule (defaults to today / next session day), speakers, session pages, iframe embed, headshot and `.ics` for published sessions.
-- **Exports and integrations** — organiser CSV; optional one-way Airtable or Accelevents sync; keyed `/api/v1` for submissions, schedule, and speakers (OpenAPI at `/api/v1/openapi.json`).
+- **Exports and integrations** — organiser CSV; **Airtable mirror mode** (manual one-way push + optional nightly cron; never Airtable→D1); optional one-way Accelevents push; keyed `/api/v1` for submissions, schedule, and speakers (OpenAPI at `/api/v1/openapi.json`).
 
 ## Day-to-day use
 
@@ -107,7 +107,7 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | `ADMIN_BYPASS_ENABLED` | `1` local only; `0` in production. |
 | `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
-| `AIRTABLE_*` | Optional one-way Airtable export. |
+| `AIRTABLE_*` | Optional Airtable mirror mode: one-way D1→Airtable push (manual or nightly opt-in). Never reverse sync. |
 | Accelevents | Configured per event under **Integrations** (one-way push; D1 stays source of record). |
 
 ```bash

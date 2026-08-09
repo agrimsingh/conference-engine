@@ -77,14 +77,14 @@ export function ExportButtons({ eventSlug }: Props) {
 			);
 			const data = (await response.json()) as { ok?: boolean; error?: string; enabled?: boolean };
 			if (!response.ok || !data.ok) {
-				setError(data.error ?? "Could not update nightly Airtable sync");
+				setError(data.error ?? "Could not update nightly Airtable mirror sync");
 				return;
 			}
 			setSyncEnabled(Boolean(data.enabled));
 			setMessage(
 				data.enabled
-					? "Nightly Airtable sync enabled for this event."
-					: "Nightly Airtable sync disabled.",
+					? "Nightly Airtable mirror sync enabled for this event (one-way)."
+					: "Nightly Airtable mirror sync disabled.",
 			);
 		} catch {
 			setError("Network error");
@@ -120,11 +120,12 @@ export function ExportButtons({ eventSlug }: Props) {
 					disabled={pending}
 					className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
 				>
-					{pending ? "Pushing…" : "Push to Airtable"}
+					{pending ? "Pushing…" : "Push to Airtable mirror"}
 				</button>
 			</div>
 			<p className="text-xs text-neutral-500">
 				Files bundle is CFP submission uploads. Latest speaker deliverables stay on the Files page.
+				Airtable mirror is one-way (D1→Airtable); never reverse sync.
 			</p>
 			{syncConfigured ? (
 				<label className="flex items-center gap-2 text-neutral-300">
@@ -134,11 +135,11 @@ export function ExportButtons({ eventSlug }: Props) {
 						disabled={syncPending}
 						onChange={(event) => void toggleNightlySync(event.target.checked)}
 					/>
-					<span>Nightly Airtable sync (1:00 UTC cron)</span>
+					<span>Nightly Airtable mirror sync (one-way, 1:00 UTC)</span>
 				</label>
 			) : (
 				<p className="text-xs text-neutral-500">
-					Nightly Airtable sync is unavailable until Airtable credentials are configured.
+					Nightly Airtable mirror sync is unavailable until Airtable credentials are configured.
 				</p>
 			)}
 			{message ? <p className="text-xs text-neutral-400">{message}</p> : null}
