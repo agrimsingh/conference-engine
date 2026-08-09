@@ -130,7 +130,14 @@ Before production migrations, export D1 (and back up R2). Roll back the Worker f
 
 ## API (short)
 
-`/api/v1` is a small, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`. Responses can include emails — keep them out of logs. Contract: `/api/v1/openapi.json` (no key).
+`/api/v1` is a small, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`. Responses can include emails — keep them out of logs.
+
+| Docs | URL |
+| --- | --- |
+| OpenAPI (this project) | [`/api/v1/openapi.json`](https://conference-engine.65labs.org/api/v1/openapi.json) (no key) |
+| Sessionboard public API docs | [apidocs.sessionboard.com](https://apidocs.sessionboard.com/api-reference/overview) |
+
+**Compatibility.** Same operator job as Sessionboard's keyed programme reads (submissions / sessions / speakers for an event). Not a drop-in: paths are `/api/v1/events/{eventSlug}/...`, auth is Bearer or `x-api-key` (not Sessionboard's `x-access-token`), and JSON shapes are conference-engine's own. Point tooling at OpenAPI; do not reuse a Sessionboard client unchanged.
 
 | Endpoint | Returns |
 | --- | --- |
