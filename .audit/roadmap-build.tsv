@@ -29,3 +29,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:49:25Z	release	Merged cockpit semantics fix	needsReviewActivation + full-score undecided + caps 50	cd13947	tests green
 2026-08-09T08:50:48Z	release	Merged CFP upload E2E fix	download routes + progress + errors + cleanup	2b5a231	tests+lint green
 2026-08-09T08:53:09Z	release	Log production migrate+deploy	0022-0024 remote D1 + Worker b970dc3a @ f9c8a76; schedule/speakers/ICS 200	f9c8a76	done
+2026-08-09T08:53:38Z	release	Verified prod routes after deploy	schedule JSON/speakers/ICS 200 on demo-cfp-to-stage	b970dc3a	done
