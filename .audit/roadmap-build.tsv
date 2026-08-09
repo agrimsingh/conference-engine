@@ -8,3 +8,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:13:40Z	wave0	Merged activate-plan-button fix to main	already-active plans link to review instead of false-fail	979e3cf	tests pending push
 2026-08-09T08:13:42Z	wave0	Removed wt-activate after merge	unit done	979e3cf on main	done
 2026-08-09T08:14:10Z	wave0	Merged remaining Wave0 branches to main	settings then formbuilder then publicreview then presetclone	loop tick 1	verify next
+2026-08-09T08:14:47Z	wave0	Wave0 complete on main; worktrees removed	all five units merged with green tests	e19162a	done
