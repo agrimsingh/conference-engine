@@ -19,7 +19,7 @@ An accepted proposal becomes a session. Attendees only see sessions you publish.
 - **Speakers** who submit, then finish bio / headshot / slides in a magic-link portal.
 - **Attendees** (and embeds) who read the published schedule.
 
-It deliberately does **not** do ticketing, payments, marketing, or a second system of record in Airtable. [D1](https://developers.cloudflare.com/d1/) is the source of truth; CSV, a keyed API, and an optional one-way Airtable push are exits, not forks of the truth.
+It deliberately does **not** do ticketing, payments, marketing, or create a second system of record. [D1](https://developers.cloudflare.com/d1/) is the source of truth; CSV, a keyed API, and optional one-way Airtable or Accelevents pushes are exits, not forks of the truth.
 
 ## Why it exists
 
@@ -71,10 +71,11 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 - **CFP form builder** — fields, required rules, conditionals, sections, uploads, draft/resume, limits, category → track routing.
 - **Review** — named reviewers, criteria, scores/comments, accept / waitlist / reject. Empty assignment list means empty board (fail closed).
-- **Speaker portal** — bio, tasks, headshots/slides; co-speaker confirm links; reminders via daily cron.
+- **Speaker operations** — roster, owner/tags/private notes, contact timeline, announcements, and task reminders.
+- **Speaker portal** — bio, tasks, headshots/slides, co-speaker confirmation, and published guides or sandboxed embeds.
 - **Scheduling** — rooms and tracks; conflict checks serialised per event; `.ics` invites; bulk publish/unpublish.
 - **Public surfaces** — schedule, speakers, session pages, iframe embed, headshot and `.ics` for published sessions.
-- **Exports** — organiser CSV; optional one-way Airtable upsert; keyed `/api/v1` for submissions and schedule.
+- **Exports and integrations** — organiser CSV; optional one-way Airtable or Accelevents sync; keyed `/api/v1` for submissions, schedule, and speakers.
 
 ## Day-to-day use
 
@@ -119,12 +120,18 @@ Before production migrations, export D1 (and back up R2). Details and rollback n
 
 ## API (short)
 
-`/api/v1` needs `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`. It returns submission and schedule data for operators — protect logs (emails included).
+`/api/v1` is a small, read-only operator API. Authenticate every data request with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`; responses include email addresses, so keep them out of logs. The machine-readable contract is available without a key at `/api/v1/openapi.json`.
 
-Public (no key): published schedule JSON, headshots, and session `.ics` under `/api/e/[eventSlug]/...`.
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/v1/events/{eventSlug}/submissions` | Submission and speaker records. |
+| `GET /api/v1/events/{eventSlug}/schedule` | Published schedule slots. |
+| `GET /api/v1/events/{eventSlug}/speakers` | Speaker roster, task status, and uploaded-resource metadata. It never includes file bytes, R2 object keys, or private logistics notes. |
+
+Public, no-key endpoints remain under `/api/e/[eventSlug]/...` for published schedule JSON, headshots, and session `.ics`.
 
 ```bash
-curl -sS http://127.0.0.1:8787/api/v1/events/aie-sandbox/schedule \
+curl -sS http://127.0.0.1:8787/api/v1/events/aie-sandbox/speakers \
   -H "Authorization: Bearer $PUBLIC_API_KEY"
 ```
 

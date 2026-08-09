@@ -25,6 +25,7 @@ function speaker(partial: Partial<RosterSpeaker> & Pick<RosterSpeaker, "personId
 		tasks: [],
 		earliestDueAt: null,
 		profileId: null,
+		crm: { owner: null, tags: [], lastContactAt: null },
 		...partial,
 	};
 }

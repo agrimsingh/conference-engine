@@ -221,6 +221,20 @@ export type SpeakerProfileRow = {
 	updated_at: number;
 };
 
+export type PortalResourceRow = {
+	id: string;
+	event_id: string;
+	title: string;
+	slug: string;
+	resource_type: "rich_text" | "embed";
+	content: string;
+	embed_url: string | null;
+	published: number;
+	position: number;
+	created_at: number;
+	updated_at: number;
+};
+
 /**
  * Organizer workflow row. Profile contact fields (job/company/social) are
  * legacy columns; source of truth is speaker_profiles.

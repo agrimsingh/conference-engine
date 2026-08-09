@@ -13,6 +13,8 @@ import {
 	type SpeakerWorkflowStatus,
 } from "@/lib/speakers/roster";
 import { renderSpeakerAnnouncementPreview } from "@/lib/speakers/operations";
+import type { SpeakerCrmDetail, SpeakerCrmOwnerOption } from "@/lib/speakers/crm";
+import { resolveSpeakerCrmLoad } from "@/lib/speakers/crm-load";
 import { formatTaskDueAt } from "@/lib/speakers/task-display";
 
 type Props = {
@@ -21,6 +23,7 @@ type Props = {
 	initialStatus: string;
 	initialQuery: string;
 	eventName: string;
+	crmOwners: SpeakerCrmOwnerOption[];
 };
 
 type Draft = {
@@ -63,7 +66,7 @@ function workflowTone(status: SpeakerWorkflowStatus): "neutral" | "positive" | "
 	}
 }
 
-export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialStatus, initialQuery }: Props) {
+export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialStatus, initialQuery, crmOwners }: Props) {
 	const router = useRouter();
 	const [speakers, setSpeakers] = useState(initialSpeakers);
 	const [status, setStatus] = useState(initialStatus);
@@ -76,6 +79,12 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 	const [pending, setPending] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [selectedRecipients, setSelectedRecipients] = useState<string[]>(initialSpeakers.map((speaker) => speaker.personId));
+	const [crmSpeakerId, setCrmSpeakerId] = useState<string | null>(null);
+	const [crmDetail, setCrmDetail] = useState<SpeakerCrmDetail | null>(null);
+	const [crmOwnerAccountId, setCrmOwnerAccountId] = useState("");
+	const [crmTags, setCrmTags] = useState("");
+	const [crmNote, setCrmNote] = useState("");
+	const [crmContactNote, setCrmContactNote] = useState("");
 
 	const visible = useMemo(() => {
 		const needle = q.trim().toLowerCase();
@@ -232,9 +241,79 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 
 	async function invite(personId: string) { setPending(true); setNotice(null); try { const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(personId)}/invite`, { method: "POST" }); const value = await response.json() as { ok?: boolean; error?: string }; setNotice(response.ok && value.ok ? "Portal invitation sent and logged in Communications." : value.error ?? "Invite failed"); } catch { setNotice("Network error"); } finally { setPending(false); } }
 
+	async function openCrm(speaker: RosterSpeaker) {
+		setPending(true);
+		setNotice(null);
+		setCrmSpeakerId(speaker.personId);
+		setCrmDetail(null);
+		try {
+			const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(speaker.personId)}/crm`);
+			const data = await response.json() as { ok?: boolean; crm?: SpeakerCrmDetail; error?: string };
+			const result = resolveSpeakerCrmLoad(response.ok, data);
+			if (result.kind === "failure") {
+				closeCrmDrawer();
+				setNotice(result.error);
+				return;
+			}
+			const crm = result.crm;
+			setCrmDetail(crm);
+			setCrmOwnerAccountId(crm.owner?.accountId ?? "");
+			setCrmTags(crm.tags.join(", "));
+			setCrmNote("");
+			setCrmContactNote("");
+		} catch {
+			closeCrmDrawer();
+			setNotice("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
+	function closeCrmDrawer() {
+		setCrmSpeakerId(null);
+		setCrmDetail(null);
+	}
+
+	async function saveCrm() {
+		if (!crmSpeakerId) return;
+		setPending(true);
+		setNotice(null);
+		try {
+			const payload: { ownerAccountId: string | null; tags: string[]; note?: string; contactNote?: string } = {
+				ownerAccountId: crmOwnerAccountId || null,
+				tags: crmTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+			};
+			if (crmNote.trim()) payload.note = crmNote;
+			if (crmContactNote.trim()) payload.contactNote = crmContactNote;
+			const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(crmSpeakerId)}/crm`, {
+				method: "PATCH",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = await response.json() as { ok?: boolean; crm?: SpeakerCrmDetail; error?: string };
+			if (!response.ok || !data.ok || !data.crm) {
+				setNotice(data.error ?? "Could not save speaker CRM");
+				return;
+			}
+			const crm = data.crm;
+			setCrmDetail(crm);
+			setCrmNote("");
+			setCrmContactNote("");
+			setSpeakers((current) => current.map((speaker) => speaker.personId === crmSpeakerId
+				? { ...speaker, crm: { owner: crm.owner, tags: crm.tags, lastContactAt: crm.lastContactAt } }
+				: speaker));
+			setNotice("Speaker CRM saved.");
+		} catch {
+			setNotice("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
 	const selectedVisible = visible.filter((speaker) => selectedRecipients.includes(speaker.personId));
 	const previewSpeaker = selectedVisible[0];
 	const preview = previewSpeaker ? renderSpeakerAnnouncementPreview(emailSubject, emailBody, previewSpeaker, eventName, `${typeof window === "undefined" ? "" : window.location.origin}/portal`) : null;
+	const crmSpeaker = crmSpeakerId ? speakers.find((speaker) => speaker.personId === crmSpeakerId) ?? null : null;
 
 	return (
 		<div className="space-y-8">
@@ -367,6 +446,13 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 												</Link>
 											</p>
 										) : null}
+										{speaker.crm.owner || speaker.crm.tags.length > 0 || speaker.crm.lastContactAt ? (
+											<p className="mt-1 text-xs text-neutral-500">
+												{speaker.crm.owner ? `owner: ${speaker.crm.owner.name}` : "owner: unassigned"}
+												{speaker.crm.tags.length > 0 ? ` · ${speaker.crm.tags.join(" · ")}` : ""}
+												{speaker.crm.lastContactAt ? ` · last contact ${new Date(speaker.crm.lastContactAt).toLocaleDateString()}` : ""}
+											</p>
+										) : null}
 										{Object.keys(speaker.socials).length > 0 ? (
 											<p className="mt-1 text-xs text-neutral-500">
 												{SOCIAL_KEYS.filter((key) => speaker.socials[key]).map((key) => (
@@ -382,15 +468,16 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 										<StatusPill tone={workflowTone(speaker.workflowStatus)}>
 											{speaker.workflowStatus}
 										</StatusPill>
-										<button
+											<button
 											type="button"
 											disabled={pending}
 											onClick={() => edit(speaker)}
 											className={buttonClasses("secondary", "sm")}
-										>
-											Edit
-										</button>
-										<button type="button" disabled={pending} onClick={() => void invite(speaker.personId)} className={buttonClasses("secondary", "sm")}>Send portal invite</button>
+											>
+												Edit
+											</button>
+											<button type="button" disabled={pending} onClick={() => void openCrm(speaker)} className={buttonClasses("secondary", "sm")}>CRM</button>
+											<button type="button" disabled={pending} onClick={() => void invite(speaker.personId)} className={buttonClasses("secondary", "sm")}>Send portal invite</button>
 									</div>
 								</div>
 							</li>
@@ -398,6 +485,28 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 					</ul>
 				)}
 			</section>
+
+			{crmSpeaker ? (
+				<section aria-label={`Speaker CRM for ${crmSpeaker.name}`} className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-neutral-800 bg-neutral-900 p-6 shadow-2xl shadow-black/40">
+					<div className="flex flex-wrap items-baseline justify-between gap-2">
+						<div>
+							<h2 className="font-medium text-neutral-100">Speaker CRM · {crmSpeaker.name}</h2>
+							<p className="mt-1 text-sm text-neutral-400">Private organizer context. Email deliveries and completed tasks appear below automatically.</p>
+						</div>
+						<button type="button" className="text-xs text-neutral-400 underline underline-offset-2" onClick={() => { setCrmSpeakerId(null); setCrmDetail(null); }}>Close</button>
+					</div>
+					{crmDetail ? (
+						<div className="mt-4 grid gap-3 md:grid-cols-2">
+							<label className="text-sm text-neutral-300">Owner<select value={crmOwnerAccountId} onChange={(event) => setCrmOwnerAccountId(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`}><option value="">Unassigned</option>{crmOwners.map((owner) => <option key={owner.accountId} value={owner.accountId}>{owner.name} · {owner.email}</option>)}</select></label>
+							<label className="text-sm text-neutral-300">Tags<input value={crmTags} onChange={(event) => setCrmTags(event.target.value)} placeholder="VIP, travel, green room" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<label className="text-sm text-neutral-300 md:col-span-2">Internal note<textarea value={crmNote} onChange={(event) => setCrmNote(event.target.value)} rows={3} maxLength={4000} placeholder="Private organizer note" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<label className="text-sm text-neutral-300 md:col-span-2">Log contact<textarea value={crmContactNote} onChange={(event) => setCrmContactNote(event.target.value)} rows={2} maxLength={4000} placeholder="What happened in the last call or message?" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<div className="md:col-span-2"><button type="button" disabled={pending} onClick={() => void saveCrm()} className={buttonClasses("primary", "sm")}>{pending ? "Saving…" : "Save CRM"}</button>{crmDetail.lastContactAt ? <span className="ml-3 text-xs text-neutral-500">Last contact: {new Date(crmDetail.lastContactAt).toLocaleString()}</span> : <span className="ml-3 text-xs text-neutral-500">No contact recorded yet</span>}</div>
+							<div className="md:col-span-2"><h3 className="text-sm font-medium text-neutral-200">Timeline</h3>{crmDetail.timeline.length ? <ul className="mt-2 divide-y divide-neutral-800 rounded-md border border-neutral-800">{crmDetail.timeline.map((entry) => <li key={`${entry.kind}-${entry.id}`} className="px-3 py-2 text-sm"><p className="text-neutral-200">{entry.body}</p><p className="mt-1 text-xs text-neutral-500">{entry.kind.replace("_", " ")} · {new Date(entry.occurredAt).toLocaleString()}{entry.authorName ? ` · ${entry.authorName}` : ""}</p></li>)}</ul> : <p className="mt-2 text-sm text-neutral-500">No CRM activity, delivered email, or completed task yet.</p>}</div>
+						</div>
+					) : <p className="mt-4 text-sm text-neutral-500">Loading CRM history…</p>}
+				</section>
+			) : null}
 
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<div className="flex flex-wrap items-baseline justify-between gap-2">

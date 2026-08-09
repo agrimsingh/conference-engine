@@ -11,6 +11,7 @@ import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writ
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { validatedAppOrigin } from "@/lib/security/origin";
 import { hasFormulaPrefix, parseBoundedCsv } from "@/lib/sessions/csv";
+import { listSpeakerCrmSummaries, type SpeakerCrmSummary } from "./crm";
 
 export type { EventSpeakerProfileRow };
 
@@ -64,6 +65,7 @@ export type RosterSpeaker = {
 	tasks: RosterTaskSummary[];
 	earliestDueAt: number | null;
 	profileId: string | null;
+	crm: SpeakerCrmSummary;
 };
 
 export type RosterFilters = {
@@ -343,6 +345,7 @@ export async function listEventSpeakerRoster(
 			tasks: [],
 			earliestDueAt: null,
 			profileId: row.profile_id,
+			crm: { owner: null, tags: [], lastContactAt: null },
 		};
 		byPerson.set(row.person_id, speaker);
 		return speaker;
@@ -398,6 +401,11 @@ export async function listEventSpeakerRoster(
 			.filter((task) => task.status === "pending" && task.dueAt !== null)
 			.map((task) => task.dueAt as number);
 		speaker.earliestDueAt = dues.length ? Math.min(...dues) : null;
+	}
+
+	const crmSummaries = await listSpeakerCrmSummaries(db, eventId, [...byPerson.keys()]);
+	for (const speaker of byPerson.values()) {
+		speaker.crm = crmSummaries.get(speaker.personId) ?? { owner: null, tags: [], lastContactAt: null };
 	}
 
 	const ordered = [...byPerson.values()].sort((a, b) =>

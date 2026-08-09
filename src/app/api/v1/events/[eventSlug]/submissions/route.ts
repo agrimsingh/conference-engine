@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
 	listLabelsForEvent,
-	listSpeakersForSubmission,
+	listSpeakersForSubmissions,
 	listSubmissionsForEvent,
 } from "@/lib/db/queries";
 import { titleFromAnswers } from "@/lib/domain";
@@ -37,7 +37,13 @@ export async function GET(request: Request, context: RouteContext) {
 	}
 
 	const submissions = await listSubmissionsForEvent(db, event.id);
-	const labelRows = await listLabelsForEvent(db, event.id);
+	const [labelRows, speakersBySubmission] = await Promise.all([
+		listLabelsForEvent(db, event.id),
+		listSpeakersForSubmissions(
+			db,
+			submissions.map((submission) => submission.id),
+		),
+	]);
 	const labelsBySubmission = new Map<string, string[]>();
 	for (const row of labelRows) {
 		const list = labelsBySubmission.get(row.submission_id) ?? [];
@@ -48,7 +54,7 @@ export async function GET(request: Request, context: RouteContext) {
 	const items = [];
 	for (const submission of submissions) {
 		const answers = parseAnswers(submission.answers_json);
-		const speakers = await listSpeakersForSubmission(db, submission.id);
+		const speakers = speakersBySubmission.get(submission.id) ?? [];
 		items.push({
 			id: submission.id,
 			status: submission.status,

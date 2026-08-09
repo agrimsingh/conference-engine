@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { listEventSpeakerRoster } from "@/lib/speakers/roster";
+import { listSpeakerCrmOwners } from "@/lib/speakers/crm";
 import { SpeakerRoster } from "./speaker-roster";
 
 type Props = {
@@ -15,7 +16,10 @@ export default async function AdminSpeakersPage({ params, searchParams }: Props)
 	const query = await searchParams;
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
-	const speakers = await listEventSpeakerRoster(db, event.id);
+	const [speakers, crmOwners] = await Promise.all([
+		listEventSpeakerRoster(db, event.id),
+		listSpeakerCrmOwners(db, event.id),
+	]);
 	const initialStatus =
 		query.status === "invited"
 		|| query.status === "confirmed"
@@ -37,9 +41,10 @@ export default async function AdminSpeakersPage({ params, searchParams }: Props)
 					eventSlug={event.slug}
 					initialSpeakers={speakers}
 					initialStatus={initialStatus}
-					initialQuery={query.q ?? ""}
-					eventName={event.name}
-				/>
+				initialQuery={query.q ?? ""}
+				eventName={event.name}
+				crmOwners={crmOwners}
+			/>
 			</main>
 		</div>
 	);

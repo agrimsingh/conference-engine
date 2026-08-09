@@ -6,7 +6,7 @@ import {
 	listAgendaTracks,
 	listAgendaSlotsWithSubmissions,
 	listEventRooms,
-	listSpeakersForSubmission,
+	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
 import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
@@ -48,11 +48,15 @@ export async function GET(request: Request, context: RouteContext) {
 	const publicSlots = slots.filter((slot) =>
 		isPublicScheduleStatus(slot.submission_status),
 	);
+	const speakersBySubmission = await listSpeakersForSubmissions(
+		db,
+		publicSlots.map((slot) => slot.submission_id),
+	);
 
 	const items = [];
 	for (const slot of publicSlots) {
 		const answers = parseAnswers(slot.answers_json);
-		const speakers = await listSpeakersForSubmission(db, slot.submission_id);
+		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
 		const track = publicScheduleTrack(slot.track_id, tracks);
 		items.push({
 			id: slot.id,

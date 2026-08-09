@@ -20,6 +20,8 @@ import { parseSavedTaskFormFields } from "@/lib/speakers/task-forms";
 import { ProfileEditor } from "./profile-editor";
 import { ActionTaskList } from "./action-task-list";
 import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
+import { listPublishedPortalResourcesForSpeaker } from "@/lib/resources/resources";
+import { PortalResourceList } from "./portal-resource-list";
 
 type Props = {
 	searchParams: Promise<{ email?: string; error?: string }>;
@@ -53,7 +55,10 @@ export default async function PortalPage({ searchParams }: Props) {
 	const submissions = await listSubmissionsForPerson(db, session.personId);
 	const tasks = await listTasksForPerson(db, session.personId);
 	const deliverables = await listDeliverableBundles(db, { personId: session.personId });
-	const actionTasks = await listSpeakerActionAssignments(db, { personId: session.personId });
+	const [actionTasks, portalResources] = await Promise.all([
+		listSpeakerActionAssignments(db, { personId: session.personId }),
+		listPublishedPortalResourcesForSpeaker(db, session.personId),
+	]);
 
 	const profileEvents = await db.prepare("SELECT event_id FROM event_speaker_profiles WHERE person_id = ?").bind(session.personId).all<{ event_id: string }>();
 	const eventRows = await listEventsByIds(db, [...submissions.map((submission) => submission.event_id), ...profileEvents.results.map((row) => row.event_id)]);
@@ -86,6 +91,10 @@ export default async function PortalPage({ searchParams }: Props) {
 				description={portalDescription}
 		/>
 			{actionTasks.length ? <section className="mb-10"><h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">Your action tasks</h2><ActionTaskList tasks={actionTasks} readOnlyEventIds={eventRows.filter((event) => event.mode === "demo").map((event) => event.id)} /></section> : null}
+			{eventRows.map((event) => {
+				const resources = portalResources.filter((resource) => resource.event_id === event.id);
+				return resources.length ? <section key={event.id} className="mb-10"><h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">{event.name} resources</h2><PortalResourceList resources={resources} /></section> : null;
+			})}
 			{eventRows.filter((event) => !firstSubmissionIdByEvent.has(event.id)).map((event) => { const profile = profilesByEvent.get(event.id); return <section key={event.id} className="mb-10 rounded-lg border border-neutral-800 bg-neutral-900 p-4"><p className="font-medium text-neutral-100">{event.name}</p><p className="mb-3 mt-1 text-xs text-neutral-500">Speaker profile</p>{event.mode !== "demo" ? <ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} jobTitle={profile?.job_title ?? ""} company={profile?.company ?? ""} social={parseSpeakerSocial(profile?.social_json)} hasHeadshot={Boolean(profile?.headshot_asset_id)} /> : null}</section>; })}
 
 			<section className="mb-10 space-y-3">
