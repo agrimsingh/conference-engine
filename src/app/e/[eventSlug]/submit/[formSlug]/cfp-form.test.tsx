@@ -30,6 +30,16 @@ afterEach(async () => {
 	container.remove();
 });
 
+const title: FormFieldDef = {
+	key: "title",
+	label: "Title",
+	fieldType: "text",
+	required: true,
+	position: 0,
+	visibilityRule: { op: "always" },
+	config: { kind: "text", maxLength: 10, placeholder: "Session title" },
+};
+
 describe("CfpForm required multiselect validation", () => {
 	it("links and announces the focused group error before sending a submission", async () => {
 		await act(async () => {
@@ -66,5 +76,44 @@ describe("CfpForm required multiselect validation", () => {
 		expect(error?.textContent).toBe("Topics is required");
 		expect(error?.getAttribute("role")).toBe("alert");
 		expect(error?.getAttribute("aria-live")).toBe("assertive");
+	});
+});
+
+describe("CfpForm maxLength char count", () => {
+	it("applies HTML maxLength and shows a live character count", async () => {
+		await act(async () => {
+			root.render(
+				<CfpForm
+					eventSlug="test-event"
+					formSlug="cfp"
+					eventName="Test event"
+					formTitle="Test CFP"
+					formDescription={null}
+					welcomeCopy={null}
+					thankYouCopy={null}
+					draftToken=""
+					draftsEnabled={false}
+					submissionLimit={0}
+					fields={[title]}
+				/>,
+			);
+		});
+
+		const input = container.querySelector('input[type="text"]') as HTMLInputElement | null;
+		expect(input).not.toBeNull();
+		expect(input?.getAttribute("maxlength")).toBe("10");
+		expect(container.textContent).toContain("0/10");
+
+		await act(async () => {
+			if (!input) return;
+			const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype,
+				"value",
+			)?.set;
+			nativeInputValueSetter?.call(input, "hello");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		expect(container.textContent).toContain("5/10");
 	});
 });

@@ -333,7 +333,9 @@ function FieldInput({
 		case "text":
 		case "url":
 		case "video":
-		case "email":
+		case "email": {
+			const textValue = typeof value === "string" ? value : "";
+			const maxLength = field.config.kind === "text" ? field.config.maxLength : undefined;
 			return (
 				<label className="flex flex-col gap-1 text-sm">
 					{label}
@@ -352,12 +354,21 @@ function FieldInput({
 						}
 						className={INPUT_CLASSES}
 						placeholder={field.config.placeholder}
-						value={typeof value === "string" ? value : ""}
+						maxLength={maxLength}
+						value={textValue}
 						onChange={(e) => onChange(e.target.value)}
 					/>
+					{maxLength != null ? (
+						<span className="text-xs text-neutral-500 tabular-nums">
+							{textValue.length}/{maxLength}
+						</span>
+					) : null}
 				</label>
 			);
-		case "textarea":
+		}
+		case "textarea": {
+			const textValue = typeof value === "string" ? value : "";
+			const maxLength = field.config.maxLength;
 			return (
 				<label className="flex flex-col gap-1 text-sm">
 					{label}
@@ -367,11 +378,18 @@ function FieldInput({
 						className={INPUT_CLASSES}
 						rows={field.config.rows ?? 4}
 						placeholder={field.config.placeholder}
-						value={typeof value === "string" ? value : ""}
+						maxLength={maxLength}
+						value={textValue}
 						onChange={(e) => onChange(e.target.value)}
 					/>
+					{maxLength != null ? (
+						<span className="text-xs text-neutral-500 tabular-nums">
+							{textValue.length}/{maxLength}
+						</span>
+					) : null}
 				</label>
 			);
+		}
 		case "number":
 			return (
 				<label className="flex flex-col gap-1 text-sm">

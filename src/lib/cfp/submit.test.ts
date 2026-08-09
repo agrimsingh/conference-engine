@@ -77,4 +77,58 @@ describe("CFP payload bounds", () => {
 		expect(typeof valid === "string" ? null : valid.config).toEqual({ kind: "textarea", maxLength: 1200, rows: 8, placeholder: "What will people learn?" });
 		expect(validateFieldWrite({ key: "format", label: "Format", fieldType: "select", required: true, position: 0, config: { kind: "select", options: [{ value: "same", label: "One" }, { value: "same", label: "Two" }] } })).toBe("config is invalid for this field type");
 	});
+
+	it("accepts neq and never visibility rules on field write", () => {
+		const neq = validateFieldWrite({
+			key: "workshop_details",
+			label: "Workshop details",
+			fieldType: "textarea",
+			required: false,
+			position: 1,
+			visibilityRule: { op: "neq", fieldKey: "format", value: "talk" },
+			config: { kind: "textarea", rows: 4 },
+		});
+		expect(neq).not.toBeTypeOf("string");
+		expect(typeof neq === "string" ? null : neq.visibilityRule).toEqual({
+			op: "neq",
+			fieldKey: "format",
+			value: "talk",
+		});
+
+		const never = validateFieldWrite({
+			key: "legacy_note",
+			label: "Legacy note",
+			fieldType: "text",
+			required: false,
+			position: 2,
+			visibilityRule: { op: "never" },
+			config: { kind: "text", placeholder: "hidden", maxLength: 40 },
+		});
+		expect(never).not.toBeTypeOf("string");
+		expect(typeof never === "string" ? null : never.visibilityRule).toEqual({ op: "never" });
+		expect(typeof never === "string" ? null : never.config).toEqual({
+			kind: "text",
+			placeholder: "hidden",
+			maxLength: 40,
+		});
+	});
+
+	it("accepts number min/max/step config on field write", () => {
+		const valid = validateFieldWrite({
+			key: "duration_minutes",
+			label: "Duration",
+			fieldType: "number",
+			required: true,
+			position: 0,
+			visibilityRule: { op: "always" },
+			config: { kind: "number", min: 5, max: 90, step: 5 },
+		});
+		expect(valid).not.toBeTypeOf("string");
+		expect(typeof valid === "string" ? null : valid.config).toEqual({
+			kind: "number",
+			min: 5,
+			max: 90,
+			step: 5,
+		});
+	});
 });

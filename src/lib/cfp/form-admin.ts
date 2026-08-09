@@ -259,12 +259,13 @@ function parseVisibilityInput(raw: unknown): VisibilityRule | string {
 	}
 	const op = (raw as { op: unknown }).op;
 	if (op === "always") return { op: "always" };
-	if (op === "eq") {
+	if (op === "never") return { op: "never" };
+	if (op === "eq" || op === "neq") {
 		const r = raw as { fieldKey?: unknown; value?: unknown };
 		if (typeof r.fieldKey !== "string" || !r.fieldKey.trim() || typeof r.value !== "string" || !r.value.trim()) {
-			return "eq rule needs fieldKey and value";
+			return `${op} rule needs fieldKey and value`;
 		}
-		return { op: "eq", fieldKey: r.fieldKey.trim(), value: r.value.trim() };
+		return { op, fieldKey: r.fieldKey.trim(), value: r.value.trim() };
 	}
 	if (op === "in") {
 		const r = raw as { fieldKey?: unknown; values?: unknown };
@@ -422,9 +423,9 @@ async function assertVisibilityDependency(
 	fieldKey: string,
 	rule: VisibilityRule,
 ): Promise<void> {
-	if (rule.op === "always") return;
-	if (rule.op !== "eq" && rule.op !== "in") {
-		throw new Error("Only always, eq, and in visibility rules are supported");
+	if (rule.op === "always" || rule.op === "never") return;
+	if (rule.op !== "eq" && rule.op !== "neq" && rule.op !== "in") {
+		throw new Error("Only always, never, eq, neq, and in visibility rules are supported");
 	}
 	if (rule.fieldKey === fieldKey) throw new Error("A field cannot control its own visibility");
 	const source = await db.prepare(

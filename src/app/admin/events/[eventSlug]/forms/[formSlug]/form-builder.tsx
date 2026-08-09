@@ -78,7 +78,7 @@ function parseDateTimeInput(value: string): number | null {
 	return Number.isFinite(ms) ? ms : null;
 }
 
-type VisibilityOp = "always" | "eq" | "in";
+type VisibilityOp = "always" | "never" | "eq" | "neq" | "in";
 
 type VisibilityDraft = {
 	visibilityOp: VisibilityOp;
@@ -87,24 +87,62 @@ type VisibilityDraft = {
 	visibilityValues: string;
 };
 
-function buildVisibilityRule(draft: VisibilityDraft): {
-	op: "always";
-} | {
-	op: "eq";
-	fieldKey: string;
-	value: string;
-} | {
-	op: "in";
-	fieldKey: string;
-	values: string[];
-} {
+type ConfigDraft = {
+	placeholder: string;
+	maxLength: string;
+	rows: string;
+	numberMin: string;
+	numberMax: string;
+	numberStep: string;
+};
+
+function emptyConfigDraft(): ConfigDraft {
+	return {
+		placeholder: "",
+		maxLength: "",
+		rows: "",
+		numberMin: "",
+		numberMax: "",
+		numberStep: "",
+	};
+}
+
+function configDraftFromField(config: Record<string, unknown>): ConfigDraft {
+	return {
+		placeholder: typeof config.placeholder === "string" ? config.placeholder : "",
+		maxLength: typeof config.maxLength === "number" ? String(config.maxLength) : "",
+		rows: typeof config.rows === "number" ? String(config.rows) : "",
+		numberMin: typeof config.min === "number" ? String(config.min) : "",
+		numberMax: typeof config.max === "number" ? String(config.max) : "",
+		numberStep: typeof config.step === "number" ? String(config.step) : "",
+	};
+}
+
+function optionalPositiveInt(raw: string): number | undefined {
+	const trimmed = raw.trim();
+	if (!trimmed) return undefined;
+	const value = Number(trimmed);
+	if (!Number.isInteger(value) || value < 1) return undefined;
+	return value;
+}
+
+function optionalFiniteNumber(raw: string): number | undefined {
+	const trimmed = raw.trim();
+	if (!trimmed) return undefined;
+	const value = Number(trimmed);
+	if (!Number.isFinite(value)) return undefined;
+	return value;
+}
+
+function buildVisibilityRule(draft: VisibilityDraft): VisibilityRule {
+	if (draft.visibilityOp === "never") return { op: "never" };
 	if (
-		draft.visibilityOp === "eq" &&
+		(draft.visibilityOp === "eq" || draft.visibilityOp === "neq") &&
 		draft.visibilityFieldKey.trim() &&
 		draft.visibilityValue.trim()
 	) {
 		return {
-			op: "eq",
+			op: draft.visibilityOp,
 			fieldKey: draft.visibilityFieldKey.trim(),
 			value: draft.visibilityValue.trim(),
 		};
@@ -116,14 +154,51 @@ function buildVisibilityRule(draft: VisibilityDraft): {
 	return { op: "always" };
 }
 
+function visibilityDraftFromRule(rule: VisibilityRule): VisibilityDraft {
+	if (rule.op === "never") {
+		return {
+			visibilityOp: "never",
+			visibilityFieldKey: "",
+			visibilityValue: "",
+			visibilityValues: "",
+		};
+	}
+	if (rule.op === "eq" || rule.op === "neq") {
+		return {
+			visibilityOp: rule.op,
+			visibilityFieldKey: rule.fieldKey,
+			visibilityValue: rule.value,
+			visibilityValues: "",
+		};
+	}
+	if (rule.op === "in") {
+		return {
+			visibilityOp: "in",
+			visibilityFieldKey: rule.fieldKey,
+			visibilityValue: "",
+			visibilityValues: rule.values.join(", "),
+		};
+	}
+	return {
+		visibilityOp: "always",
+		visibilityFieldKey: "",
+		visibilityValue: "",
+		visibilityValues: "",
+	};
+}
+
 function visibilitySummary(rule: VisibilityRule): string {
 	if (rule.op === "eq" && rule.fieldKey && rule.value != null) {
 		return `visible when ${rule.fieldKey} = ${rule.value}`;
+	}
+	if (rule.op === "neq" && rule.fieldKey && rule.value != null) {
+		return `visible when ${rule.fieldKey} ≠ ${rule.value}`;
 	}
 	if (rule.op === "in" && rule.fieldKey && rule.values?.length) {
 		return `visible when ${rule.fieldKey} in [${rule.values.join(", ")}]`;
 	}
 	if (rule.op === "always") return "always visible";
+	if (rule.op === "never") return "never visible";
 	return `visible when ${rule.op}`;
 }
 
@@ -159,11 +234,13 @@ function VisibilityFields({
 					}
 				>
 					<option value="always">Always</option>
+					<option value="never">Never</option>
 					<option value="eq">Equals</option>
+					<option value="neq">Not equals</option>
 					<option value="in">Is one of</option>
 				</select>
 			</label>
-			{op === "eq" || op === "in" ? (
+			{op === "eq" || op === "neq" || op === "in" ? (
 				<div className="grid gap-2 sm:grid-cols-2">
 					<label className="block text-xs text-neutral-400">
 						Field key
@@ -216,7 +293,7 @@ function VisibilityFields({
 								onChange({
 									visibilityOp: op,
 									visibilityFieldKey: fieldKey,
-									visibilityValue: op === "eq" ? e.target.value : value,
+									visibilityValue: op === "eq" || op === "neq" ? e.target.value : value,
 									visibilityValues: op === "in" ? e.target.value : values,
 								})
 							}
@@ -267,16 +344,18 @@ export function FormBuilder({
 	const [thankYouCopy, setThankYouCopy] = useState(initialThankYouCopy);
 	const [fields, setFields] = useState(initialFields);
 	const [editingId, setEditingId] = useState<string | null>(null);
-	const [editDraft, setEditDraft] = useState<{
-		label: string;
-		required: boolean;
-		helpText: string;
-		visibilityOp: VisibilityOp;
-		visibilityFieldKey: string;
-		visibilityValue: string;
-		visibilityValues: string;
-		options: SelectOption[];
-	} | null>(null);
+	const [editDraft, setEditDraft] = useState<(
+		{
+			label: string;
+			required: boolean;
+			helpText: string;
+			visibilityOp: VisibilityOp;
+			visibilityFieldKey: string;
+			visibilityValue: string;
+			visibilityValues: string;
+			options: SelectOption[];
+		} & ConfigDraft
+	) | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [draft, setDraft] = useState({
@@ -290,6 +369,7 @@ export function FormBuilder({
 		visibilityValue: "",
 		visibilityValues: "",
 		options: defaultSelectOptions(),
+		...emptyConfigDraft(),
 	});
 
 	const base = `/api/admin/events/${eventSlug}/forms/${formSlug}/fields`;
@@ -353,7 +433,7 @@ export function FormBuilder({
 		setBusy(true);
 		setError(null);
 		const position = fields.length;
-		const config = buildFieldConfig(draft.fieldType, draft.options);
+		const config = buildFieldConfig(draft.fieldType, draft.options, draft);
 		const visibilityRule = buildVisibilityRule(draft);
 
 		const res = await fetch(base, {
@@ -392,46 +472,62 @@ export function FormBuilder({
 			visibilityValue: "",
 			visibilityValues: "",
 			options: defaultSelectOptions(),
+			...emptyConfigDraft(),
 		});
 		router.refresh();
 	}
 
 	function startEdit(field: FieldRow) {
-		const rule = field.visibilityRule;
-		const conditionalRule = rule.op === "eq" || rule.op === "in" ? rule : null;
 		setEditingId(field.id);
 		setEditDraft({
 			label: field.label,
 			required: field.required,
 			helpText: field.helpText ?? "",
-			visibilityOp: conditionalRule?.op ?? "always",
-			visibilityFieldKey: conditionalRule?.fieldKey ?? "",
-			visibilityValue: conditionalRule?.op === "eq" ? conditionalRule.value : "",
-			visibilityValues: conditionalRule?.op === "in" ? conditionalRule.values.join(", ") : "",
+			...visibilityDraftFromRule(field.visibilityRule),
 			options: readSelectOptions(field.config),
+			...configDraftFromField(field.config),
 		});
 	}
 
 	function buildFieldConfig(
 		fieldType: FieldType,
 		options: SelectOption[],
+		configDraft: ConfigDraft,
 	): Record<string, unknown> {
 		if (fieldType === "select" || fieldType === "multiselect") {
 			return { kind: fieldType, options };
 		}
-		if (fieldType === "textarea") return { kind: "textarea", rows: 5 };
-		if (fieldType === "number") return { kind: "number" };
 		if (fieldType === "speaker_block") {
 			return { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 };
 		}
-		return { kind: fieldType };
+		if (fieldType === "number") {
+			const config: Record<string, unknown> = { kind: "number" };
+			const min = optionalFiniteNumber(configDraft.numberMin);
+			const max = optionalFiniteNumber(configDraft.numberMax);
+			const step = optionalFiniteNumber(configDraft.numberStep);
+			if (min !== undefined) config.min = min;
+			if (max !== undefined) config.max = max;
+			if (step !== undefined && step > 0) config.step = step;
+			return config;
+		}
+		const config: Record<string, unknown> = { kind: fieldType };
+		const placeholder = configDraft.placeholder.trim();
+		if (placeholder) config.placeholder = placeholder;
+		if (fieldType === "textarea") {
+			config.rows = optionalPositiveInt(configDraft.rows) ?? 5;
+		}
+		if (fieldType === "text" || fieldType === "textarea") {
+			const maxLength = optionalPositiveInt(configDraft.maxLength);
+			if (maxLength !== undefined) config.maxLength = maxLength;
+		}
+		return config;
 	}
 
-	function configForFieldEdit(field: FieldRow, options: SelectOption[]): Record<string, unknown> {
-		if (field.fieldType === "select" || field.fieldType === "multiselect") {
-			return { ...field.config, kind: field.fieldType, options };
-		}
-		return field.config;
+	function configForFieldEdit(
+		field: FieldRow,
+		draft: ConfigDraft & { options: SelectOption[] },
+	): Record<string, unknown> {
+		return buildFieldConfig(field.fieldType, draft.options, draft);
 	}
 
 	async function saveFieldEdit(field: FieldRow) {
@@ -452,7 +548,7 @@ export function FormBuilder({
 					required: editDraft.required,
 					position: field.position,
 					visibilityRule,
-					config: configForFieldEdit(field, editDraft.options),
+					config: configForFieldEdit(field, editDraft),
 					helpText: editDraft.helpText.trim() || undefined,
 				},
 			}),
@@ -686,6 +782,13 @@ export function FormBuilder({
 											}
 										/>
 									) : null}
+									<FieldConfigFields
+										fieldType={field.fieldType}
+										draft={editDraft}
+										onChange={(patch) =>
+											setEditDraft((d) => (d ? { ...d, ...patch } : d))
+										}
+									/>
 									<div className="flex gap-2">
 										<Button
 											type="button"
@@ -838,6 +941,11 @@ export function FormBuilder({
 						onChange={(options) => setDraft((d) => ({ ...d, options }))}
 					/>
 				) : null}
+				<FieldConfigFields
+					fieldType={draft.fieldType}
+					draft={draft}
+					onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+				/>
 				<Button type="button" disabled={busy} onClick={() => void addField()}>
 					Add field
 				</Button>
@@ -847,6 +955,100 @@ export function FormBuilder({
 				<p className="text-sm text-red-300" role="alert">
 					{error}
 				</p>
+			) : null}
+		</div>
+	);
+}
+
+function FieldConfigFields({
+	fieldType,
+	draft,
+	onChange,
+}: {
+	fieldType: FieldType;
+	draft: ConfigDraft;
+	onChange: (patch: Partial<ConfigDraft>) => void;
+}) {
+	const showsPlaceholder =
+		fieldType === "text" ||
+		fieldType === "textarea" ||
+		fieldType === "url" ||
+		fieldType === "video" ||
+		fieldType === "email";
+	const showsMaxLength = fieldType === "text" || fieldType === "textarea";
+	const showsRows = fieldType === "textarea";
+	const showsNumber = fieldType === "number";
+	if (!showsPlaceholder && !showsMaxLength && !showsRows && !showsNumber) return null;
+
+	return (
+		<div className="grid gap-3 sm:grid-cols-2">
+			{showsPlaceholder ? (
+				<label className="block text-xs text-neutral-400 sm:col-span-2">
+					Placeholder
+					<input
+						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+						value={draft.placeholder}
+						onChange={(e) => onChange({ placeholder: e.target.value })}
+					/>
+				</label>
+			) : null}
+			{showsMaxLength ? (
+				<label className="block text-xs text-neutral-400">
+					Max length
+					<input
+						type="number"
+						min={1}
+						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+						value={draft.maxLength}
+						onChange={(e) => onChange({ maxLength: e.target.value })}
+					/>
+				</label>
+			) : null}
+			{showsRows ? (
+				<label className="block text-xs text-neutral-400">
+					Rows
+					<input
+						type="number"
+						min={1}
+						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+						value={draft.rows}
+						placeholder="5"
+						onChange={(e) => onChange({ rows: e.target.value })}
+					/>
+				</label>
+			) : null}
+			{showsNumber ? (
+				<>
+					<label className="block text-xs text-neutral-400">
+						Min
+						<input
+							type="number"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={draft.numberMin}
+							onChange={(e) => onChange({ numberMin: e.target.value })}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Max
+						<input
+							type="number"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={draft.numberMax}
+							onChange={(e) => onChange({ numberMax: e.target.value })}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Step
+						<input
+							type="number"
+							min={0}
+							step="any"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={draft.numberStep}
+							onChange={(e) => onChange({ numberStep: e.target.value })}
+						/>
+					</label>
+				</>
 			) : null}
 		</div>
 	);
