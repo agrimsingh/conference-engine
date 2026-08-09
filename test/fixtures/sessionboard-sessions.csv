@@ -1,0 +1,4 @@
+Title,Description,Track,First Name,Last Name,Email,Biography,Video URL
+Opening Keynote,"Welcome and state of the field.",Main Stage,Ada,Lovelace,ada.lovelace@example.test,"Mathematician and first programmer.",https://video.example.test/keynote
+Lightning: Agents,"Five minutes on tool-using agents.",Lightning,Grace,Hopper,grace.hopper@example.test,"Compiler pioneer.",https://video.example.test/lightning
+Workshop: Schedules,"Hands-on schedule rebuild from CSV.",Workshops,Alan,Turing,alan.turing@example.test,"Foundations of computing.",

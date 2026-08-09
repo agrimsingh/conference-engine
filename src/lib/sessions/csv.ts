@@ -1,6 +1,7 @@
 export const MAX_IMPORT_BYTES = 512 * 1024;
 export const MAX_IMPORT_ROWS = 250;
-export const MAX_IMPORT_COLUMNS = 20;
+/** Wide enough for a trimmed Sessionboard Sessions+Contacts export. */
+export const MAX_IMPORT_COLUMNS = 40;
 
 export type CsvRecord = Record<string, string>;
 

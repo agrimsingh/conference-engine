@@ -15,13 +15,13 @@ describe("session CSV safety", () => {
 		expect(safeExternalUrl("data:text/html,unsafe")).toBeNull();
 	});
 
-	it("enforces the documented 512 KB, 250-row, and 20-column limits", () => {
+	it("enforces the documented 512 KB, 250-row, and 40-column limits", () => {
 		const exactly512Kb = `title\n${"x".repeat(512 * 1024 - 6)}`;
 		expect(parseBoundedCsv(exactly512Kb).ok).toBe(true);
 		expect(parseBoundedCsv(`${exactly512Kb}x`)).toMatchObject({ ok: false, error: expect.stringMatching(/512 KB/) });
-		const headers = Array.from({ length: 20 }, (_, index) => `column_${index}`).join(",");
-		expect(parseBoundedCsv(`${headers}\n${Array(20).fill("value").join(",")}`).ok).toBe(true);
-		expect(parseBoundedCsv(`${headers},extra\n${Array(21).fill("value").join(",")}`)).toMatchObject({ ok: false, error: expect.stringMatching(/columns/) });
+		const headers = Array.from({ length: 40 }, (_, index) => `column_${index}`).join(",");
+		expect(parseBoundedCsv(`${headers}\n${Array(40).fill("value").join(",")}`).ok).toBe(true);
+		expect(parseBoundedCsv(`${headers},extra\n${Array(41).fill("value").join(",")}`)).toMatchObject({ ok: false, error: expect.stringMatching(/columns/) });
 		const rows250 = `title\n${Array.from({ length: 250 }, (_, index) => `Talk ${index}`).join("\n")}`;
 		expect(parseBoundedCsv(rows250).ok).toBe(true);
 		expect(parseBoundedCsv(`${rows250}\nToo many`)).toMatchObject({ ok: false, error: expect.stringMatching(/250 rows/) });

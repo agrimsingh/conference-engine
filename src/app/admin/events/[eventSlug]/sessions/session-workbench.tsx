@@ -97,7 +97,7 @@ export function SessionWorkbench({
 
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<h2 className="text-base font-medium text-neutral-100">Import CSV</h2>
-				<p className="mt-1 text-sm text-neutral-400">Required: <code>title</code>. Optional: abstract, track/category, speaker_name, speaker_email, speaker_bio, video_url, google_doc_url, supporting_url. Preview checks formulas, URLs, duplicate rows, and existing sessions before anything is written.</p>
+				<p className="mt-1 text-sm text-neutral-400">Paste a Sessionboard CSV export (or our columns). Required: <code>title</code> / Session Title. Optional: Description, Track, First Name + Last Name, Email, Biography, video_url, google_doc_url, supporting_url. Preview checks formulas, URLs, duplicate rows, and existing sessions before anything is written.</p>
 				<textarea aria-label="Session CSV" value={importCsv} onChange={(event) => setImportCsv(event.target.value)} rows={8} className="mt-3 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs" />
 				<div className="mt-3 flex gap-2"><Button onClick={() => void previewImport()} disabled={busy}>Preview import</Button><Button variant="primary" onClick={() => void commitImport()} disabled={busy || !preview}>Commit import</Button></div>
 				{preview ? <ul className="mt-3 space-y-1 text-sm">{preview.map((row) => <li key={row.row} className={row.issues.length ? "text-amber-300" : "text-neutral-400"}>Row {row.row}: {row.input?.title ?? "Invalid row"}{row.issues.length ? ` — ${row.issues.join("; ")}` : row.duplicate === "idempotent" ? " — already imported" : " — ready"}</li>)}</ul> : null}
