@@ -28,7 +28,6 @@ type Props = {
 	tasks: TaskView[];
 	compact?: boolean;
 	readOnly?: boolean;
-	now: number;
 	timeZone?: string;
 };
 
@@ -36,11 +35,12 @@ export function textTaskRules(key: string): { minLength: number | undefined; hin
 	return key === "bio" ? { minLength: 20, hint: " (20+ characters)" } : { minLength: undefined, hint: "" };
 }
 
-export function TaskChecklist({ tasks, compact = false, readOnly = false, now, timeZone }: Props) {
+export function TaskChecklist({ tasks, compact = false, readOnly = false, timeZone }: Props) {
 	const router = useRouter();
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
+	const [now] = useState(() => Date.now());
 
 	async function completeTextTask(taskId: string, label: string, text: string) {
 		setBusyId(taskId);

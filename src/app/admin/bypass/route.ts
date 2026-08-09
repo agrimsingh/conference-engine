@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 		sameSite: "lax",
 		path: "/",
 		maxAge: 60 * 60 * 24 * 7,
-		secure: process.env.NODE_ENV === "production",
+		secure: url.protocol === "https:",
 	});
 	return response;
 }
