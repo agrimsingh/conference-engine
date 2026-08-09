@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingHero, LandingNav } from "@/components/landing-intro";
 import { LogoMark } from "@/components/logo";
 
 const DEMO_EVENT = "demo-cfp-to-stage";
@@ -461,76 +462,10 @@ function ScheduleScene() {
 export default function Home() {
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-100">
-			{/* Nav */}
-			<header className="sticky top-0 z-40 border-b border-neutral-800/70 bg-neutral-950/80 backdrop-blur">
-				<nav className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
-					<Link href="/" className="flex items-center gap-2">
-						<LogoMark />
-						<span className="text-sm font-semibold tracking-tight">
-							conference-engine
-						</span>
-					</Link>
-					<div className="ml-auto hidden items-center gap-5 text-sm text-neutral-400 sm:flex">
-						<a className="hover:text-neutral-100" href="#pipeline">
-							Features
-						</a>
-						<Link
-							className="hover:text-neutral-100"
-							href={`/e/${DEMO_EVENT}/schedule`}
-						>
-							Schedule
-						</Link>
-						<a
-							className="hover:text-neutral-100"
-							href={`${REPO_URL}#readme`}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Docs
-						</a>
-						<a
-							className="hover:text-neutral-100"
-							href={REPO_URL}
-							target="_blank"
-							rel="noreferrer"
-						>
-							GitHub
-						</a>
-					</div>
-					<Link
-						href="/demo"
-						className="ml-auto rounded-md bg-emerald-500 px-3.5 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400 sm:ml-0"
-					>
-						Explore demo
-					</Link>
-				</nav>
-			</header>
+			<LandingNav demoEvent={DEMO_EVENT} repoUrl={REPO_URL} />
 
 			<main>
-				{/* Headline band */}
-				<section className="mx-auto max-w-7xl px-4 pb-10 pt-14 sm:px-6 sm:pt-16">
-					<h1 className="text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl lg:text-6xl">
-						CFP to stage.{" "}
-						<span className="text-emerald-400">Nothing stalls.</span>
-					</h1>
-					<p className="mt-3 max-w-xl text-pretty text-base text-neutral-400">
-						The self-hosted conference program pipeline — an open-source
-						Sessionboard alternative that runs on Cloudflare.
-					</p>
-					<div className="mt-5 flex flex-wrap items-center gap-6 text-sm font-medium">
-						<Link
-							href="/demo"
-							className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300"
-						>
-							Explore demo
-							<ArrowIcon />
-						</Link>
-						<Link href="/admin" className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100">
-							Create your event
-							<ArrowIcon />
-						</Link>
-					</div>
-				</section>
+				<LandingHero />
 
 				{/* Schedule scene */}
 				<section className="relative pb-6">

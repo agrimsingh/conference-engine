@@ -110,7 +110,7 @@ components:
 
 **Creative North Star: "The Product Is the Hero"**
 
-conference-engine's visual world is the developer-tool category standard played completely straight — the Linear/Vercel/Resend/Stripe/PostHog register with no irony and no smuggled quirk. This is a recorded brand commitment (PRODUCT.md, 2026-08-08): convention is the choice, and future visual work refines within this canon rather than re-litigating the direction. The landing page proves the thesis literally — instead of a tall centered hero with a screenshot in a browser frame (explicitly refused), the page opens with a compact left-aligned headline band and then hands ~70% of the viewport to a live-looking schedule builder catching a real speaker conflict. The product demonstrates itself; the marketing copy stands aside.
+conference-engine's visual world is the developer-tool category standard played completely straight — the Linear/Vercel/Resend/Stripe/PostHog register with no irony and no smuggled quirk. This is a recorded brand commitment (PRODUCT.md, 2026-08-08): convention is the choice, and future visual work refines within this canon rather than re-litigating the direction. The landing page proves the thesis literally — instead of a tall centered hero with a screenshot in a browser frame (explicitly refused), the page opens with a compact left-aligned conversion band that says the hosted product is ready for organizers now, then hands ~70% of the viewport to a live-looking schedule builder catching a real speaker conflict. The product demonstrates itself; the marketing copy stands aside.
 
 **The system is one dark world (decision recorded 2026-08-08, superseding the earlier marketing/app split).** Every surface — landing, admin (submissions, schedule, dashboard, tasks), review board, speaker portal, CFP form, and public schedule — lives on the same near-black ground (#0a0a0b) with off-white text, graphite raised cards, hairline carbon borders, and a single emerald accent. The earlier Stripe-style split (dark marketing, light workhorse app) was deliberate at the time; the product owner has since decided consistency wins: the app is the landing page's promise kept, in the same room. The old "never darken the app surfaces" rule is retired.
 
@@ -128,8 +128,8 @@ Density is dev-tool density: 13px and 11px micro-type is normal inside functiona
 A neutral-dominated palette where the entire Tailwind neutral scale is the shared spine and emerald is the only voice with an opinion.
 
 ### Primary
-- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per viewport — the primary action (the landing "Open demo" button; the one filled button per app view), with near-black text. Also the logo mark's stroke and dot, and the drag-card's active border at 60% opacity. In practice Tailwind `emerald-500` is its working twin on buttons.
-- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("Nothing stalls."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`). `emerald-400` is the text register for positive status on dark chips.
+- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per viewport — the primary action (the landing "Create your event" button; the one filled button per app view), with near-black text. Also the logo mark's stroke and dot, and the drag-card's active border at 60% opacity. In practice Tailwind `emerald-500` is its working twin on buttons.
+- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("From CFP to stage."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`). `emerald-400` is the text register for positive status on dark chips.
 
 ### Secondary
 - **Conflict Red** (`{colors.conflict-red}`, #dc2626): red means "the system caught something" and nothing else. The schedule conflict banner is its loudest form (solid red-600 fill, red-400/60 border, white semibold text). Everywhere else red is error/negative semantics only, rendered for dark surfaces as red-400 text on red-500/10 fill with red-500/30 border. Never decorative, never a second accent.
@@ -162,7 +162,7 @@ A neutral-dominated palette where the entire Tailwind neutral scale is the share
 **Character:** One neutral grotesk doing everything, differentiated by size, weight ceiling, and tightening tracking as size grows. Confident, quiet, engineered — the voice of a tool that expects to be trusted, not admired.
 
 ### Hierarchy
-- **Display** (600, 2.25rem stepping to 3.75rem at `lg`, tight leading, −0.02em): the landing headline only. Left-aligned, `text-balance`, with one phrase colored Emerald Bright.
+- **Display** (600, 2.25rem stepping to 3.75rem at `lg`, tight leading, −0.02em): the landing headline only. Left-aligned, `text-balance`, with the product span “From CFP to stage.” colored Emerald Bright.
 - **Headline** (600, 1.5rem stepping to 1.875rem, −0.025em): landing section headings ("The whole program pipeline, one system").
 - **Title** (600, 1.875rem, −0.025em): app page titles via the shared `PageHeader` component, in neutral-100; item-level titles drop to 1.125rem/500.
 - **Body** (400, 0.875rem base, 1rem for landing lede, relaxed leading on long descriptions): Smoke. Long text capped near `max-w-xl`/`max-w-2xl` (~65ch).
@@ -210,7 +210,8 @@ Shared primitives live in `src/components/ui.tsx` (Button, Chip, StatusPill, Seg
 - **Primary:** Emerald Signal fill (`emerald-500`) with near-black text, hover Emerald Bright (`emerald-400`) — the ONE primary action per view.
 - **Secondary:** Graphite fill, Carbon Line border, neutral-200 text; hover lifts the fill one step to Carbon Line. Disabled drops to 40–50% opacity.
 - **Hover / Focus:** color-only transitions; focus is the global 2px Emerald Bright outline with 2px offset.
-- **Arrow link (landing):** the marketing CTA of record — Emerald Bright text with an inline 14px stroked arrow, hover lightening one emerald step. Neutral variant in neutral-300 → neutral-100 for the secondary path.
+- **Landing conversion pair:** one solid Emerald Signal button for creating an event, followed by a neutral arrow link for exploring the demo. The homepage must describe the hosted product as usable now before mentioning self-hosting; deployment remains a secondary path lower on the page.
+- **Arrow link (landing):** the supporting CTA — neutral-300 text with an inline 14px stroked arrow, hover lightening to neutral-100. Emerald arrow links remain available for in-page product exploration after the primary conversion has been established.
 
 ### Chips
 - **Tag chips:** 10–11px text in Smoke, 1px neutral-700/80% border, 4px radius, hairline padding — metadata tags on rail cards and label chips.

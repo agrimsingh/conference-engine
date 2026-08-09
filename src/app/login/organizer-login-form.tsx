@@ -62,9 +62,9 @@ export function OrganizerLoginForm({ initialEmail, next, initialError }: Props) 
 		return (
 			<>
 				<PageHeader
-					eyebrow="Organizer"
-					title="Check your email"
-					description="We sent a one-time sign-in link. Open it on this device to continue."
+					eyebrow="Organizer workspace"
+					title="Check your email to continue"
+					description="We sent a secure, one-time link. Open it on this device to create or manage your event."
 				/>
 				<div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-5">
 					<p className="text-sm font-medium text-emerald-300">
@@ -85,9 +85,9 @@ export function OrganizerLoginForm({ initialEmail, next, initialError }: Props) 
 	return (
 		<>
 			<PageHeader
-				eyebrow="Organizer"
-				title="Sign in"
-				description="Enter your email and we'll send a magic link to the organizer admin."
+				eyebrow="Organizer workspace"
+				title="Create or open your event"
+				description="Enter your email for a secure sign-in link. New organizers can create their first event as soon as they sign in."
 			/>
 			<form
 				onSubmit={onSubmit}
@@ -123,16 +123,20 @@ export function OrganizerLoginForm({ initialEmail, next, initialError }: Props) 
 						className="text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-200"
 						onClick={() => setShowName(true)}
 					>
-						Add your name (first visit)
+						New here? Add your name
 					</button>
 				)}
 				{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
+				<p className="text-sm text-neutral-400">
+					After sign-in, guided setup walks you through dates, CFP, review,
+					speakers, and schedule publishing.
+				</p>
 				<button
 					type="submit"
 					disabled={pending}
-					className={`w-full sm:w-auto ${buttonClasses("primary")}`}
+					className={`w-full ${buttonClasses("primary")}`}
 				>
-					{pending ? "Sending…" : "Email me a sign-in link"}
+					{pending ? "Sending…" : "Continue with email"}
 				</button>
 			</form>
 			<p className="mt-8 text-sm text-neutral-500">

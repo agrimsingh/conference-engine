@@ -21,10 +21,10 @@ async function screenshot(testName: string, testInfo: TestInfo, page: Page) {
 test.describe("release smoke: public surfaces", () => {
 	test("landing leads through demo perspectives to the public schedule", async ({ page }, testInfo) => {
 		await page.goto("/");
-		await expect(page.getByRole("heading", { name: /CFP to stage/i })).toBeVisible();
+		await expect(page.locator('main a[href="/admin"]').first()).toBeVisible();
 		await screenshot("01-landing", testInfo, page);
 
-		await page.getByRole("link", { name: "Explore demo" }).first().click();
+		await page.getByRole("link", { name: "Explore the live demo" }).click();
 		await expect(page).toHaveURL(/\/demo$/);
 		await expect(page.getByText("Read-only demo data")).toBeVisible();
 		await expect(page.getByRole("navigation", { name: "Demo perspective" })).toBeVisible();
