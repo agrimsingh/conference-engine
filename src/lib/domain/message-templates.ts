@@ -10,6 +10,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"organizer_magic_link",
 	"organizer_invite",
 	"reviewer_invite",
+	"reviewer_outstanding_reminder",
 ] as const;
 
 export type MessageTemplateKey = (typeof MESSAGE_TEMPLATE_KEYS)[number];
@@ -198,6 +199,29 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"— conference-engine",
 		].join("\n"),
 	}),
+	reviewer_outstanding_reminder: (ctx) => {
+		const count = ctx.outstandingCount ?? ctx.taskLabels?.length ?? 0;
+		const labels = ctx.taskLabels ?? [];
+		const taskLines =
+			labels.length > 0
+				? labels.map((label) => `• ${label}`)
+				: ["• (see your review board for details)"];
+		return {
+			subject: `Reminder: ${count} outstanding review${count === 1 ? "" : "s"} for ${ctx.eventName}`,
+			text: [
+				`Hi ${ctx.submitterName},`,
+				"",
+				`You still have ${count} incomplete review assignment${count === 1 ? "" : "s"} for ${ctx.eventName}:`,
+				"",
+				...taskLines,
+				"",
+				ctx.portalHint ??
+					"Open your personal review link from your invite email to finish scoring.",
+				"",
+				"— conference-engine",
+			].join("\n"),
+		};
+	},
 };
 
 export function isMessageTemplateKey(value: string): value is MessageTemplateKey {
@@ -221,6 +245,8 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 		// Multiple co-speakers per submission + admin resend.
 		key !== "co_speaker_invite" &&
 		// Token rotation on regenerate must be able to mail a new link.
-		key !== "reviewer_invite"
+		key !== "reviewer_invite" &&
+		// Manual outstanding-reviewer nudges may repeat inside a window via deliveryScope.
+		key !== "reviewer_outstanding_reminder"
 	);
 }

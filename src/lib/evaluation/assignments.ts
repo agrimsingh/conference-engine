@@ -1,5 +1,6 @@
 import {
 	clearAssignmentsForSubmission,
+	listAssignmentsForPlanSubmissions,
 	listAssignmentsForReviewer,
 	listAssignmentsForSubmission,
 } from "@/lib/db/queries";
@@ -58,7 +59,7 @@ export async function setSubmissionReviewers(
 	},
 ): Promise<ReviewAssignmentRow[]> {
 	const reviewerIds = await validatePlanReviewerIds(db, args.planId, args.reviewerIds);
-	const rows = assignmentRows(args.planId, [args.submissionId], reviewerIds);
+	const rows = await buildAssignmentRows(db, args.planId, [args.submissionId], reviewerIds);
 	await db.batch(assignmentStatements(db, args.planId, [args.submissionId], rows));
 
 	return rows;
@@ -77,7 +78,7 @@ export async function setBulkSubmissionReviewers(
 		.bind(args.planId, ...submissionIds).all<{ id: string }>();
 	if (owned.results.length !== submissionIds.length) throw new AssignmentValidationError("One or more submissions do not belong to this event", 404);
 	const validReviewerIds = await validatePlanReviewerIds(db, args.planId, reviewerIds);
-	const rows = assignmentRows(args.planId, submissionIds, validReviewerIds);
+	const rows = await buildAssignmentRows(db, args.planId, submissionIds, validReviewerIds);
 	// D1 executes a batch as one transaction: no submission is cleared or
 	// reassigned unless every delete and insert succeeds.
 	await db.batch(assignmentStatements(db, args.planId, submissionIds, rows));
@@ -96,17 +97,37 @@ async function validatePlanReviewerIds(db: D1Database, planId: string, reviewerI
 	return uniqueIds;
 }
 
-function assignmentRows(planId: string, submissionIds: string[], reviewerIds: string[]): ReviewAssignmentRow[] {
+async function buildAssignmentRows(
+	db: D1Database,
+	planId: string,
+	submissionIds: string[],
+	reviewerIds: string[],
+): Promise<ReviewAssignmentRow[]> {
+	const existing = await listAssignmentsForPlanSubmissions(db, planId, submissionIds);
+	const recusalByKey = new Map<string, number>();
+	for (const row of existing) {
+		if (row.recused_at == null) continue;
+		recusalByKey.set(`${row.reviewer_id}:${row.submission_id}`, row.recused_at);
+	}
 	const created_at = Date.now();
-	return submissionIds.flatMap((submissionId) => reviewerIds.map((reviewer_id) => ({ id: crypto.randomUUID(), plan_id: planId, reviewer_id, submission_id: submissionId, created_at })));
+	return submissionIds.flatMap((submissionId) =>
+		reviewerIds.map((reviewer_id) => ({
+			id: crypto.randomUUID(),
+			plan_id: planId,
+			reviewer_id,
+			submission_id: submissionId,
+			created_at,
+			recused_at: recusalByKey.get(`${reviewer_id}:${submissionId}`) ?? null,
+		})),
+	);
 }
 
 function assignmentStatements(db: D1Database, planId: string, submissionIds: string[], rows: ReviewAssignmentRow[]): D1PreparedStatement[] {
 	const placeholders = submissionIds.map(() => "?").join(", ");
 	return [
 		db.prepare(`DELETE FROM review_assignments WHERE plan_id = ? AND submission_id IN (${placeholders})`).bind(planId, ...submissionIds),
-		...rows.map((row) => db.prepare(`INSERT INTO review_assignments (id, plan_id, reviewer_id, submission_id, created_at) VALUES (?, ?, ?, ?, ?)`)
-			.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at)),
+		...rows.map((row) => db.prepare(`INSERT INTO review_assignments (id, plan_id, reviewer_id, submission_id, created_at, recused_at) VALUES (?, ?, ?, ?, ?, ?)`)
+			.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at, row.recused_at)),
 	];
 }
 

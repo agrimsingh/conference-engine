@@ -60,6 +60,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 	const workload = new Map<string, { assigned: number; scored: number }>();
 	for (const reviewer of reviewers) workload.set(reviewer.id, { assigned: 0, scored: reviewCount.get(reviewer.id) ?? 0 });
 	for (const assignment of assignments) {
+		if (assignment.recused_at != null) continue;
 		const row = workload.get(assignment.reviewer_id);
 		if (row) row.assigned += 1;
 	}

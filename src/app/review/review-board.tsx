@@ -13,7 +13,7 @@ type CriterionScoreView = { id: string; criterionId: string; score: number; comm
 type ScoreView = { id: string; score: number; comment: string | null; scoredBy: string };
 type SubmissionView = {
 	id: string; status: string; submitterName: string | null; submitterEmail: string | null; title: string; category: string; format: string | null;
-	answers: SubmissionAnswerDisplay[]; assignment: string; previews: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
+	answers: SubmissionAnswerDisplay[]; assignment: string; recusedAt: number | null; previews: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
 };
 type Props = { eventSlug: string; token: string; canDecide: boolean; reviewerId: string | null; criteria: CriterionView[]; submissions: SubmissionView[] };
 
@@ -31,7 +31,8 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 		const matchesQuery = `${row.title} ${row.submitterName ?? ""} ${row.submitterEmail ?? ""} ${row.category}`.toLowerCase().includes(query.trim().toLowerCase());
 		return matchesQuery && (status === "all" || row.status === status);
 	}), [query, status, submissions]);
-	const completed = submissions.filter((row) => authoredScores(row, reviewerId).length === criteria.length && criteria.length > 0).length;
+	const activeAssignments = submissions.filter((row) => row.recusedAt == null);
+	const completed = activeAssignments.filter((row) => authoredScores(row, reviewerId).length === criteria.length && criteria.length > 0).length;
 	const safeFocusIndex = visible.length === 0 ? 0 : Math.min(focusIndex, visible.length - 1);
 	const safeCriterionIndex = criteria.length === 0 ? 0 : Math.min(criterionIndex, criteria.length - 1);
 	const focused = visible[safeFocusIndex] ?? null;
@@ -82,7 +83,31 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 		return () => window.removeEventListener("keydown", listener);
 	}, []);
 
+	async function recuseSubmission(row: SubmissionView) {
+		if (!reviewerId || row.recusedAt != null) return;
+		setPendingId(row.id);
+		setError(null);
+		try {
+			const response = await fetch("/api/review/recuse", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ token, submissionId: row.id }),
+			});
+			const data = await response.json() as { ok?: boolean; error?: string };
+			if (!response.ok || !data.ok) {
+				setError(data.error ?? "Recusal failed");
+				return;
+			}
+			router.refresh();
+		} catch {
+			setError("Network error");
+		} finally {
+			setPendingId(null);
+		}
+	}
+
 	async function scoreSubmission(row: SubmissionView) {
+		if (row.recusedAt != null) { setError("You recused this assignment."); return; }
 		if (!criteria.length) { setError("This plan has no rubric criteria. Ask an organizer to add one."); return; }
 		setPendingId(row.id); setError(null);
 		const existing = new Map(authoredScores(row, reviewerId).map((score) => [score.criterionId, score]));
@@ -105,7 +130,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 		<div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/70 px-3 py-3 text-sm">
 			<div>
 				<p className="font-medium text-neutral-100">Review progress</p>
-				<p className="mt-0.5 text-neutral-400">{completed}/{submissions.length} proposals fully scored across {criteria.length} criteria.</p>
+				<p className="mt-0.5 text-neutral-400">{completed}/{activeAssignments.length} active assignments fully scored across {criteria.length} criteria.</p>
 				<p className="mt-1 text-xs text-neutral-500">Shortcuts: J/K move proposals, [/] move criteria, 0–9 set the focused criterion score.</p>
 			</div>
 			<div className="flex flex-wrap gap-2">
@@ -144,12 +169,22 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 							<summary className="cursor-pointer font-medium text-neutral-200">Proposal details</summary>
 							<SubmissionAnswersList answers={row.answers} />
 						</details>
+						{row.recusedAt != null ? (
+							<p className={noticeClasses("warning")}>You recused this assignment. It no longer counts toward required reviews.</p>
+						) : null}
 						<div className="space-y-3 rounded-md border border-neutral-800 bg-neutral-950/30 p-3">
-							<div>
-								<p className="font-medium text-neutral-100">Rubric</p>
-								<p className="mt-0.5 text-xs text-neutral-500">Score each criterion, then save this review.</p>
+							<div className="flex flex-wrap items-start justify-between gap-2">
+								<div>
+									<p className="font-medium text-neutral-100">Rubric</p>
+									<p className="mt-0.5 text-xs text-neutral-500">Score each criterion, then save this review.</p>
+								</div>
+								{reviewerId && row.recusedAt == null ? (
+									<button type="button" disabled={busy} onClick={() => void recuseSubmission(row)} className={buttonClasses("secondary")}>
+										{busy ? "Saving…" : "Recuse"}
+									</button>
+								) : null}
 							</div>
-							{criteria.map((criterion, criterionOffset) => {
+							{row.recusedAt != null ? null : criteria.map((criterion, criterionOffset) => {
 								const selected = picked[row.id]?.[criterion.id] ?? own.get(criterion.id)?.score ?? midpoint(criterion);
 								const scoreComment = comments[row.id]?.[criterion.id] ?? own.get(criterion.id)?.comment ?? "";
 								const criterionFocused = focusedRow && criterionOffset === safeCriterionIndex;
@@ -191,7 +226,9 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 									</fieldset>
 								);
 							})}
-							<button type="button" disabled={busy} onClick={() => void scoreSubmission(row)} className={buttonClasses("secondary")}>{busy ? "Saving…" : "Save rubric review"}</button>
+							{row.recusedAt == null ? (
+								<button type="button" disabled={busy} onClick={() => void scoreSubmission(row)} className={buttonClasses("secondary")}>{busy ? "Saving…" : "Save rubric review"}</button>
+							) : null}
 						</div>
 						{canDecide ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
 					</li>
