@@ -41,7 +41,7 @@ DELETE FROM rate_limit_buckets;
 DELETE FROM production_hardening_migration_guard;
 DELETE FROM events;
 
--- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
+-- Seed: aie-sandbox event + open CFP form (local writable fixture; conference preset shape)
 
 INSERT INTO events (id, slug, name, timezone, ownership_claimable, created_at, updated_at)
 VALUES (

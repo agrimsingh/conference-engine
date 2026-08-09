@@ -10,3 +10,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:14:10Z	wave0	Merged remaining Wave0 branches to main	settings then formbuilder then publicreview then presetclone	loop tick 1	verify next
 2026-08-09T08:14:47Z	wave0	Wave0 complete on main; worktrees removed	all five units merged with green tests	e19162a	done
 2026-08-09T08:15:02Z	wave1	Created worktrees for cockpit review schedule public setup	Wave0 landed; continue roadmap	e1d5e5a	launching
+2026-08-09T08:15:36Z	council	Security scan NONE; Wave0 merge already landed before late council reports	stale 11pct report superseded by e1d5e5a	3c3d2668 + fb4863a6	noted
