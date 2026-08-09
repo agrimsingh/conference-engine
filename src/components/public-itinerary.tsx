@@ -28,25 +28,24 @@ function formatDay(dayKey: string, timeZone: string): string {
 	return new Intl.DateTimeFormat("en", { timeZone, weekday: "long", month: "long", day: "numeric" }).format(new Date(`${dayKey}T12:00:00Z`));
 }
 
-export function PublicItinerary({ eventSlug, timezone, sessions, mode }: {
+export function PublicItinerary({ eventSlug, timezone, sessions, eventSessionIds, mode }: {
 	eventSlug: string;
 	timezone: string;
 	sessions: PublicItinerarySession[];
+	eventSessionIds: readonly string[];
 	mode: "itinerary" | "my-schedule";
 }) {
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [hydrated, setHydrated] = useState(false);
 	const [exportError, setExportError] = useState("");
 	const [exporting, setExporting] = useState(false);
-	const availableIds = useMemo(() => sessions.map((session) => session.sessionId), [sessions]);
-
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
-			setSelectedIds(parseItinerarySelection(window.localStorage.getItem(itineraryStorageKey(eventSlug)), eventSlug, availableIds));
+			setSelectedIds(parseItinerarySelection(window.localStorage.getItem(itineraryStorageKey(eventSlug)), eventSlug, eventSessionIds));
 			setHydrated(true);
 		}, 0);
 		return () => window.clearTimeout(timer);
-	}, [availableIds, eventSlug]);
+	}, [eventSessionIds, eventSlug]);
 
 	useEffect(() => {
 		if (!hydrated) return;
