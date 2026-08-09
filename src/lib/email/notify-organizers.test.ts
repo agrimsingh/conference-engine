@@ -19,7 +19,29 @@ vi.mock("./resend", () => ({
 	sendTemplatedEmail: mocks.sendTemplatedEmail,
 }));
 
-import { notifyOrganizersOfSubmission } from "./notify";
+import { isOrganizerSubmissionNotifyEnabled, notifyOrganizersOfSubmission } from "./notify";
+
+describe("isOrganizerSubmissionNotifyEnabled", () => {
+	it("defaults create on and update off", () => {
+		expect(isOrganizerSubmissionNotifyEnabled({}, "created")).toBe(true);
+		expect(isOrganizerSubmissionNotifyEnabled({}, "updated")).toBe(false);
+	});
+
+	it("reads explicit event flags", () => {
+		expect(
+			isOrganizerSubmissionNotifyEnabled(
+				{ notify_on_submission_create: 0, notify_on_submission_update: 1 },
+				"created",
+			),
+		).toBe(false);
+		expect(
+			isOrganizerSubmissionNotifyEnabled(
+				{ notify_on_submission_create: 0, notify_on_submission_update: 1 },
+				"updated",
+			),
+		).toBe(true);
+	});
+});
 
 describe("notifyOrganizersOfSubmission", () => {
 	beforeEach(() => {
@@ -41,6 +63,8 @@ describe("notifyOrganizersOfSubmission", () => {
 			name: "AI Summit",
 			timezone: "UTC",
 			mode: "live",
+			notify_on_submission_create: 1,
+			notify_on_submission_update: 1,
 			created_at: 1,
 			updated_at: 1,
 		});
@@ -127,6 +151,67 @@ describe("notifyOrganizersOfSubmission", () => {
 
 	it("returns nothing when the event has no members", async () => {
 		mocks.listEventMembers.mockResolvedValueOnce([]);
+		const results = await notifyOrganizersOfSubmission({} as D1Database, {
+			submissionId: "sub-1",
+			kind: "created",
+		});
+		expect(results).toEqual([]);
+		expect(mocks.sendTemplatedEmail).not.toHaveBeenCalled();
+	});
+
+	it("skips update fan-out when notify_on_submission_update is off", async () => {
+		mocks.getEventById.mockResolvedValueOnce({
+			id: "evt",
+			slug: "evt",
+			name: "AI Summit",
+			timezone: "UTC",
+			mode: "live",
+			notify_on_submission_create: 1,
+			notify_on_submission_update: 0,
+			created_at: 1,
+			updated_at: 1,
+		});
+		const results = await notifyOrganizersOfSubmission({} as D1Database, {
+			submissionId: "sub-1",
+			kind: "updated",
+		});
+		expect(results).toEqual([]);
+		expect(mocks.listEventMembers).not.toHaveBeenCalled();
+		expect(mocks.sendTemplatedEmail).not.toHaveBeenCalled();
+	});
+
+	it("still sends create fan-out when update notify is off", async () => {
+		mocks.getEventById.mockResolvedValueOnce({
+			id: "evt",
+			slug: "evt",
+			name: "AI Summit",
+			timezone: "UTC",
+			mode: "live",
+			notify_on_submission_create: 1,
+			notify_on_submission_update: 0,
+			created_at: 1,
+			updated_at: 1,
+		});
+		const results = await notifyOrganizersOfSubmission({} as D1Database, {
+			submissionId: "sub-1",
+			kind: "created",
+		});
+		expect(results).toHaveLength(2);
+		expect(mocks.sendTemplatedEmail).toHaveBeenCalledTimes(2);
+	});
+
+	it("skips create fan-out when notify_on_submission_create is off", async () => {
+		mocks.getEventById.mockResolvedValueOnce({
+			id: "evt",
+			slug: "evt",
+			name: "AI Summit",
+			timezone: "UTC",
+			mode: "live",
+			notify_on_submission_create: 0,
+			notify_on_submission_update: 1,
+			created_at: 1,
+			updated_at: 1,
+		});
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "created",

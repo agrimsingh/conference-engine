@@ -93,7 +93,7 @@ function sentTo(fetchMock: ReturnType<typeof vi.fn>): string[] {
 describe("organizer submission notify", () => {
 	afterEach(() => vi.unstubAllGlobals());
 
-	it("emails every organizer once on create and again on edit finalize", async () => {
+	it("defaults to create notify on and update notify off", async () => {
 		const eventId = "org-notify-event";
 		const formId = "org-notify-form";
 		const draftId = "org-notify-draft";
@@ -105,6 +105,16 @@ describe("organizer submission notify", () => {
 			ownerEmail: "owner@org.notify",
 			adminEmail: "admin@org.notify",
 		});
+		const prefs = await env.DB.prepare(
+			"SELECT notify_on_submission_create, notify_on_submission_update FROM events WHERE id = ?",
+		)
+			.bind(eventId)
+			.first<{ notify_on_submission_create: number; notify_on_submission_update: number }>();
+		expect(prefs).toEqual({
+			notify_on_submission_create: 1,
+			notify_on_submission_update: 0,
+		});
+
 		await prepareDraftResumeDelivery(env.DB, {
 			secret,
 			eventId,
@@ -180,16 +190,84 @@ describe("organizer submission notify", () => {
 			kind: "updated",
 			runtime,
 		});
-		expect(updateMails.every((mail) => mail.ok && mail.status === "sent")).toBe(true);
-		expect(sentTo(fetchMock)).toEqual(["admin@org.notify", "owner@org.notify"]);
+		expect(updateMails).toEqual([]);
+		expect(fetchMock).not.toHaveBeenCalled();
 
 		const updateRows = await env.DB.prepare(
-			"SELECT to_email, template_key, status FROM email_deliveries WHERE submission_id = ? AND template_key = 'submission_updated_organizer' ORDER BY to_email",
+			"SELECT to_email FROM email_deliveries WHERE submission_id = ? AND template_key = 'submission_updated_organizer'",
 		)
 			.bind(updated.submissionId)
-			.all<{ to_email: string; template_key: string; status: string }>();
-		expect(updateRows.results).toHaveLength(2);
-		expect(updateRows.results.every((row) => row.status === "sent")).toBe(true);
+			.all<{ to_email: string }>();
+		expect(updateRows.results).toEqual([]);
+	});
+
+	it("emails organizers on update only when notify_on_submission_update is enabled", async () => {
+		const eventId = "org-notify-update-on";
+		const formId = "org-notify-update-form";
+		const draftId = "org-notify-update-draft";
+		const token = "org-notify-update-token";
+		await seedEvent({
+			eventId,
+			eventSlug: "org-notify-update",
+			formId,
+			ownerEmail: "owner@org.update",
+			adminEmail: "admin@org.update",
+		});
+		await env.DB.prepare(
+			"UPDATE events SET notify_on_submission_update = 1 WHERE id = ?",
+		)
+			.bind(eventId)
+			.run();
+		await prepareDraftResumeDelivery(env.DB, {
+			secret,
+			eventId,
+			formId,
+			verifiedEmail: "speaker@org.update",
+			submitterName: "Ada",
+			draftId,
+			token,
+			now,
+			answers: { title: "Original", speakers: [{ name: "Ada", email: "speaker@org.update" }] },
+		});
+
+		const fetchMock = vi.fn(
+			async () => new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const created = await finalizeDraft(env.DB, {
+			secret,
+			draftId,
+			token,
+			submitterName: "Ada",
+			answers: { title: "Original", speakers: [{ name: "Ada", email: "speaker@org.update" }] },
+			speakers: [{ name: "Ada", email: "speaker@org.update" }],
+			now: now + 1,
+		});
+		expect(created.outcome).toBe("created");
+
+		const updated = await finalizeDraft(env.DB, {
+			secret,
+			draftId,
+			token: created.editToken,
+			submitterName: "Ada Lovelace",
+			answers: {
+				title: "Revised",
+				speakers: [{ name: "Ada Lovelace", email: "speaker@org.update" }],
+			},
+			speakers: [{ name: "Ada Lovelace", email: "speaker@org.update" }],
+			now: now + 2,
+		});
+		expect(updated.outcome).toBe("updated");
+
+		fetchMock.mockClear();
+		const updateMails = await notifyOrganizersOfSubmission(env.DB, {
+			submissionId: updated.submissionId,
+			kind: "updated",
+			runtime,
+		});
+		expect(updateMails.every((mail) => mail.ok && mail.status === "sent")).toBe(true);
+		expect(sentTo(fetchMock)).toEqual(["admin@org.update", "owner@org.update"]);
 
 		fetchMock.mockClear();
 		const updateReplay = await notifyOrganizersOfSubmission(env.DB, {
