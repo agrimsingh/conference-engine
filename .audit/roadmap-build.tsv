@@ -31,3 +31,5 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:53:09Z	release	Log production migrate+deploy	0022-0024 remote D1 + Worker b970dc3a @ f9c8a76; schedule/speakers/ICS 200	f9c8a76	done
 2026-08-09T08:53:38Z	release	Verified prod routes after deploy	schedule JSON/speakers/ICS 200 on demo-cfp-to-stage	b970dc3a	done
 2026-08-09T09:00:07Z	release	Fable adjudicated release blockers MET	live routes+migrations+lint+uploads+cockpit spot-checked	1149a2f4	yes
+2026-08-09T09:10:56Z	eval	Opened 5 parallel eval gap worktrees	score-per-effort order 1-5; content-mgmt deferred	9b3516d2385af9d1c06bb511910036090b88912f	running
+2026-08-09T09:15:48Z	eval	Merged public discover	search facets gallery surname sort	be2c2e6	green
