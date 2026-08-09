@@ -113,6 +113,9 @@ export default async function ReviewPage({ searchParams }: Props) {
 		scoresBySubmission.set(score.submission_id, list);
 	}
 
+	const recusalBySubmission = new Map(
+		reviewerAssignments.map((assignment) => [assignment.submission_id, assignment.recused_at]),
+	);
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
 		let parsedAnswers: Record<string, unknown> = {};
@@ -130,6 +133,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 		} catch {
 			// ignore
 		}
+		const recusedAt = identity.mode === "reviewer" ? (recusalBySubmission.get(row.id) ?? null) : null;
 		return {
 			id: row.id,
 			status: row.status,
@@ -138,7 +142,13 @@ export default async function ReviewPage({ searchParams }: Props) {
 			title,
 			category: displayCategory(row.category),
 			format: typeof parsedAnswers.format === "string" ? parsedAnswers.format : null,
-			assignment: identity.mode === "reviewer" ? "Assigned to you" : "Committee review",
+			assignment:
+				identity.mode === "reviewer"
+					? recusedAt
+						? "Recused"
+						: "Assigned to you"
+					: "Committee review",
+			recusedAt,
 			answers: buildSubmissionAnswerDisplays(parsedAnswers, {
 				submissionId: row.id,
 				downloadHref: (fieldKey) => {

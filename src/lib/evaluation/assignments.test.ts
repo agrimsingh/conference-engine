@@ -15,6 +15,7 @@ function assignment(submissionId: string): ReviewAssignmentRow {
 		reviewer_id: "rev-1",
 		submission_id: submissionId,
 		created_at: 0,
+		recused_at: null,
 	};
 }
 

@@ -3,9 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
+import { Button, buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
 import { DECISION_REGISTRY, renderDecisionPreviews, type DecisionAction } from "@/lib/domain";
 import { buildScoreComparisonMatrix } from "@/lib/evaluation/score-matrix";
+import {
+	sortScoreMatrixRows,
+	type ScoreMatrixSortDirection,
+	type ScoreMatrixSortKey,
+} from "@/lib/evaluation/score-matrix-sort";
 import { activationReviewPath } from "./activation-result";
 import { parseBulkDecisionResult } from "./bulk-decision-result";
 
@@ -62,6 +67,8 @@ export function ReviewWorkspace({
 	const [sendEmail, setSendEmail] = useState(true);
 	const [emailSubject, setEmailSubject] = useState("");
 	const [emailText, setEmailText] = useState("");
+	const [matrixSortKey, setMatrixSortKey] = useState<ScoreMatrixSortKey>("avg");
+	const [matrixSortDir, setMatrixSortDir] = useState<ScoreMatrixSortDirection>("desc");
 
 	const visible = useMemo(
 		() => submissions.filter((submission) => `${submission.title} ${submission.submitter}`.toLowerCase().includes(query.trim().toLowerCase()) && (status === "all" || submission.status === status)),
@@ -83,6 +90,33 @@ export function ReviewWorkspace({
 		}),
 		[aggregates, criteria, criterionScores, liveReviewers, submissions],
 	);
+	const statusBySubmission = useMemo(
+		() => new Map(submissions.map((submission) => [submission.id, submission.status])),
+		[submissions],
+	);
+	const sortedMatrixRows = useMemo(
+		() =>
+			sortScoreMatrixRows(
+				matrix.submissions.map((submission) => ({
+					id: submission.id,
+					title: submission.title,
+					status: statusBySubmission.get(submission.id) ?? "",
+					average: matrix.averages[submission.id] ?? null,
+				})),
+				matrixSortKey,
+				matrixSortDir,
+			),
+		[matrix.averages, matrix.submissions, matrixSortDir, matrixSortKey, statusBySubmission],
+	);
+
+	function toggleMatrixSort(key: ScoreMatrixSortKey) {
+		if (matrixSortKey === key) {
+			setMatrixSortDir((previous) => (previous === "asc" ? "desc" : "asc"));
+			return;
+		}
+		setMatrixSortKey(key);
+		setMatrixSortDir(key === "avg" ? "desc" : "asc");
+	}
 
 	async function request(path: string, method: string, body?: unknown) {
 		setError(null);
@@ -100,10 +134,13 @@ export function ReviewWorkspace({
 				error?: string;
 				emailStatus?: string | null;
 				reviewer?: { reviewPath?: string };
+				sent?: number;
+				skipped?: number;
 			};
 			const decisions = parseBulkDecisionResult(data);
 			if (!response.ok || (!data.ok && !decisions)) throw new Error(data.error ?? "Request failed");
 			if (decisions) setDecisionMessage(decisions.message);
+			else if (typeof data.sent === "number") setMessage(`Reminders sent: ${data.sent}, skipped: ${data.skipped ?? 0}.`);
 			else if (data.emailStatus === "sent" || data.emailStatus === "skipped") setMessage(`Saved. Invite email ${data.emailStatus}.`);
 			else if (data.emailStatus === "failed") setMessage("Saved. Invite email failed; copy the link below.");
 			else setMessage("Saved.");
@@ -435,8 +472,28 @@ export function ReviewWorkspace({
 					</section>
 
 					<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-						<h2 className="font-medium text-neutral-100">Score comparison</h2>
-						<p className="mt-1 text-xs text-neutral-500">Aggregate scores per named reviewer, with per-criterion breakdown on hover.</p>
+						<div className="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<h2 className="font-medium text-neutral-100">Score comparison</h2>
+								<p className="mt-1 text-xs text-neutral-500">Aggregate scores per named reviewer, with per-criterion breakdown on hover. Click Proposal, Status, or Avg to sort.</p>
+							</div>
+							<div className="flex flex-wrap gap-2">
+								<a
+									href={`/api/admin/events/${eventSlug}/export/scores.csv?plan=${plan.id}`}
+									className={buttonClasses("secondary")}
+								>
+									Export scores CSV
+								</a>
+								<Button
+									size="sm"
+									variant="secondary"
+									disabled={pending || !active}
+									onClick={() => void request(`/api/admin/events/${eventSlug}/review/reminders`, "POST", { planId: plan.id })}
+								>
+									Remind outstanding reviewers
+								</Button>
+							</div>
+						</div>
 						{matrix.submissions.length === 0 || matrix.reviewers.length === 0 ? (
 							<p className="mt-3 text-sm text-neutral-500">Scores appear here once reviewers submit reviews.</p>
 						) : (
@@ -444,17 +501,31 @@ export function ReviewWorkspace({
 								<table className="min-w-full border-collapse text-left text-xs">
 									<thead>
 										<tr className="border-b border-neutral-800 text-neutral-500">
-											<th className="px-2 py-2 font-medium">Proposal</th>
+											<th className="px-2 py-2 font-medium">
+												<button type="button" className="hover:text-neutral-200" onClick={() => toggleMatrixSort("title")}>
+													Proposal{matrixSortKey === "title" ? (matrixSortDir === "asc" ? " ↑" : " ↓") : ""}
+												</button>
+											</th>
+											<th className="px-2 py-2 font-medium">
+												<button type="button" className="hover:text-neutral-200" onClick={() => toggleMatrixSort("status")}>
+													Status{matrixSortKey === "status" ? (matrixSortDir === "asc" ? " ↑" : " ↓") : ""}
+												</button>
+											</th>
 											{matrix.reviewers.map((reviewer) => (
 												<th key={reviewer.id} className="px-2 py-2 font-medium">{reviewer.name}</th>
 											))}
-											<th className="px-2 py-2 font-medium">Avg</th>
+											<th className="px-2 py-2 font-medium">
+												<button type="button" className="hover:text-neutral-200" onClick={() => toggleMatrixSort("avg")}>
+													Avg{matrixSortKey === "avg" ? (matrixSortDir === "asc" ? " ↑" : " ↓") : ""}
+												</button>
+											</th>
 										</tr>
 									</thead>
 									<tbody>
-										{matrix.submissions.map((submission) => (
+										{sortedMatrixRows.map((submission) => (
 											<tr key={submission.id} className="border-b border-neutral-900/80">
 												<td className="max-w-[14rem] truncate px-2 py-2 text-neutral-200">{submission.title}</td>
+												<td className="px-2 py-2 text-neutral-400">{submission.status.replaceAll("_", " ")}</td>
 												{matrix.reviewers.map((reviewer) => {
 													const cell = matrix.cells[submission.id]?.[reviewer.id];
 													const title = cell
@@ -469,9 +540,7 @@ export function ReviewWorkspace({
 													);
 												})}
 												<td className="px-2 py-2 tabular-nums text-neutral-200">
-													{matrix.averages[submission.id] === null || matrix.averages[submission.id] === undefined
-														? "—"
-														: matrix.averages[submission.id]!.toFixed(1)}
+													{submission.average === null ? "—" : submission.average.toFixed(1)}
 												</td>
 											</tr>
 										))}

@@ -5,6 +5,7 @@ import { COCKPIT_BLOCKER_LIST_LIMIT } from "@/lib/domain/cockpit";
 import { getEventById } from "@/lib/db/queries";
 import { setSubmissionReviewers } from "@/lib/evaluation/assignments";
 import { activateEvaluationPlan, createEvaluationPlan, listCriteria } from "@/lib/evaluation/plan";
+import { recuseAssignment } from "@/lib/evaluation/recusal";
 import { createReviewer } from "@/lib/evaluation/reviewers";
 import { upsertEvaluationScore } from "@/lib/evaluation/score";
 
@@ -225,6 +226,54 @@ describe("loadCockpitSnapshot", () => {
 		expect(snapshot.reviewedUndecidedTotal).toBe(0);
 		expect(snapshot.incompleteReviews.map((row) => row.reviewerName)).toEqual(["Reviewer B"]);
 		expect(snapshot.incompleteReviewsTotal).toBe(1);
+	});
+
+	it("excludes recused assignments from incomplete and allows undecided", async () => {
+		const eventId = "cockpit-recusal";
+		await seedBase(eventId);
+		await insertSubmittedSubmission(eventId, `${eventId}-recusal`, "Recusal talk");
+
+		const draft = await createEvaluationPlan(env.DB, { eventId, name: "Recusal plan" });
+		const active = await activateEvaluationPlan(env.DB, { eventId, planId: draft.id });
+		if (!active.ok) throw new Error(active.error);
+
+		const reviewerA = await createReviewer(env.DB, { planId: draft.id, name: "Reviewer A" });
+		const reviewerB = await createReviewer(env.DB, { planId: draft.id, name: "Reviewer B" });
+		await setSubmissionReviewers(env.DB, {
+			planId: draft.id,
+			submissionId: `${eventId}-recusal`,
+			reviewerIds: [reviewerA.reviewer.id, reviewerB.reviewer.id],
+		});
+
+		const criteria = await listCriteria(env.DB, draft.id);
+		const scoreInput = criteria.map((criterion, index) => ({
+			criterionId: criterion.id,
+			score: index + 3,
+		}));
+		const scored = await upsertEvaluationScore(env.DB, {
+			token: reviewerA.token,
+			submissionId: `${eventId}-recusal`,
+			criterionScores: scoreInput,
+		});
+		expect(scored.ok).toBe(true);
+
+		const recused = await recuseAssignment(env.DB, {
+			planId: draft.id,
+			reviewerId: reviewerB.reviewer.id,
+			submissionId: `${eventId}-recusal`,
+		});
+		expect(recused.ok).toBe(true);
+
+		const event = await getEventById(env.DB, eventId);
+		expect(event).not.toBeNull();
+		const snapshot = await loadCockpitSnapshot(env.DB, event!);
+
+		expect(snapshot.incompleteReviews).toEqual([]);
+		expect(snapshot.incompleteReviewsTotal).toBe(0);
+		expect(snapshot.reviewedUndecided.map((row) => row.submissionId)).toEqual([
+			`${eventId}-recusal`,
+		]);
+		expect(snapshot.reviewedUndecidedTotal).toBe(1);
 	});
 
 	it("caps blocker lists while reporting full totals", async () => {

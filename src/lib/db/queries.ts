@@ -1300,10 +1300,10 @@ export async function insertReviewAssignment(
 	await db
 		.prepare(
 			`INSERT INTO review_assignments
-         (id, plan_id, reviewer_id, submission_id, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
+         (id, plan_id, reviewer_id, submission_id, created_at, recused_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
 		)
-		.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at)
+		.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at, row.recused_at)
 		.run();
 }
 
@@ -1369,7 +1369,7 @@ export async function listNeedsReviewActivationSubmissions(
 	return { rows: result.results, total };
 }
 
-/** Submitted / under_review with no assignment on the active plan. */
+/** Submitted / under_review with no active (non-recused) assignment on the active plan. */
 export async function listUnassignedReviewSubmissions(
 	db: D1Database,
 	eventId: string,
@@ -1381,7 +1381,9 @@ export async function listUnassignedReviewSubmissions(
          AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}
          AND NOT EXISTS (
            SELECT 1 FROM review_assignments ra
+           INNER JOIN reviewers r ON r.id = ra.reviewer_id
            WHERE ra.plan_id = ? AND ra.submission_id = s.id
+             AND ra.recused_at IS NULL AND r.revoked_at IS NULL
          )`;
 	const [result, total] = await Promise.all([
 		db
@@ -1404,7 +1406,7 @@ export async function listUnassignedReviewSubmissions(
 	return { rows: result.results, total };
 }
 
-/** Assignments with no named-reviewer score yet. */
+/** Active assignments with no named-reviewer score yet (recusals excluded). */
 export async function listIncompleteAssignedReviews(
 	db: D1Database,
 	eventId: string,
@@ -1416,6 +1418,7 @@ export async function listIncompleteAssignedReviews(
          AND s.event_id = ?
          AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}
          AND r.revoked_at IS NULL
+         AND ra.recused_at IS NULL
          AND NOT EXISTS (
            SELECT 1 FROM evaluation_scores es
            WHERE es.plan_id = ra.plan_id
@@ -1467,12 +1470,14 @@ export async function listReviewedUndecidedSubmissions(
          AND EXISTS (
            SELECT 1 FROM review_assignments ra
            INNER JOIN reviewers r ON r.id = ra.reviewer_id
-           WHERE ra.plan_id = ? AND ra.submission_id = s.id AND r.revoked_at IS NULL
+           WHERE ra.plan_id = ? AND ra.submission_id = s.id
+             AND r.revoked_at IS NULL AND ra.recused_at IS NULL
          )
          AND NOT EXISTS (
            SELECT 1 FROM review_assignments ra
            INNER JOIN reviewers r ON r.id = ra.reviewer_id
-           WHERE ra.plan_id = ? AND ra.submission_id = s.id AND r.revoked_at IS NULL
+           WHERE ra.plan_id = ? AND ra.submission_id = s.id
+             AND r.revoked_at IS NULL AND ra.recused_at IS NULL
              AND NOT EXISTS (
                SELECT 1 FROM evaluation_scores es
                WHERE es.plan_id = ra.plan_id

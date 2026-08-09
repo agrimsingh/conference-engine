@@ -298,4 +298,5 @@ export type ReviewAssignmentRow = {
 	reviewer_id: string;
 	submission_id: string;
 	created_at: number;
+	recused_at: number | null;
 };
