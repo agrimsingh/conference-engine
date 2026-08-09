@@ -286,7 +286,11 @@ describe("organizer session creation, lineage, and publication", () => {
 		]);
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toBeNull();
 		expect((await bulk(room, created.eventId, "publish", [session.id])).status).toBe(200);
-		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ submission: { id: session.id, supporting_url: "https://resources.example.test/public" }, slot: { roomName: "Main" } });
+		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ submission: { id: session.id, supporting_url: "https://resources.example.test/public" }, slot: { roomName: "Main", trackId: null, trackName: "Unassigned" } });
+		const track = await env.DB.prepare("SELECT id, name FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0").bind(created.eventId).first<{ id: string; name: string }>();
+		expect(track).not.toBeNull();
+		await env.DB.prepare("UPDATE agenda_slots SET track_id = ? WHERE submission_id = ?").bind(track!.id, session.id).run();
+		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ slot: { trackId: track!.id, trackName: track!.name } });
 	});
 
 	it("serializes bulk publication with unplace so no published session loses its slot", async () => {

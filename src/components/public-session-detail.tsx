@@ -29,7 +29,7 @@ export async function PublicSessionDetail({ params, basePath }: { params: Promis
 		<main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
 			<Link href={`${basePath}/${session.event.slug}/schedule`} className="text-sm text-neutral-400 underline underline-offset-2 hover:text-neutral-100">Back to schedule</Link>
 			<header className="mt-6 border-b border-neutral-800 pb-6">
-				<p className="font-mono text-xs tabular-nums text-neutral-500">{formatClock(session.slot.startsAt, session.event.timezone)}–{formatClock(session.slot.endsAt, session.event.timezone)} · {session.slot.roomName}</p>
+				<p className="font-mono text-xs tabular-nums text-neutral-500">{formatClock(session.slot.startsAt, session.event.timezone)}–{formatClock(session.slot.endsAt, session.event.timezone)} · {session.slot.roomName} · {session.slot.trackName}</p>
 				<h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-neutral-100">{title}</h1>
 				{session.speakers.length > 0 ? <p className="mt-3 text-sm text-neutral-400">{session.speakers.map((speaker) => speaker.name || speaker.email).join(", ")}</p> : null}
 			</header>
