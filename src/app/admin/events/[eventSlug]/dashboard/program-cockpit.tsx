@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button, EmptyState, noticeClasses, StatusPill, buttonClasses } from "@/components/ui";
 import {
 	cockpitBlockerCounts,
+	cockpitSectionCaption,
 	cockpitTotalBlockers,
 	parseInvalidateMessage,
 	shouldRefetchOnInvalidate,
@@ -234,6 +235,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 					[
 						["Tasks", counts.outstandingTasks],
 						["Co-speakers", counts.pendingCoSpeakers],
+						["Needs plan", counts.needsReviewActivation],
 						["Unassigned", counts.unassignedReviews],
 						["Incomplete reviews", counts.incompleteReviews],
 						["Undecided", counts.reviewedUndecided],
@@ -371,6 +373,52 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 										</li>
 									))}
 								</ul>
+							</li>
+						))}
+					</ul>
+				</section>
+			) : null}
+
+			{snapshot.needsReviewActivation.length > 0 ? (
+				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+					<div className="flex flex-wrap items-baseline justify-between gap-2">
+						<div>
+							<p className="font-medium text-neutral-100">Review plan not active</p>
+							<p className="mt-1 text-xs text-neutral-500">
+								Submitted proposals are waiting for an evaluation plan.
+							</p>
+						</div>
+						<div className="flex items-center gap-2">
+							{cockpitSectionCaption(
+								snapshot.needsReviewActivation.length,
+								snapshot.needsReviewActivationTotal,
+							) ? (
+								<span className="text-xs text-neutral-500">
+									{cockpitSectionCaption(
+										snapshot.needsReviewActivation.length,
+										snapshot.needsReviewActivationTotal,
+									)}
+								</span>
+							) : null}
+							<Link
+								href={`/admin/events/${eventSlug}/review`}
+								className={buttonClasses("secondary", "sm")}
+							>
+								Activate plan
+							</Link>
+						</div>
+					</div>
+					<ul className="mt-3 divide-y divide-neutral-800">
+						{snapshot.needsReviewActivation.map((item) => (
+							<li
+								key={item.submissionId}
+								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+							>
+								<span>
+									<span className="font-medium text-neutral-200">{item.title}</span>
+									<span className="text-neutral-500"> · {item.submitter}</span>
+								</span>
+								<StatusPill tone="warning">awaiting plan</StatusPill>
 							</li>
 						))}
 					</ul>

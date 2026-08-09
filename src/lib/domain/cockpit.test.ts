@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	cockpitBlockerCounts,
+	cockpitSectionCaption,
 	cockpitTotalBlockers,
 	type CockpitSnapshot,
 } from "./cockpit";
@@ -15,12 +16,20 @@ function emptySnapshot(overrides: Partial<CockpitSnapshot> = {}): CockpitSnapsho
 		reviewers: [],
 		outstandingTasks: { incompleteCount: 0, groups: [] },
 		pendingCoSpeakers: [],
+		needsReviewActivation: [],
+		needsReviewActivationTotal: 0,
 		unassignedReviews: [],
+		unassignedReviewsTotal: 0,
 		incompleteReviews: [],
+		incompleteReviewsTotal: 0,
 		reviewedUndecided: [],
+		reviewedUndecidedTotal: 0,
 		acceptedUnscheduled: [],
+		acceptedUnscheduledTotal: 0,
 		scheduledUnpublished: [],
+		scheduledUnpublishedTotal: 0,
 		failedDeliveries: [],
+		failedDeliveriesTotal: 0,
 		...overrides,
 	};
 }
@@ -32,6 +41,8 @@ describe("cockpitBlockerCounts", () => {
 				incompleteCount: 2,
 				groups: [],
 			},
+			needsReviewActivationTotal: 3,
+			unassignedReviewsTotal: 1,
 			pendingCoSpeakers: [
 				{
 					speakerId: "s1",
@@ -58,14 +69,26 @@ describe("cockpitBlockerCounts", () => {
 					replayable: true,
 				},
 			],
+			failedDeliveriesTotal: 1,
 		});
 		expect(cockpitBlockerCounts(snapshot)).toMatchObject({
 			outstandingTasks: 2,
+			needsReviewActivation: 3,
 			pendingCoSpeakers: 1,
 			unassignedReviews: 1,
 			failedDeliveries: 1,
 		});
-		expect(cockpitTotalBlockers(snapshot)).toBe(5);
+		expect(cockpitTotalBlockers(snapshot)).toBe(8);
+	});
+});
+
+describe("cockpitSectionCaption", () => {
+	it("returns null when the full list is shown", () => {
+		expect(cockpitSectionCaption(5, 5)).toBeNull();
+	});
+
+	it("describes truncated lists", () => {
+		expect(cockpitSectionCaption(50, 120)).toBe("Showing 50 of 120");
 	});
 });
 

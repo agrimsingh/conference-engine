@@ -23,6 +23,7 @@ import type {
 	SubmissionSpeakerRow,
 	TaskTemplateRow,
 } from "./types";
+import { COCKPIT_BLOCKER_LIST_LIMIT } from "@/lib/domain/cockpit";
 
 export async function getEventBySlug(
 	db: D1Database,
@@ -1292,27 +1293,87 @@ export type CockpitIncompleteReviewSqlRow = CockpitSubmissionSqlRow & {
 	reviewer_name: string;
 };
 
+export type CockpitSqlList<T> = {
+	rows: T[];
+	total: number;
+};
+
+function cockpitListLimit(limit = COCKPIT_BLOCKER_LIST_LIMIT): number {
+	return Math.max(1, Math.min(limit, COCKPIT_BLOCKER_LIST_LIMIT));
+}
+
+async function cockpitSqlCount(
+	db: D1Database,
+	sql: string,
+	...binds: unknown[]
+): Promise<number> {
+	const row = await db.prepare(sql).bind(...binds).first<{ count: number }>();
+	return row?.count ?? 0;
+}
+
+const PIPELINE_SUBMISSION_STATUSES = "('submitted', 'under_review')" as const;
+
+/** Submitted / under_review when no evaluation plan is active yet. */
+export async function listNeedsReviewActivationSubmissions(
+	db: D1Database,
+	eventId: string,
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `s.event_id = ? AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+         FROM submissions s
+         WHERE ${where}
+         ORDER BY s.created_at DESC
+         LIMIT ?`,
+			)
+			.bind(eventId, bounded)
+			.all<CockpitSubmissionSqlRow>(),
+		cockpitSqlCount(
+			db,
+			`SELECT COUNT(*) AS count FROM submissions s WHERE ${where}`,
+			eventId,
+		),
+	]);
+	return { rows: result.results, total };
+}
+
 /** Submitted / under_review with no assignment on the active plan. */
 export async function listUnassignedReviewSubmissions(
 	db: D1Database,
 	eventId: string,
 	planId: string,
-): Promise<CockpitSubmissionSqlRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
-       FROM submissions s
-       WHERE s.event_id = ?
-         AND s.status IN ('submitted', 'under_review')
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `s.event_id = ?
+         AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}
          AND NOT EXISTS (
            SELECT 1 FROM review_assignments ra
            WHERE ra.plan_id = ? AND ra.submission_id = s.id
-         )
-       ORDER BY s.created_at DESC`,
-		)
-		.bind(eventId, planId)
-		.all<CockpitSubmissionSqlRow>();
-	return result.results;
+         )`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+         FROM submissions s
+         WHERE ${where}
+         ORDER BY s.created_at DESC
+         LIMIT ?`,
+			)
+			.bind(eventId, planId, bounded)
+			.all<CockpitSubmissionSqlRow>(),
+		cockpitSqlCount(
+			db,
+			`SELECT COUNT(*) AS count FROM submissions s WHERE ${where}`,
+			eventId,
+			planId,
+		),
+	]);
+	return { rows: result.results, total };
 }
 
 /** Assignments with no named-reviewer score yet. */
@@ -1320,83 +1381,141 @@ export async function listIncompleteAssignedReviews(
 	db: D1Database,
 	eventId: string,
 	planId: string,
-): Promise<CockpitIncompleteReviewSqlRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT
-         s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email,
-         ra.id AS assignment_id, ra.reviewer_id AS reviewer_id, r.name AS reviewer_name
-       FROM review_assignments ra
-       INNER JOIN reviewers r ON r.id = ra.reviewer_id
-       INNER JOIN submissions s ON s.id = ra.submission_id
-       WHERE ra.plan_id = ?
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitIncompleteReviewSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `ra.plan_id = ?
          AND s.event_id = ?
-         AND s.status IN ('submitted', 'under_review')
+         AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}
          AND r.revoked_at IS NULL
          AND NOT EXISTS (
            SELECT 1 FROM evaluation_scores es
            WHERE es.plan_id = ra.plan_id
              AND es.submission_id = ra.submission_id
              AND es.reviewer_id = ra.reviewer_id
-         )
-       ORDER BY s.created_at DESC, r.name ASC`,
-		)
-		.bind(planId, eventId)
-		.all<CockpitIncompleteReviewSqlRow>();
-	return result.results;
+         )`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT
+           s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email,
+           ra.id AS assignment_id, ra.reviewer_id AS reviewer_id, r.name AS reviewer_name
+         FROM review_assignments ra
+         INNER JOIN reviewers r ON r.id = ra.reviewer_id
+         INNER JOIN submissions s ON s.id = ra.submission_id
+         WHERE ${where}
+         ORDER BY s.created_at DESC, r.name ASC
+         LIMIT ?`,
+			)
+			.bind(planId, eventId, bounded)
+			.all<CockpitIncompleteReviewSqlRow>(),
+		cockpitSqlCount(
+			db,
+			`SELECT COUNT(*) AS count
+         FROM review_assignments ra
+         INNER JOIN reviewers r ON r.id = ra.reviewer_id
+         INNER JOIN submissions s ON s.id = ra.submission_id
+         WHERE ${where}`,
+			planId,
+			eventId,
+		),
+	]);
+	return { rows: result.results, total };
 }
 
-/** Scored on the active plan but still submitted / under_review. */
+/**
+ * Every active-plan assignment scored, but submission still submitted / under_review.
+ * Excludes proposals with any outstanding reviewer score (no early accept/reject).
+ */
 export async function listReviewedUndecidedSubmissions(
 	db: D1Database,
 	eventId: string,
 	planId: string,
-): Promise<CockpitSubmissionSqlRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
-       FROM submissions s
-       WHERE s.event_id = ?
-         AND s.status IN ('submitted', 'under_review')
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `s.event_id = ?
+         AND s.status IN ${PIPELINE_SUBMISSION_STATUSES}
          AND EXISTS (
-           SELECT 1 FROM evaluation_scores es
-           WHERE es.plan_id = ? AND es.submission_id = s.id
+           SELECT 1 FROM review_assignments ra
+           INNER JOIN reviewers r ON r.id = ra.reviewer_id
+           WHERE ra.plan_id = ? AND ra.submission_id = s.id AND r.revoked_at IS NULL
          )
-       ORDER BY s.updated_at DESC`,
-		)
-		.bind(eventId, planId)
-		.all<CockpitSubmissionSqlRow>();
-	return result.results;
+         AND NOT EXISTS (
+           SELECT 1 FROM review_assignments ra
+           INNER JOIN reviewers r ON r.id = ra.reviewer_id
+           WHERE ra.plan_id = ? AND ra.submission_id = s.id AND r.revoked_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM evaluation_scores es
+               WHERE es.plan_id = ra.plan_id
+                 AND es.submission_id = ra.submission_id
+                 AND es.reviewer_id = ra.reviewer_id
+             )
+         )`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+         FROM submissions s
+         WHERE ${where}
+         ORDER BY s.updated_at DESC
+         LIMIT ?`,
+			)
+			.bind(eventId, planId, planId, bounded)
+			.all<CockpitSubmissionSqlRow>(),
+		cockpitSqlCount(
+			db,
+			`SELECT COUNT(*) AS count FROM submissions s WHERE ${where}`,
+			eventId,
+			planId,
+			planId,
+		),
+	]);
+	return { rows: result.results, total };
 }
 
 export async function listAcceptedUnscheduledSubmissions(
 	db: D1Database,
 	eventId: string,
-): Promise<CockpitSubmissionSqlRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
-       FROM submissions s
-       WHERE s.event_id = ? AND s.status = 'accepted'
-       ORDER BY s.updated_at DESC`,
-		)
-		.bind(eventId)
-		.all<CockpitSubmissionSqlRow>();
-	return result.results;
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `s.event_id = ? AND s.status = 'accepted'`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+         FROM submissions s
+         WHERE ${where}
+         ORDER BY s.updated_at DESC
+         LIMIT ?`,
+			)
+			.bind(eventId, bounded)
+			.all<CockpitSubmissionSqlRow>(),
+		cockpitSqlCount(db, `SELECT COUNT(*) AS count FROM submissions s WHERE ${where}`, eventId),
+	]);
+	return { rows: result.results, total };
 }
 
 export async function listScheduledUnpublishedSubmissions(
 	db: D1Database,
 	eventId: string,
-): Promise<CockpitSubmissionSqlRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
-       FROM submissions s
-       WHERE s.event_id = ? AND s.status = 'scheduled'
-       ORDER BY s.updated_at DESC`,
-		)
-		.bind(eventId)
-		.all<CockpitSubmissionSqlRow>();
-	return result.results;
+	limit = COCKPIT_BLOCKER_LIST_LIMIT,
+): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
+	const bounded = cockpitListLimit(limit);
+	const where = `s.event_id = ? AND s.status = 'scheduled'`;
+	const [result, total] = await Promise.all([
+		db
+			.prepare(
+				`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+         FROM submissions s
+         WHERE ${where}
+         ORDER BY s.updated_at DESC
+         LIMIT ?`,
+			)
+			.bind(eventId, bounded)
+			.all<CockpitSubmissionSqlRow>(),
+		cockpitSqlCount(db, `SELECT COUNT(*) AS count FROM submissions s WHERE ${where}`, eventId),
+	]);
+	return { rows: result.results, total };
 }

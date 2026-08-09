@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { loadCockpitSnapshot } from "@/lib/cockpit/snapshot";
+import { COCKPIT_BLOCKER_LIST_LIMIT } from "@/lib/domain/cockpit";
 import { getEventById } from "@/lib/db/queries";
 import { setSubmissionReviewers } from "@/lib/evaluation/assignments";
 import { activateEvaluationPlan, createEvaluationPlan, listCriteria } from "@/lib/evaluation/plan";
@@ -21,6 +22,29 @@ async function seedBase(eventId: string) {
 			"INSERT INTO people (id, email, name, created_at) VALUES (?, ?, 'Speaker', ?)",
 		).bind(`${eventId}-person`, `${eventId}@test.invalid`, now),
 	]);
+}
+
+async function insertSubmittedSubmission(
+	eventId: string,
+	submissionId: string,
+	title: string,
+	submitter = "Submitter",
+) {
+	await env.DB.prepare(
+		`INSERT INTO submissions (id, form_id, event_id, status, answers_json, submitter_name, submitter_email, created_at, updated_at)
+     VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?, ?)`,
+	)
+		.bind(
+			submissionId,
+			`${eventId}-form`,
+			eventId,
+			JSON.stringify({ title }),
+			submitter,
+			`${submissionId}@test.invalid`,
+			now,
+			now,
+		)
+		.run();
 }
 
 describe("loadCockpitSnapshot", () => {
@@ -143,5 +167,95 @@ describe("loadCockpitSnapshot", () => {
 			},
 		]);
 		expect(snapshot.reviewers.map((row) => row.name)).toContain("Cockpit reviewer");
+	});
+
+	it("surfaces submitted work when no evaluation plan is active", async () => {
+		const eventId = "cockpit-no-plan";
+		await seedBase(eventId);
+		await insertSubmittedSubmission(eventId, `${eventId}-waiting`, "Waiting on plan");
+
+		const event = await getEventById(env.DB, eventId);
+		expect(event).not.toBeNull();
+		const snapshot = await loadCockpitSnapshot(env.DB, event!);
+
+		expect(snapshot.activePlanId).toBeNull();
+		expect(snapshot.needsReviewActivation.map((row) => row.submissionId)).toEqual([
+			`${eventId}-waiting`,
+		]);
+		expect(snapshot.needsReviewActivationTotal).toBe(1);
+		expect(snapshot.unassignedReviews).toEqual([]);
+		expect(snapshot.incompleteReviews).toEqual([]);
+		expect(snapshot.reviewedUndecided).toEqual([]);
+	});
+
+	it("keeps partially scored proposals in incomplete reviews, not undecided", async () => {
+		const eventId = "cockpit-partial-score";
+		await seedBase(eventId);
+		await insertSubmittedSubmission(eventId, `${eventId}-partial`, "Two reviewers");
+
+		const draft = await createEvaluationPlan(env.DB, { eventId, name: "Partial plan" });
+		const active = await activateEvaluationPlan(env.DB, { eventId, planId: draft.id });
+		if (!active.ok) throw new Error(active.error);
+
+		const reviewerA = await createReviewer(env.DB, { planId: draft.id, name: "Reviewer A" });
+		const reviewerB = await createReviewer(env.DB, { planId: draft.id, name: "Reviewer B" });
+		await setSubmissionReviewers(env.DB, {
+			planId: draft.id,
+			submissionId: `${eventId}-partial`,
+			reviewerIds: [reviewerA.reviewer.id, reviewerB.reviewer.id],
+		});
+
+		const criteria = await listCriteria(env.DB, draft.id);
+		const scoreInput = criteria.map((criterion, index) => ({
+			criterionId: criterion.id,
+			score: index + 3,
+		}));
+		const scored = await upsertEvaluationScore(env.DB, {
+			token: reviewerA.token,
+			submissionId: `${eventId}-partial`,
+			criterionScores: scoreInput,
+		});
+		expect(scored.ok).toBe(true);
+
+		const event = await getEventById(env.DB, eventId);
+		expect(event).not.toBeNull();
+		const snapshot = await loadCockpitSnapshot(env.DB, event!);
+
+		expect(snapshot.reviewedUndecided.map((row) => row.submissionId)).toEqual([]);
+		expect(snapshot.reviewedUndecidedTotal).toBe(0);
+		expect(snapshot.incompleteReviews.map((row) => row.reviewerName)).toEqual(["Reviewer B"]);
+		expect(snapshot.incompleteReviewsTotal).toBe(1);
+	});
+
+	it("caps blocker lists while reporting full totals", async () => {
+		const eventId = "cockpit-cap";
+		await seedBase(eventId);
+
+		const overLimit = COCKPIT_BLOCKER_LIST_LIMIT + 5;
+		const statements = [];
+		for (let index = 0; index < overLimit; index += 1) {
+			statements.push(
+				env.DB.prepare(
+					`INSERT INTO submissions (id, form_id, event_id, status, answers_json, submitter_name, submitter_email, created_at, updated_at)
+           VALUES (?, ?, ?, 'accepted', ?, 'Speaker', ?, ?, ?)`,
+				).bind(
+					`${eventId}-accepted-${index}`,
+					`${eventId}-form`,
+					eventId,
+					JSON.stringify({ title: `Talk ${index}` }),
+					`speaker-${index}@test.invalid`,
+					now - index,
+					now - index,
+				),
+			);
+		}
+		await env.DB.batch(statements);
+
+		const event = await getEventById(env.DB, eventId);
+		expect(event).not.toBeNull();
+		const snapshot = await loadCockpitSnapshot(env.DB, event!);
+
+		expect(snapshot.acceptedUnscheduled).toHaveLength(COCKPIT_BLOCKER_LIST_LIMIT);
+		expect(snapshot.acceptedUnscheduledTotal).toBe(overLimit);
 	});
 });

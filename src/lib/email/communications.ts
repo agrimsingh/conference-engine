@@ -44,6 +44,7 @@ export async function listFailedEventDeliveries(
 	eventId: string,
 	limit = 50,
 ): Promise<DeliveryHistoryRow[]> {
+	const bounded = Math.max(1, Math.min(limit, 200));
 	const result = await db.prepare(
 		`SELECT d.delivery_key, d.submission_id, d.template_key, d.to_email, d.subject, d.status,
 			d.provider_id, d.error, d.attempt_count, d.updated_at, d.sent_at,
@@ -51,8 +52,22 @@ export async function listFailedEventDeliveries(
 		 FROM email_deliveries d
 		 WHERE d.event_id = ? AND d.status = 'failed'
 		 ORDER BY updated_at DESC LIMIT ?`,
-	).bind(eventId, Math.max(1, Math.min(limit, 200))).all<DeliveryHistoryRow>();
+	).bind(eventId, bounded).all<DeliveryHistoryRow>();
 	return result.results;
+}
+
+export async function countFailedEventDeliveries(
+	db: D1Database,
+	eventId: string,
+): Promise<number> {
+	const row = await db
+		.prepare(
+			`SELECT COUNT(*) AS count FROM email_deliveries d
+       WHERE d.event_id = ? AND d.status = 'failed'`,
+		)
+		.bind(eventId)
+		.first<{ count: number }>();
+	return row?.count ?? 0;
 }
 
 /** One manual reminder is still one email per person/event, even with many tasks. */

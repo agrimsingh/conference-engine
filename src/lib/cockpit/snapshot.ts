@@ -1,4 +1,5 @@
 import {
+	COCKPIT_BLOCKER_LIST_LIMIT,
 	titleFromAnswers,
 	type CockpitFailedDeliveryItem,
 	type CockpitIncompleteReviewItem,
@@ -9,6 +10,7 @@ import {
 	getActiveEvaluationPlan,
 	listAcceptedUnscheduledSubmissions,
 	listIncompleteAssignedReviews,
+	listNeedsReviewActivationSubmissions,
 	listReviewedUndecidedSubmissions,
 	listScheduledUnpublishedSubmissions,
 	listUnassignedReviewSubmissions,
@@ -16,7 +18,7 @@ import {
 	type CockpitSubmissionSqlRow,
 } from "@/lib/db/queries";
 import type { EventRow } from "@/lib/db/types";
-import { listFailedEventDeliveries } from "@/lib/email/communications";
+import { countFailedEventDeliveries, listFailedEventDeliveries } from "@/lib/email/communications";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { loadOutstandingTasksSnapshot } from "@/lib/tasks/outstanding";
 
@@ -74,26 +76,32 @@ export async function loadCockpitSnapshot(
 	]);
 
 	const [
-		unassignedRows,
-		incompleteRows,
-		undecidedRows,
-		acceptedRows,
-		scheduledRows,
+		needsActivation,
+		unassigned,
+		incomplete,
+		undecided,
+		accepted,
+		scheduled,
 		failedRows,
+		failedTotal,
 		reviewers,
 	] = await Promise.all([
 		plan
-			? listUnassignedReviewSubmissions(db, event.id, plan.id)
-			: Promise.resolve([] as CockpitSubmissionSqlRow[]),
+			? Promise.resolve({ rows: [] as CockpitSubmissionSqlRow[], total: 0 })
+			: listNeedsReviewActivationSubmissions(db, event.id, COCKPIT_BLOCKER_LIST_LIMIT),
 		plan
-			? listIncompleteAssignedReviews(db, event.id, plan.id)
-			: Promise.resolve([] as CockpitIncompleteReviewSqlRow[]),
+			? listUnassignedReviewSubmissions(db, event.id, plan.id, COCKPIT_BLOCKER_LIST_LIMIT)
+			: Promise.resolve({ rows: [] as CockpitSubmissionSqlRow[], total: 0 }),
 		plan
-			? listReviewedUndecidedSubmissions(db, event.id, plan.id)
-			: Promise.resolve([] as CockpitSubmissionSqlRow[]),
-		listAcceptedUnscheduledSubmissions(db, event.id),
-		listScheduledUnpublishedSubmissions(db, event.id),
-		listFailedEventDeliveries(db, event.id),
+			? listIncompleteAssignedReviews(db, event.id, plan.id, COCKPIT_BLOCKER_LIST_LIMIT)
+			: Promise.resolve({ rows: [] as CockpitIncompleteReviewSqlRow[], total: 0 }),
+		plan
+			? listReviewedUndecidedSubmissions(db, event.id, plan.id, COCKPIT_BLOCKER_LIST_LIMIT)
+			: Promise.resolve({ rows: [] as CockpitSubmissionSqlRow[], total: 0 }),
+		listAcceptedUnscheduledSubmissions(db, event.id, COCKPIT_BLOCKER_LIST_LIMIT),
+		listScheduledUnpublishedSubmissions(db, event.id, COCKPIT_BLOCKER_LIST_LIMIT),
+		listFailedEventDeliveries(db, event.id, COCKPIT_BLOCKER_LIST_LIMIT),
+		countFailedEventDeliveries(db, event.id),
 		plan ? listPlanReviewers(db, plan.id) : Promise.resolve([]),
 	]);
 
@@ -110,11 +118,19 @@ export async function loadCockpitSnapshot(
 			groups: outstanding.groups,
 		},
 		pendingCoSpeakers: outstanding.pendingCoSpeakers,
-		unassignedReviews: unassignedRows.map(toSubmissionRef),
-		incompleteReviews: incompleteRows.map(toIncompleteReview),
-		reviewedUndecided: undecidedRows.map(toSubmissionRef),
-		acceptedUnscheduled: acceptedRows.map(toSubmissionRef),
-		scheduledUnpublished: scheduledRows.map(toSubmissionRef),
+		needsReviewActivation: needsActivation.rows.map(toSubmissionRef),
+		needsReviewActivationTotal: needsActivation.total,
+		unassignedReviews: unassigned.rows.map(toSubmissionRef),
+		unassignedReviewsTotal: unassigned.total,
+		incompleteReviews: incomplete.rows.map(toIncompleteReview),
+		incompleteReviewsTotal: incomplete.total,
+		reviewedUndecided: undecided.rows.map(toSubmissionRef),
+		reviewedUndecidedTotal: undecided.total,
+		acceptedUnscheduled: accepted.rows.map(toSubmissionRef),
+		acceptedUnscheduledTotal: accepted.total,
+		scheduledUnpublished: scheduled.rows.map(toSubmissionRef),
+		scheduledUnpublishedTotal: scheduled.total,
 		failedDeliveries: failedRows.map(toFailedDelivery),
+		failedDeliveriesTotal: failedTotal,
 	};
 }
