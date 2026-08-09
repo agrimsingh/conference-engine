@@ -4,6 +4,19 @@
 -- but clear every application table in child-to-parent FK order before creating
 -- the writable aie-sandbox fixture below.
 DELETE FROM email_delivery_envelopes;
+DELETE FROM speaker_crm_activities;
+DELETE FROM speaker_crm_tags;
+DELETE FROM speaker_crm_profiles;
+DELETE FROM content_heads;
+DELETE FROM content_revisions;
+DELETE FROM deliverable_comments;
+DELETE FROM deliverable_versions;
+DELETE FROM speaker_action_task_assignments;
+DELETE FROM speaker_action_tasks;
+DELETE FROM accelevents_sync_mappings;
+DELETE FROM accelevents_integrations;
+DELETE FROM portal_resources;
+DELETE FROM public_embeds;
 DELETE FROM agenda_calendar_lifecycles;
 DELETE FROM co_speaker_invitation_history;
 DELETE FROM co_speaker_invitation_claims;
@@ -12,6 +25,7 @@ DELETE FROM review_assignments;
 DELETE FROM evaluation_scores;
 DELETE FROM event_invitations;
 DELETE FROM submission_draft_tokens;
+DELETE FROM session_materialization_claims;
 DELETE FROM speaker_tasks;
 DELETE FROM agenda_slots;
 DELETE FROM email_deliveries;
@@ -26,6 +40,7 @@ DELETE FROM task_templates;
 DELETE FROM form_fields;
 DELETE FROM agenda_tracks;
 DELETE FROM event_rooms;
+DELETE FROM event_speaker_profiles;
 DELETE FROM speaker_profiles;
 DELETE FROM assets;
 DELETE FROM event_ownership;
