@@ -146,7 +146,9 @@ export {
 } from "./outstanding-tasks";
 
 export {
+	COCKPIT_BLOCKER_LIST_LIMIT,
 	cockpitBlockerCounts,
+	cockpitSectionCaption,
 	cockpitTotalBlockers,
 	type CockpitBlockerKey,
 	type CockpitFailedDeliveryItem,
