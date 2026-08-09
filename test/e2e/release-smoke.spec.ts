@@ -22,16 +22,19 @@ async function screenshot(testName: string, testInfo: TestInfo, page: Page) {
 }
 
 test.describe("release smoke: public surfaces", () => {
-	test("landing leads through demo perspectives to the public schedule", async ({ page }, testInfo) => {
+	test("landing leads through the demo launcher to the public schedule", async ({ page }, testInfo) => {
 		await page.goto("/");
 		await expect(page.locator('main a[href="/admin"]').first()).toBeVisible();
 		await screenshot("01-landing", testInfo, page);
 
-		await page.getByRole("link", { name: "Explore the live demo" }).click();
-		await expect(page).toHaveURL(/\/demo$/);
-		await expect(page.getByText("Read-only demo data")).toBeVisible();
+		await page.getByRole("link", { name: "Open the demo CFP" }).first().click();
+		await expect(page).toHaveURL(new RegExp(`/e/${DEMO_EVENT_SLUG}/submit/cfp`));
+		await expect(page.getByText("Read-only demo").first()).toBeVisible();
+		await screenshot("02-demo-cfp", testInfo, page);
+
+		await page.goto("/demo");
 		await expect(page.getByRole("navigation", { name: "Demo perspective" })).toBeVisible();
-		await screenshot("02-demo-applicant", testInfo, page);
+		await expect(page.getByText("Playable read-only surfaces")).toBeVisible();
 
 		for (const [label, perspective] of [
 			["Organizer", "organizer"],
