@@ -11,9 +11,13 @@ INSERT OR IGNORE INTO events (
 )
 SELECT
 	'demo-cfp-to-stage-2026', 'demo-cfp-to-stage', 'CFP to Stage Demo', 'Asia/Singapore',
-	'2026-10-10', '2026-10-11', 'demo', 'hard', 0, 1790000000000, 1790000000000
+	'2026-10-10', '2026-10-12', 'demo', 'hard', 0, 1790000000000, 1790000000000
 WHERE NOT EXISTS (SELECT 1 FROM events WHERE id = 'demo-cfp-to-stage-2026')
 	AND NOT EXISTS (SELECT 1 FROM events WHERE slug = 'demo-cfp-to-stage');
+
+UPDATE events
+SET start_day = '2026-10-10', end_day = '2026-10-12', updated_at = 1790000000000
+WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo';
 
 WITH demo_event AS (
 	SELECT id FROM events
@@ -108,7 +112,7 @@ WITH demo_event AS (
 	('hana-sato', 'Hana Sato', 'published', 'stage', 'Guardrails with useful failure modes', 'Safety controls that explain themselves.', 30, 'Practice', 5),
 	('maya-chen', 'Maya Chen', 'published', 'workshop', 'Build a capable MCP server', 'A hands-on protocol workshop.', 90, 'Agents', 6),
 	('ravi-patel', 'Ravi Patel', 'published', 'stage', 'Eval pipelines in CI', 'Make regressions visible before release.', 30, 'Practice', 7),
-	('zoe-martin', 'Zoe Martin', 'published', 'stage', 'The MCP ecosystem one year in', 'An architecture tour with production lessons.', 45, 'Agents', 8),
+	('zoe-martin', 'Zoe Martin', 'published', 'lightning', 'The MCP ecosystem one year in', 'An architecture tour with production lessons.', 15, 'Agents', 8),
 	('omar-haddad', 'Omar Haddad', 'scheduled', 'stage', 'RAG postmortems', 'The failure patterns teams should plan for.', 30, 'Platform', 9),
 	('julia-kovacs', 'Julia Kovacs', 'scheduled', 'stage', 'Voice agents in production', 'Latency, turn-taking, and recovery.', 30, 'Agents', 10),
 	('wei-lin', 'Wei Lin', 'scheduled', 'stage', 'Shipping multimodal search', 'How index design affects experience.', 45, 'Platform', 11),
@@ -150,7 +154,8 @@ WITH demo_event AS (
 	SELECT f.id, f.event_id FROM cfp_forms f JOIN demo_event e ON e.id = f.event_id
 	WHERE f.id = 'demo-cfp-form' AND f.slug = 'cfp'
 ), fixtures(n, name) AS (VALUES
-	('amara-diallo', 'Amara Diallo'), ('jonas-weber', 'Jonas Weber'), ('priya-nair', 'Priya Nair'), ('diego-reyes', 'Diego Reyes'), ('hana-sato', 'Hana Sato')
+	('amara-diallo', 'Amara Diallo'), ('jonas-weber', 'Jonas Weber'), ('priya-nair', 'Priya Nair'), ('diego-reyes', 'Diego Reyes'),
+	('hana-sato', 'Hana Sato'), ('maya-chen', 'Maya Chen'), ('ravi-patel', 'Ravi Patel'), ('zoe-martin', 'Zoe Martin')
 )
 INSERT OR IGNORE INTO submission_speakers (
 	id, submission_id, person_id, name, email, bio, position, status, invited_at, confirmed_at, added_after_acceptance, confirm_token_hash
@@ -166,16 +171,43 @@ WHERE NOT EXISTS (SELECT 1 FROM submission_speakers WHERE id = 'demo-speaker-' |
 WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
-), fixtures(n, name) AS (VALUES
-	('amara-diallo', 'Amara Diallo'), ('jonas-weber', 'Jonas Weber'), ('maya-chen', 'Maya Chen'), ('sam-okafor', 'Sam Okafor'), ('lena-fischer', 'Lena Fischer')
+), fixtures(n, name, job_title, company) AS (VALUES
+	('amara-diallo', 'Amara Diallo', 'Staff Engineer', 'Resilient Labs'),
+	('jonas-weber', 'Jonas Weber', 'Principal Platform Engineer', 'Tideway Systems'),
+	('priya-nair', 'Priya Nair', 'Head of AI Quality', 'Signal Works'),
+	('diego-reyes', 'Diego Reyes', 'Developer Experience Lead', 'Contract Cloud'),
+	('maya-chen', 'Maya Chen', 'Protocol Engineer', 'Open Systems Lab')
 )
-INSERT OR IGNORE INTO speaker_profiles (id, event_id, person_id, display_name, bio, headshot_asset_id, created_at, updated_at)
-SELECT 'demo-profile-' || x.n, e.id, p.id, x.name, 'Fictional speaker profile for the public read-only demo.', NULL, 1790000000000, 1790000000000
+INSERT OR IGNORE INTO speaker_profiles (id, event_id, person_id, display_name, bio, job_title, company, headshot_asset_id, created_at, updated_at)
+SELECT 'demo-profile-' || x.n, e.id, p.id, x.name, 'Fictional speaker profile for the public read-only demo.', x.job_title, x.company, NULL, 1790000000000, 1790000000000
 FROM fixtures x
 JOIN demo_event e
 JOIN submissions s ON s.id = 'demo-sub-' || x.n AND s.event_id = e.id
 JOIN people p ON p.id = s.submitter_person_id AND p.email = lower(replace(x.n, '-', '.')) || '@example.invalid'
 WHERE NOT EXISTS (SELECT 1 FROM speaker_profiles WHERE id = 'demo-profile-' || x.n);
+
+WITH demo_event AS (
+	SELECT id FROM events
+	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
+), fixtures(n, job_title, company) AS (VALUES
+	('amara-diallo', 'Staff Engineer', 'Resilient Labs'),
+	('jonas-weber', 'Principal Platform Engineer', 'Tideway Systems'),
+	('priya-nair', 'Head of AI Quality', 'Signal Works'),
+	('diego-reyes', 'Developer Experience Lead', 'Contract Cloud'),
+	('maya-chen', 'Protocol Engineer', 'Open Systems Lab')
+)
+UPDATE speaker_profiles
+SET
+	job_title = (SELECT x.job_title FROM fixtures x WHERE speaker_profiles.person_id = 'demo-person-' || x.n),
+	company = (SELECT x.company FROM fixtures x WHERE speaker_profiles.person_id = 'demo-person-' || x.n),
+	updated_at = 1790000000000
+WHERE event_id IN (SELECT id FROM demo_event)
+	AND person_id IN (SELECT 'demo-person-' || n FROM fixtures);
+
+UPDATE submissions
+SET answers_json = '{"format":"lightning","title":"The MCP ecosystem one year in","abstract":"An architecture tour with production lessons.","duration_minutes":15}',
+	updated_at = 1790000000000
+WHERE id = 'demo-sub-zoe-martin' AND event_id = 'demo-cfp-to-stage-2026';
 
 WITH demo_event AS (
 	SELECT id FROM events
@@ -306,7 +338,9 @@ WITH demo_event AS (
 	('demo-slot-jonas', 'demo-sub-jonas-weber', 'demo-room-main', 'demo-track-platform', 'Main Stage', 1791597600000, 1791600300000, 'demo-jonas@conference-engine.invalid'),
 	('demo-slot-ravi', 'demo-sub-ravi-patel', 'demo-room-main', 'demo-track-practice', 'Main Stage', 1791680400000, 1791682200000, 'demo-ravi@conference-engine.invalid'),
 	('demo-slot-maya', 'demo-sub-maya-chen', 'demo-room-lab', 'demo-track-practice', 'Builder Lab', 1791594000000, 1791599400000, 'demo-maya@conference-engine.invalid'),
-	('demo-slot-diego', 'demo-sub-diego-reyes', 'demo-room-forum', 'demo-track-platform', 'Forum', 1791595800000, 1791597600000, 'demo-diego@conference-engine.invalid')
+	('demo-slot-diego', 'demo-sub-diego-reyes', 'demo-room-forum', 'demo-track-platform', 'Forum', 1791595800000, 1791597600000, 'demo-diego@conference-engine.invalid'),
+	('demo-slot-hana', 'demo-sub-hana-sato', 'demo-room-lab', 'demo-track-practice', 'Builder Lab', 1791684000000, 1791685800000, 'demo-hana@conference-engine.invalid'),
+	('demo-slot-zoe', 'demo-sub-zoe-martin', 'demo-room-main', 'demo-track-agents', 'Main Stage', 1791768600000, 1791769500000, 'demo-zoe@conference-engine.invalid')
 )
 INSERT OR IGNORE INTO agenda_slots (id, event_id, submission_id, room_id, track_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at)
 SELECT x.id, e.id, s.id, r.id, t.id, x.room_name, x.starts_at, x.ends_at, x.ics_uid, 1790000000000, 1790000000000

@@ -17,8 +17,33 @@ async function runDemoSeed(): Promise<void> {
 	for (const statement of statements) await env.DB.prepare(statement).run();
 }
 
+async function clearDemoFixture(): Promise<void> {
+	const eventId = "demo-cfp-to-stage-2026";
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM agenda_calendar_lifecycles WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM agenda_slots WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM evaluation_scores WHERE plan_id = 'demo-review-plan'").bind(),
+		env.DB.prepare("DELETE FROM review_assignments WHERE plan_id = 'demo-review-plan'").bind(),
+		env.DB.prepare("DELETE FROM reviewers WHERE plan_id = 'demo-review-plan'").bind(),
+		env.DB.prepare("DELETE FROM evaluation_criteria WHERE plan_id = 'demo-review-plan'").bind(),
+		env.DB.prepare("DELETE FROM evaluation_plans WHERE id = 'demo-review-plan'").bind(),
+		env.DB.prepare("DELETE FROM speaker_tasks WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM task_templates WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM speaker_profiles WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM submission_speakers WHERE submission_id IN (SELECT id FROM submissions WHERE event_id = ?)").bind(eventId),
+		env.DB.prepare("DELETE FROM submissions WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM agenda_tracks WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM event_rooms WHERE event_id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM form_fields WHERE form_id = 'demo-cfp-form'").bind(),
+		env.DB.prepare("DELETE FROM cfp_forms WHERE id = 'demo-cfp-form'").bind(),
+		env.DB.prepare("DELETE FROM events WHERE id = ?").bind(eventId),
+		env.DB.prepare("DELETE FROM people WHERE id LIKE 'demo-person-%'").bind(),
+	]);
+}
+
 describe("demo seed collision safety", () => {
 	it("skips colliding live identities and IDs while continuing to seed only the demo event", async () => {
+		await clearDemoFixture();
 		await env.DB.batch([
 			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, mode, created_at, updated_at) VALUES ('seed-collision-live-event', 'seed-collision-live', 'Live collision event', 'UTC', 'live', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('seed-collision-live-form', 'seed-collision-live-event', 'cfp', 'Live CFP', 'open', ?, ?)").bind(now, now),
