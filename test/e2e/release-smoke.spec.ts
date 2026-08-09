@@ -36,15 +36,16 @@ test.describe("release smoke: public surfaces", () => {
 		await expect(page.getByRole("navigation", { name: "Demo perspective" })).toBeVisible();
 		await expect(page.getByText("Playable read-only surfaces")).toBeVisible();
 
+		const perspectiveNav = page.getByRole("navigation", { name: "Demo perspective" });
 		for (const [label, perspective] of [
 			["Organizer", "organizer"],
 			["Reviewer", "reviewer"],
 			["Speaker", "speaker"],
 			["Attendee", "attendee"],
 		]) {
-			await page.getByRole("link", { name: label }).click();
+			await perspectiveNav.getByRole("link", { name: label }).click();
 			await expect(page).toHaveURL(new RegExp(`/demo\\?perspective=${perspective}`));
-			await expect(page.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+			await expect(perspectiveNav.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
 		}
 		await expect(page.getByText("Published program")).toBeVisible();
 		await screenshot("03-demo-attendee", testInfo, page);
