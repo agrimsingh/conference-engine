@@ -6,6 +6,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"co_speaker_invite",
 	"calendar_invite",
 	"task_reminder",
+	"speaker_announcement",
 	"portal_magic_link",
 	"organizer_magic_link",
 	"organizer_invite",
@@ -145,6 +146,16 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			].join("\n"),
 		};
 	},
+	speaker_announcement: (ctx) => ({
+		subject: `Update from ${ctx.eventName}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			ctx.title?.trim() || `Organizers of ${ctx.eventName} sent an update.`,
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
 	portal_magic_link: (ctx) => ({
 		subject: `Sign in to your ${ctx.eventName} speaker portal`,
 		text: [
@@ -239,6 +250,7 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 	return (
 		key !== "calendar_invite" &&
 		key !== "task_reminder" &&
+		key !== "speaker_announcement" &&
 		key !== "portal_magic_link" &&
 		key !== "organizer_magic_link" &&
 		key !== "organizer_invite" &&

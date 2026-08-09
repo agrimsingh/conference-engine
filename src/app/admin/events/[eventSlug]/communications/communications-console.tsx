@@ -18,6 +18,7 @@ const LABELS: Record<EditableMessageTemplateKey, string> = {
 	waitlist: "Waitlist decision",
 	portal_magic_link: "Portal invite",
 	task_reminder: "Task reminder",
+	speaker_announcement: "Speaker announcement",
 	calendar_invite: "Schedule and calendar",
 };
 

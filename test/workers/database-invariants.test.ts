@@ -277,7 +277,7 @@ describe("D1 runtime invariants", () => {
 		await env.DB.batch([
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('reminder-person', 'speaker@reminder.test', 'Speaker', ?)").bind(now),
 			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('reminder-submission', 'reminder-form', 'reminder-event', 'accepted', '{}', ?, ?)").bind(now, now),
-			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, status, created_at, updated_at) VALUES ('reminder-task', 'reminder-event', 'reminder-submission', 'reminder-person', 'bio', 'pending', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, status, due_at, created_at, updated_at) VALUES ('reminder-task', 'reminder-event', 'reminder-submission', 'reminder-person', 'bio', 'pending', ?, ?, ?)").bind(now, now, now),
 		]);
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "provider-reminder" }), { status: 200 }));
 		vi.stubGlobal("fetch", fetchMock);
@@ -292,8 +292,8 @@ describe("D1 runtime invariants", () => {
 				APP_ORIGIN: "https://conference.example.test",
 			};
 			const runs = await Promise.all([
-				sendTaskReminders(reminderEnv, { now }),
-				sendTaskReminders(reminderEnv, { now }),
+				sendTaskReminders(reminderEnv, { now, dueMode: "due_or_overdue" }),
+				sendTaskReminders(reminderEnv, { now, dueMode: "due_or_overdue" }),
 			]);
 			expect(runs.reduce((count, run) => count + run.sent, 0)).toBe(1);
 			expect(runs.reduce((count, run) => count + run.skipped, 0)).toBe(1);

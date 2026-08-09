@@ -31,6 +31,8 @@ export async function POST(request: Request, context: RouteContext) {
 	const result = await sendTaskReminders(env, {
 		eventId: event.id,
 		personIds,
+		now: Date.now(),
+		dueMode: "all_pending",
 	});
 	if (result.configurationError) {
 		return NextResponse.json({ ok: false, error: result.configurationError }, { status: 503 });

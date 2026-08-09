@@ -6,6 +6,20 @@ import { renderEventMessageTemplate } from "./templates";
 const REMINDER_KV_TTL_SECONDS = 20 * 60 * 60;
 export const REMINDER_DELIVERY_WINDOW_MS = 20 * 60 * 60_000;
 
+let reminderDueAtColumnCache: boolean | null = null;
+
+async function speakerTasksHaveDueAtColumn(db: D1Database): Promise<boolean> {
+	if (reminderDueAtColumnCache !== null) return reminderDueAtColumnCache;
+	const info = await db.prepare("PRAGMA table_info(speaker_tasks)").all<{ name: string }>();
+	reminderDueAtColumnCache = info.results.some((column) => column.name === "due_at");
+	return reminderDueAtColumnCache;
+}
+
+/** Test helper: clear PRAGMA cache between cases. */
+export function resetReminderDueAtColumnCache(): void {
+	reminderDueAtColumnCache = null;
+}
+
 export type ReminderEnv = {
 	DB: D1Database;
 	SESSIONS?: KVNamespace;
@@ -20,6 +34,28 @@ export type ReminderRunResult = {
 	skipped: number;
 	configurationError?: string;
 };
+
+/** Cron/automated: only tasks whose due date has arrived. Admin "remind now": all pending. */
+export type ReminderDueMode = "due_or_overdue" | "all_pending";
+
+/**
+ * SQL fragment for due-date-aware selection.
+ * Rule: `due_at IS NOT NULL AND due_at <= now` when the column exists and mode is due_or_overdue.
+ * Missing `due_at` column falls back to no due filter (legacy DBs).
+ */
+export function dueAwarePendingFilter(args: {
+	hasDueAtColumn: boolean;
+	dueMode: ReminderDueMode;
+	now: number;
+}): { clause: string; binds: number[] } {
+	if (!args.hasDueAtColumn || args.dueMode === "all_pending") {
+		return { clause: "", binds: [] };
+	}
+	return {
+		clause: " AND st.due_at IS NOT NULL AND st.due_at <= ?",
+		binds: [args.now],
+	};
+}
 
 type PendingTaskRow = {
 	person_id: string;
@@ -54,6 +90,9 @@ function reminderKvKey(personId: string, eventId: string): string {
  * Query pending speaker_tasks, group by person+event, send one reminder email
  * per group. KV key `reminder:<personId>:<eventId>` (TTL 20h) dedupes.
  * Per-person send failures count as skipped (never throws for Resend errors).
+ *
+ * Default dueMode is due_or_overdue (cron-safe). Pass all_pending for explicit
+ * admin "remind now" / roster task-reminder sends.
  */
 export async function sendTaskReminders(
 	env: ReminderEnv,
@@ -62,9 +101,17 @@ export async function sendTaskReminders(
 		/** A manual retry must remain inside the event selected by the organizer. */
 		personIds?: string[];
 		now?: number;
+		dueMode?: ReminderDueMode;
 	},
 ): Promise<ReminderRunResult> {
-	const rows = await loadPendingTaskRows(env.DB, options?.eventId, options?.personIds);
+	const now = options?.now ?? Date.now();
+	const dueMode = options?.dueMode ?? "due_or_overdue";
+	const rows = await loadPendingTaskRows(env.DB, {
+		eventId: options?.eventId,
+		personIds: options?.personIds,
+		now,
+		dueMode,
+	});
 	const groups = groupByPersonEvent(rows);
 	const portalOrigin = validatedAppOrigin(env.APP_ORIGIN);
 	if (!portalOrigin) {
@@ -73,7 +120,7 @@ export async function sendTaskReminders(
 	if (!env.AUTH_SECRET) {
 		return { sent: 0, skipped: groups.length, configurationError: "AUTH_SECRET is required for durable reminder delivery" };
 	}
-	const reminderWindow = Math.floor((options?.now ?? Date.now()) / REMINDER_DELIVERY_WINDOW_MS);
+	const reminderWindow = Math.floor(now / REMINDER_DELIVERY_WINDOW_MS);
 
 	let sent = 0;
 	let skipped = 0;
@@ -132,16 +179,26 @@ export async function sendTaskReminders(
 
 async function loadPendingTaskRows(
 	db: D1Database,
-	eventId?: string,
-	personIds?: string[],
+	args: {
+		eventId?: string;
+		personIds?: string[];
+		now: number;
+		dueMode: ReminderDueMode;
+	},
 ): Promise<PendingTaskRow[]> {
-	const selectedPeople = [...new Set(personIds?.filter(Boolean) ?? [])];
+	const selectedPeople = [...new Set(args.personIds?.filter(Boolean) ?? [])];
 	// An explicit empty segment is never an alias for every speaker.
-	if (personIds !== undefined && selectedPeople.length === 0) return [];
+	if (args.personIds !== undefined && selectedPeople.length === 0) return [];
 	const personClause = selectedPeople.length
 		? ` AND st.person_id IN (${selectedPeople.map(() => "?").join(", ")})`
 		: "";
-	if (eventId) {
+	const hasDueAtColumn = await speakerTasksHaveDueAtColumn(db);
+	const dueFilter = dueAwarePendingFilter({
+		hasDueAtColumn,
+		dueMode: args.dueMode,
+		now: args.now,
+	});
+	if (args.eventId) {
 		const result = await db
 			.prepare(
 				`SELECT
@@ -161,10 +218,10 @@ async function loadPendingTaskRows(
 				INNER JOIN events e ON e.id = st.event_id
 				INNER JOIN submissions s ON s.id = st.submission_id
 				INNER JOIN cfp_forms f ON f.id = s.form_id
-					WHERE st.status = 'pending' AND st.template_required = 1 AND st.event_id = ? AND e.mode <> 'demo'${personClause}
+					WHERE st.status = 'pending' AND st.template_required = 1 AND st.event_id = ? AND e.mode <> 'demo'${personClause}${dueFilter.clause}
 					ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 			)
-			.bind(eventId, ...selectedPeople)
+			.bind(args.eventId, ...selectedPeople, ...dueFilter.binds)
 			.all<PendingTaskRow>();
 		return result.results;
 	}
@@ -188,10 +245,10 @@ async function loadPendingTaskRows(
 			INNER JOIN events e ON e.id = st.event_id
 			INNER JOIN submissions s ON s.id = st.submission_id
 			INNER JOIN cfp_forms f ON f.id = s.form_id
-			WHERE st.status = 'pending' AND st.template_required = 1 AND e.mode <> 'demo'${personClause}
+			WHERE st.status = 'pending' AND st.template_required = 1 AND e.mode <> 'demo'${personClause}${dueFilter.clause}
 			ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 		)
-		.bind(...selectedPeople)
+		.bind(...selectedPeople, ...dueFilter.binds)
 		.all<PendingTaskRow>();
 	return result.results;
 }

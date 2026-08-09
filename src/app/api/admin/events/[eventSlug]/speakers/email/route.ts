@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
-import { emailRosterSpeakers, filterRosterSpeakers, isSpeakerWorkflowStatus, listEventSpeakerRoster } from "@/lib/speakers/roster";
+import {
+	emailRosterSpeakers,
+	filterRosterSpeakers,
+	isSpeakerWorkflowStatus,
+	listEventSpeakerRoster,
+	resolveRosterBulkEmailTemplateKey,
+} from "@/lib/speakers/roster";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 
 type RouteContext = {
@@ -20,6 +26,14 @@ export async function POST(request: Request, context: RouteContext) {
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
 	if (!isJsonObject(parsed.value)) {
 		return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
+	}
+
+	const templateKey = resolveRosterBulkEmailTemplateKey(parsed.value.templateKey);
+	if (!templateKey) {
+		return NextResponse.json(
+			{ ok: false, error: "templateKey must be task_reminder or speaker_announcement" },
+			{ status: 400 },
+		);
 	}
 
 	let personIds: string[] = [];
@@ -52,8 +66,22 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "No speakers match the current filter" }, { status: 400 });
 	}
 
+	const subject = typeof parsed.value.subject === "string" ? parsed.value.subject : undefined;
+	const text = typeof parsed.value.text === "string"
+		? parsed.value.text
+		: typeof parsed.value.body === "string"
+			? parsed.value.body
+			: undefined;
+
 	const env = await getCloudflareEnv();
-	const result = await emailRosterSpeakers(env, { eventId: event.id, personIds });
+	const result = await emailRosterSpeakers(env, {
+		eventId: event.id,
+		personIds,
+		templateKey,
+		subject,
+		text,
+		now: Date.now(),
+	});
 	if (result.error) {
 		return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
 	}
@@ -69,6 +97,7 @@ export async function POST(request: Request, context: RouteContext) {
 		sent: result.sent,
 		skipped: result.skipped,
 		recipients: personIds.length,
+		templateKey: result.templateKey ?? templateKey,
 		broadcasted,
 	});
 }

@@ -16,7 +16,7 @@ export default {
 
 	async scheduled(event, env, ctx) {
 		ctx.waitUntil(
-			sendTaskReminders(env),
+			sendTaskReminders(env, { now: Date.now(), dueMode: "due_or_overdue" }),
 		);
 		ctx.waitUntil(
 			pruneExpiredRateLimitBuckets(env.DB),

@@ -5,6 +5,7 @@ import {
 	isSpeakerWorkflowStatus,
 	matchesRosterSearch,
 	parseSpeakerSocials,
+	resolveRosterBulkEmailTemplateKey,
 	serializeSpeakerSocials,
 	type RosterSpeaker,
 } from "./roster";
@@ -85,5 +86,14 @@ describe("speaker roster domain", () => {
 		expect(filterRosterSpeakers(rows, { q: "ghopper" }).map((row) => row.personId)).toEqual(["2"]);
 		expect(matchesRosterSearch(rows[0]!, "ADA")).toBe(true);
 		expect(matchesRosterSearch(rows[0]!, "zzz")).toBe(false);
+	});
+
+	it("resolves only safe roster bulk-email template keys", () => {
+		expect(resolveRosterBulkEmailTemplateKey(undefined)).toBe("task_reminder");
+		expect(resolveRosterBulkEmailTemplateKey("task_reminder")).toBe("task_reminder");
+		expect(resolveRosterBulkEmailTemplateKey("speaker_announcement")).toBe("speaker_announcement");
+		expect(resolveRosterBulkEmailTemplateKey("acceptance")).toBeNull();
+		expect(resolveRosterBulkEmailTemplateKey("organizer_magic_link")).toBeNull();
+		expect(resolveRosterBulkEmailTemplateKey(12)).toBeNull();
 	});
 });
