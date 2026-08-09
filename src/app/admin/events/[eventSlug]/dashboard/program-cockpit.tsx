@@ -38,15 +38,26 @@ function ShowMoreToggle({
 	itemCount,
 	expanded,
 	onToggle,
+	controls,
+	sectionLabel,
 }: {
 	itemCount: number;
 	expanded: boolean;
 	onToggle: () => void;
+	controls: string;
+	sectionLabel: string;
 }) {
 	if (itemCount <= COCKPIT_SECTION_PREVIEW_COUNT) return null;
 	return (
 		<button
 			type="button"
+			aria-expanded={expanded}
+			aria-controls={controls}
+			aria-label={
+				expanded
+					? `Show fewer ${sectionLabel}`
+					: `Show all ${itemCount} ${sectionLabel}`
+			}
 			onClick={onToggle}
 			className="mt-2 text-xs font-medium text-neutral-400 hover:text-neutral-200"
 		>
@@ -303,7 +314,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 				</div>
 			</div>
 
-			<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+			<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3">
 				{(
 					[
 						["Tasks", counts.outstandingTasks, "tasks"],
@@ -408,6 +419,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.pendingCoSpeakers.length}
 						expanded={pendingCoSpeakersExpanded}
 						onToggle={togglePendingCoSpeakers}
+						controls="cockpit-co-speakers"
+						sectionLabel="co-speakers awaiting confirmation"
 					/>
 				</section>
 			) : null}
@@ -490,6 +503,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.outstandingTasks.groups.length}
 						expanded={outstandingTasksExpanded}
 						onToggle={toggleOutstandingTasks}
+						controls="cockpit-tasks"
+						sectionLabel="outstanding speaker tasks"
 					/>
 				</section>
 			) : null}
@@ -549,6 +564,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.needsReviewActivation.length}
 						expanded={needsReviewActivationExpanded}
 						onToggle={toggleNeedsReviewActivation}
+						controls="cockpit-needs-plan"
+						sectionLabel="submissions needing review plan"
 					/>
 				</section>
 			) : null}
@@ -629,6 +646,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.unassignedReviews.length}
 						expanded={unassignedReviewsExpanded}
 						onToggle={toggleUnassignedReviews}
+						controls="cockpit-unassigned"
+						sectionLabel="unassigned reviews"
 					/>
 				</section>
 			) : null}
@@ -673,6 +692,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.incompleteReviews.length}
 						expanded={incompleteReviewsExpanded}
 						onToggle={toggleIncompleteReviews}
+						controls="cockpit-incomplete-reviews"
+						sectionLabel="incomplete assigned reviews"
 					/>
 				</section>
 			) : null}
@@ -740,6 +761,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.reviewedUndecided.length}
 						expanded={reviewedUndecidedExpanded}
 						onToggle={toggleReviewedUndecided}
+						controls="cockpit-undecided"
+						sectionLabel="reviewed but undecided submissions"
 					/>
 				</section>
 			) : null}
@@ -781,6 +804,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.acceptedUnscheduled.length}
 						expanded={acceptedUnscheduledExpanded}
 						onToggle={toggleAcceptedUnscheduled}
+						controls="cockpit-unscheduled"
+						sectionLabel="accepted but unscheduled submissions"
 					/>
 				</section>
 			) : null}
@@ -847,6 +872,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.scheduledUnpublished.length}
 						expanded={scheduledUnpublishedExpanded}
 						onToggle={toggleScheduledUnpublished}
+						controls="cockpit-unpublished"
+						sectionLabel="scheduled but unpublished sessions"
 					/>
 				</section>
 			) : null}
@@ -913,6 +940,8 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						itemCount={snapshot.failedDeliveries.length}
 						expanded={failedDeliveriesExpanded}
 						onToggle={toggleFailedDeliveries}
+						controls="cockpit-failed-email"
+						sectionLabel="failed email deliveries"
 					/>
 				</section>
 			) : null}
