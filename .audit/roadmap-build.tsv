@@ -54,3 +54,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T17:33:47Z	p1	Gmail calendar strip PASS (human screenshots)	probes A/B/C show Yes/Maybe/No; no product MIME change	de93105	PASS
 2026-08-09T17:37:20Z	release	Prod: migrate 0037 + deploy P0/P1 tip	Worker a90313e3; source 69c5e51	69c5e51	live 200s; no pending migrations
 2026-08-09T17:38:38Z	p2	Merged Airtable mirror-mode docs	README/PRODUCT/PARITY + export button copy	73cd6e0	merged
+2026-08-09T17:39:05Z	p2	Cancelled logistics/token-receipts product work	user clarified token claim is personal not product	-	cancelled
