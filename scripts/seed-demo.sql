@@ -350,3 +350,40 @@ JOIN submissions s ON s.id = x.submission_id AND s.event_id = e.id
 JOIN event_rooms r ON r.id = x.room_id AND r.event_id = e.id
 JOIN agenda_tracks t ON t.id = x.track_id AND t.event_id = e.id
 WHERE NOT EXISTS (SELECT 1 FROM agenda_slots WHERE id = x.id);
+
+-- Stable public widgets make the demo immediately usable after migration 0029.
+-- Inserts ignore reserved-ID collisions; the refresh below is scoped to this demo
+-- event, so reseeding cannot modify another event's definitions.
+WITH demo_event AS (
+	SELECT id FROM events
+	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
+), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Agents"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
+	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),
+	('demo-embed-speaker-gallery', 'Speaker gallery', 'speaker-gallery', 'speaker_gallery', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}')
+)
+INSERT OR IGNORE INTO public_embeds (id, event_id, name, slug, widget_type, config_json, created_at, updated_at)
+SELECT x.id, e.id, x.name, x.slug, x.widget_type, x.config_json, 1790000000000, 1790000000000
+FROM fixtures x JOIN demo_event e;
+
+WITH demo_event AS (
+	SELECT id FROM events
+	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
+), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Agents"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
+	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),
+	('demo-embed-speaker-gallery', 'Speaker gallery', 'speaker-gallery', 'speaker_gallery', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}')
+)
+UPDATE public_embeds
+SET
+	name = (SELECT x.name FROM fixtures x WHERE x.id = public_embeds.id),
+	slug = (SELECT x.slug FROM fixtures x WHERE x.id = public_embeds.id),
+	widget_type = (SELECT x.widget_type FROM fixtures x WHERE x.id = public_embeds.id),
+	config_json = (SELECT x.config_json FROM fixtures x WHERE x.id = public_embeds.id),
+	updated_at = 1790000000000
+WHERE event_id IN (SELECT id FROM demo_event)
+	AND id IN (SELECT id FROM fixtures);

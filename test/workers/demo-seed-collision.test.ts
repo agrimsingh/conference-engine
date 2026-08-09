@@ -20,6 +20,7 @@ async function runDemoSeed(): Promise<void> {
 async function clearDemoFixture(): Promise<void> {
 	const eventId = "demo-cfp-to-stage-2026";
 	await env.DB.batch([
+		env.DB.prepare("DELETE FROM public_embeds WHERE event_id = ?").bind(eventId),
 		env.DB.prepare("DELETE FROM agenda_calendar_lifecycles WHERE event_id = ?").bind(eventId),
 		env.DB.prepare("DELETE FROM agenda_slots WHERE event_id = ?").bind(eventId),
 		env.DB.prepare("DELETE FROM evaluation_scores WHERE plan_id = 'demo-review-plan'").bind(),
@@ -46,6 +47,7 @@ describe("demo seed collision safety", () => {
 		await clearDemoFixture();
 		await env.DB.batch([
 			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, mode, created_at, updated_at) VALUES ('seed-collision-live-event', 'seed-collision-live', 'Live collision event', 'UTC', 'live', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO public_embeds (id, event_id, name, slug, widget_type, config_json, created_at, updated_at) VALUES ('demo-embed-agenda', 'seed-collision-live-event', 'Live agenda', 'agenda', 'agenda', '{}', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('seed-collision-live-form', 'seed-collision-live-event', 'cfp', 'Live CFP', 'open', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('demo-person-amara-diallo', 'amara.diallo@example.invalid', 'Live Amara', ?)").bind(now),
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('demo-person-priya-nair', 'priya.nair@example.invalid', 'Live Priya', ?)").bind(now),
@@ -74,6 +76,8 @@ describe("demo seed collision safety", () => {
 		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM submission_speakers WHERE id = 'demo-speaker-amara-diallo'").first()).toEqual({ count: 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_profiles WHERE id = 'demo-profile-amara-diallo'").first()).toEqual({ count: 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM speaker_tasks WHERE id LIKE 'demo-task-amara-%'").first()).toEqual({ count: 0 });
+		expect(await env.DB.prepare("SELECT name, event_id, config_json FROM public_embeds WHERE id = 'demo-embed-agenda'").first()).toEqual({ name: "Live agenda", event_id: "seed-collision-live-event", config_json: "{}" });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM public_embeds WHERE event_id = 'demo-cfp-to-stage-2026'").first()).toEqual({ count: 4 });
 		expect(await env.DB.prepare(`SELECT COUNT(*) AS count
 			FROM submissions
 			WHERE event_id = 'demo-cfp-to-stage-2026'

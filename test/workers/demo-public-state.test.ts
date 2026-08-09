@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import demoSeed from "../../scripts/seed-demo.sql?raw";
 import { listPublicSpeakersForEvent } from "@/lib/db/queries";
+import { buildPublicEmbedPayload, parseEmbedInput } from "@/lib/embeds/embed";
 
 const demoEventId = "demo-cfp-to-stage-2026";
 
@@ -57,5 +58,54 @@ describe("demo public state", () => {
 		expect(speakers.filter((speaker) => speaker.job_title && speaker.company).length).toBeGreaterThanOrEqual(3);
 		expect(speakers.filter((speaker) => speaker.has_headshot === 0).map((speaker) => speaker.display_name))
 			.toContain("Amara Diallo");
+	});
+
+	it("seeds five validated, event-scoped public embeds and publishes only published sessions", async () => {
+		await runDemoSeed();
+
+		const embeds = await env.DB.prepare(`SELECT id, name, slug, widget_type, config_json
+			FROM public_embeds WHERE event_id = ? ORDER BY slug`).bind(demoEventId).all<{
+			id: string;
+			name: string;
+			slug: string;
+			widget_type: string;
+			config_json: string;
+		}>();
+		expect(embeds.results.map((embed) => `${embed.slug}:${embed.widget_type}`)).toEqual([
+			"agenda:agenda",
+			"itinerary:itinerary",
+			"sessions:sessions",
+			"speaker-gallery:speaker_gallery",
+			"speakers:speakers",
+		]);
+		for (const embed of embeds.results) {
+			const config = JSON.parse(embed.config_json) as Record<string, unknown>;
+			expect(parseEmbedInput({ name: embed.name, slug: embed.slug, widgetType: embed.widget_type, ...config })).toMatchObject({ ok: true });
+		}
+		for (const slug of ["speakers", "speaker-gallery"]) {
+			const config = JSON.parse(embeds.results.find((embed) => embed.slug === slug)!.config_json) as { visibleFields: string[] };
+			expect(config.visibleFields).toEqual(expect.arrayContaining(["headshot", "jobTitle", "company", "bio"]));
+		}
+		const filteredSessions = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "sessions");
+		expect(filteredSessions?.sessions).toHaveLength(2);
+		expect(filteredSessions?.sessions.every((session) => session.trackId === "demo-track-agents" && session.format === "Agents" && session.room === "Main Stage")).toBe(true);
+		const speakerPayload = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "speakers");
+		expect(speakerPayload?.speakers).toContainEqual(expect.objectContaining({ name: "Amara Diallo", jobTitle: "Staff Engineer", company: "Resilient Labs" }));
+
+		await env.DB.prepare("UPDATE public_embeds SET name = 'Stale agenda', config_json = '{}', updated_at = ? WHERE id = ? AND event_id = ?").bind(1_790_000_000_000, "demo-embed-agenda", demoEventId).run();
+		await runDemoSeed();
+		expect(await env.DB.prepare("SELECT name, config_json FROM public_embeds WHERE id = ? AND event_id = ?").bind("demo-embed-agenda", demoEventId).first()).toEqual({
+			name: "Conference agenda",
+			config_json: '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}',
+		});
+
+		const form = await env.DB.prepare("SELECT id FROM cfp_forms WHERE event_id = ? AND kind = 'public' LIMIT 1").bind(demoEventId).first<{ id: string }>();
+		await env.DB.batch([
+			env.DB.prepare("INSERT OR IGNORE INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('demo-embed-hidden-session', ?, ?, 'scheduled', ?, ?, ?)").bind(form!.id, demoEventId, JSON.stringify({ title: "Scheduled demo session" }), 1_790_000_000_000, 1_790_000_000_000),
+			env.DB.prepare("INSERT OR IGNORE INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('demo-embed-hidden-slot', ?, 'demo-embed-hidden-session', 'Main Stage', ?, ?, 'demo-embed-hidden@conference-engine.invalid', ?, ?)").bind(demoEventId, 1_790_000_000_000, 1_790_001_800_000, 1_790_000_000_000, 1_790_000_000_000),
+		]);
+		const payload = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "agenda");
+		expect(payload?.sessions.length).toBeGreaterThan(0);
+		expect(payload?.sessions.map((session) => session.title)).not.toContain("Scheduled demo session");
 	});
 });
