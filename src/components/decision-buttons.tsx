@@ -23,6 +23,11 @@ type Props = {
 	previews: Record<DecisionAction, RenderedMessage>;
 };
 
+const ACTION_VARIANTS: Record<string, string> = {
+	accept: buttonClasses("primary", "sm"),
+	reject: `${buttonClasses("secondary", "sm")} text-red-400`,
+};
+
 /**
  * Decision actions with an explicit email confirmation step. Clicking an
  * action opens the rendered email for review/editing with a send toggle;
@@ -98,8 +103,8 @@ export function DecisionButtons({
 						onClick={() =>
 							openAction === action ? setOpenAction(null) : openConfirm(action)
 						}
-						className={`${buttonClasses("secondary", "sm")}${
-							action === "accept" ? " text-emerald-400" : ""
+						className={`${
+							ACTION_VARIANTS[action] ?? buttonClasses("secondary", "sm")
 						}${openAction === action ? " bg-neutral-800" : ""}`}
 					>
 						{DECISION_REGISTRY[action].label}

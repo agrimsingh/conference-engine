@@ -33,9 +33,12 @@ export function SubmissionRow({
 		assignedReviewerCount > 0;
 
 	return (
-		<li className="px-4 py-3 text-sm">
+		<li className="relative px-4 py-3 text-sm transition-colors hover:bg-neutral-800/40">
 			<div className="flex items-start justify-between gap-3">
-				<Link href={href} className="font-medium text-neutral-100 hover:underline">
+				<Link
+					href={href}
+					className="font-medium text-neutral-100 outline-none before:absolute before:inset-0 hover:underline focus-visible:ring-2 focus-visible:ring-emerald-500"
+				>
 					{title}
 				</Link>
 				<div className="flex shrink-0 flex-wrap justify-end gap-1.5">
