@@ -149,10 +149,41 @@ describe("public embed widgets", () => {
 		expect(container.textContent).not.toContain("Sam Lee");
 	});
 
-	it("renders a searchable speaker gallery with headshots, graceful fallback, and details", async () => {
+	it("renders a searchable speaker gallery with headshots, graceful fallback, and interactive details", async () => {
 		await act(async () => root.render(<SpeakersWidget payload={payload} gallery />));
 		expect(container.querySelector('img[src*="speaker-2"]')).not.toBeNull();
 		expect(container.querySelector('svg[aria-label="Illustrated speaker portrait"]')).not.toBeNull();
+		const priyaDetails = container.querySelector('button[aria-label="View details for Priya Raman"]') as HTMLButtonElement;
+		expect(priyaDetails).not.toBeNull();
+		await act(async () => priyaDetails.click());
+		const dialog = container.querySelector('[role="dialog"]');
+		expect(dialog?.getAttribute("aria-modal")).toBe("true");
+		expect(dialog?.parentElement?.previousElementSibling?.hasAttribute("inert")).toBe(true);
+		expect(dialog?.textContent).toContain("Priya builds dependable delivery platforms.");
+		expect(dialog?.querySelector('a[href="/e/devflow/sessions/session-1"]')?.textContent).toContain("Taming CI");
+		expect(dialog?.querySelector('a[href="/e/devflow/speakers/speaker-1"]')?.textContent).toContain("View full speaker profile");
+		expect(container.querySelectorAll('button[aria-label^="View details for "]')).toHaveLength(2);
+		const close = [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Close details");
+		const lastLink = [...dialog!.querySelectorAll("a")].at(-1) as HTMLAnchorElement;
+		lastLink.focus();
+		await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+		expect(document.activeElement).toBe(close);
+		close?.focus();
+		await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
+		expect(document.activeElement).toBe(lastLink);
+		await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+		expect(container.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(priyaDetails);
+		await act(async () => priyaDetails.click());
+		const reopenedDialog = container.querySelector('[role="dialog"]')!;
+		await act(async () => reopenedDialog.parentElement?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+		expect(container.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(priyaDetails);
+		await act(async () => priyaDetails.click());
+		const closeAgain = [...container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Close details");
+		await act(async () => closeAgain?.click());
+		expect(container.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(priyaDetails);
 		const search = container.querySelector('input[type="search"]') as HTMLInputElement;
 		await act(async () => setValue(search, "Sam"));
 		expect(container.textContent).toContain("Sam designs agent products.");

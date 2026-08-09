@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import type { PublicEmbedPayload } from "@/lib/embeds/embed";
 import { truncatePreview } from "@/lib/schedule/public-discover";
@@ -223,7 +223,19 @@ function SpeakerImage({ payload, speaker, gallery }: { payload: PublicEmbedPaylo
 	);
 }
 
-function SpeakerCard({ payload, speaker, gallery }: { payload: PublicEmbedPayload; speaker: Speaker; gallery: boolean }) {
+function SpeakerCard({
+	payload,
+	speaker,
+	gallery,
+	onOpenDetails,
+	detailsButtonRef,
+}: {
+	payload: PublicEmbedPayload;
+	speaker: Speaker;
+	gallery: boolean;
+	onOpenDetails?: () => void;
+	detailsButtonRef?: (element: HTMLButtonElement | null) => void;
+}) {
 	const fields = new Set(payload.embed.config.visibleFields);
 	return (
 		<article className={gallery ? "h-full rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-center" : fields.has("headshot") ? "grid gap-4 py-5 sm:grid-cols-[auto_1fr]" : "py-5"}>
@@ -255,16 +267,126 @@ function SpeakerCard({ payload, speaker, gallery }: { payload: PublicEmbedPayloa
 						</ul>
 					</div>
 				) : null}
+				{gallery && onOpenDetails ? (
+					<button
+						ref={detailsButtonRef}
+						type="button"
+						aria-haspopup="dialog"
+						aria-label={`View details for ${speaker.name}`}
+						className="mt-4 rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-200 hover:border-[var(--embed-accent)] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--embed-accent)]"
+						onClick={onOpenDetails}
+					>
+						View details
+					</button>
+				) : null}
 			</div>
 		</article>
 	);
 }
 
+function SpeakerDetailDialog({
+	payload,
+	speaker,
+	onClose,
+}: {
+	payload: PublicEmbedPayload;
+	speaker: Speaker;
+	onClose: () => void;
+}) {
+	const fields = new Set(payload.embed.config.visibleFields);
+	const titleId = `speaker-detail-${speaker.id}-title`;
+	const dialogRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		const dialog = dialogRef.current;
+		if (!dialog) return;
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+			if (event.key !== "Tab") return;
+			const focusable = [...dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => !element.hasAttribute("hidden"));
+			if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
+			const first = focusable[0]!;
+			const last = focusable.at(-1)!;
+			if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+			else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+			else if (!dialog.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => { document.removeEventListener("keydown", onKeyDown); document.body.style.overflow = previousOverflow; };
+	}, [onClose]);
+	return (
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+			role="presentation"
+			onMouseDown={(event) => {
+				if (event.target === event.currentTarget) onClose();
+			}}
+		>
+			<section
+				ref={dialogRef}
+				role="dialog"
+				tabIndex={-1}
+				aria-modal="true"
+				aria-labelledby={titleId}
+				className="max-h-[min(44rem,calc(100vh-2rem))] w-full max-w-2xl overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-950 p-5 shadow-2xl sm:p-6"
+			>
+				<div className="flex items-start justify-between gap-4">
+					<div className={fields.has("headshot") ? "grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center" : ""}>
+						{fields.has("headshot") ? <SpeakerImage payload={payload} speaker={speaker} gallery={false} /> : null}
+						<div>
+							<h2 id={titleId} className="text-2xl font-semibold text-neutral-100">{speaker.name}</h2>
+							{fields.has("jobTitle") || fields.has("company") ? (
+								<p className="mt-1 text-sm text-neutral-400">
+									{[fields.has("jobTitle") ? speaker.jobTitle : null, fields.has("company") ? speaker.company : null].filter(Boolean).join(" · ")}
+								</p>
+							) : null}
+						</div>
+					</div>
+					<button
+						type="button"
+						autoFocus
+						className="shrink-0 rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-200 hover:border-neutral-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--embed-accent)]"
+						onClick={onClose}
+					>
+						Close details
+					</button>
+				</div>
+				{fields.has("bio") && speaker.bio ? <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-neutral-300">{speaker.bio}</p> : null}
+				{speaker.sessions.length > 0 ? (
+					<div className="mt-6">
+						<h3 className="text-xs font-medium uppercase tracking-wide text-neutral-500">Sessions ({speaker.sessions.length})</h3>
+						<ul className="mt-3 space-y-3">
+							{speaker.sessions.map((session) => (
+								<li key={session.id} className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+									<Link className="font-medium text-neutral-100 hover:underline" href={session.url} target="_blank">{session.title}</Link>
+									<p className="mt-1 text-xs text-neutral-500">{formatDateTime(session.startsAt, payload.event.timezone)}–{formatTime(session.endsAt, payload.event.timezone)} · {session.room}</p>
+								</li>
+							))}
+						</ul>
+					</div>
+				) : null}
+				<Link className="mt-6 inline-block text-sm font-medium text-[var(--embed-accent)] hover:underline" href={speaker.url} target="_blank">
+					View full speaker profile
+				</Link>
+			</section>
+		</div>
+	);
+}
+
 export function SpeakersWidget({ payload, gallery }: { payload: PublicEmbedPayload; gallery: boolean }) {
 	const [query, setQuery] = useState("");
+	const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
+	const detailButtons = useRef(new Map<string, HTMLButtonElement>());
 	const speakers = payload.speakers.filter((speaker) => speaker.name.toLowerCase().includes(query.trim().toLowerCase()));
+	const closeDetails = () => {
+		const speakerId = selectedSpeaker?.id;
+		setSelectedSpeaker(null);
+		if (speakerId) queueMicrotask(() => detailButtons.current.get(speakerId)?.focus());
+	};
 	return (
 		<section className="mt-6">
+		<div inert={selectedSpeaker ? true : undefined} aria-hidden={selectedSpeaker ? true : undefined}>
 		<label className="block max-w-md text-xs font-medium text-neutral-400">
 			Search speakers by name
 			<input
@@ -278,9 +400,22 @@ export function SpeakersWidget({ payload, gallery }: { payload: PublicEmbedPaylo
 		<p className="mt-4 text-sm text-neutral-400" aria-live="polite">{countLabel(speakers.length, "speaker")}</p>
 		<ul className={gallery ? "mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" : "mt-3 divide-y divide-neutral-800"}>
 			{speakers.map((speaker) => (
-				<li key={speaker.id}><SpeakerCard payload={payload} speaker={speaker} gallery={gallery} /></li>
+				<li key={speaker.id}>
+					<SpeakerCard
+						payload={payload}
+						speaker={speaker}
+						gallery={gallery}
+						onOpenDetails={gallery ? () => setSelectedSpeaker(speaker) : undefined}
+						detailsButtonRef={gallery ? (element) => {
+							if (element) detailButtons.current.set(speaker.id, element);
+							else detailButtons.current.delete(speaker.id);
+						} : undefined}
+					/>
+				</li>
 			))}
 		</ul>
+		</div>
+		{gallery && selectedSpeaker ? <SpeakerDetailDialog payload={payload} speaker={selectedSpeaker} onClose={closeDetails} /> : null}
 	</section>
 	);
 }
