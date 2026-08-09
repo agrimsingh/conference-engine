@@ -42,3 +42,18 @@ WHERE event_id='evt_aie_sandbox' AND slug IN ('cfp','lightning','workshop') AND 
 ```
 
 Never run `scripts/seed.sql` with `--remote`.
+
+## Shipped evidence (2026-08-10)
+
+- Commit: `a2493d0` on `main` (pushed)
+- Worker version: `fe3ed4f4-c6e9-4913-b8d6-0e7b43628ffe`
+- Remote D1: `demo-cfp-form` → `open`; `form_aie_cfp` → `closed`
+
+| Check | Result |
+| --- | --- |
+| `GET /e/demo-cfp-to-stage/submit/cfp` | 200; contains `Read-only demo`, `Session format` |
+| `POST /api/e/demo-cfp-to-stage/submit/cfp` | 403 `{"ok":false,"errors":["This form is read-only"]}` |
+| `GET /e/aie-sandbox/submit/cfp` | 200; `CFP closed` / `no longer accepting` |
+| `GET /demo?perspective=applicant` | 200; `Demo launcher`, `Open demo CFP` |
+| `GET /` | 200; `Try the demo` (no “Explore the live demo”) |
+| `GET /e/demo-cfp-to-stage/schedule` | 200; footer `Try the demo CFP` |
