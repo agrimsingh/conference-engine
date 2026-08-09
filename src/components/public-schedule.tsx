@@ -235,13 +235,16 @@ export async function PublicSchedule({
 	});
 	// eslint-disable-next-line react-hooks/purity -- request-time default day in a server component
 	const todayKey = dayKeyInTimeZone(Date.now(), event.timezone);
+	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
+		? "list"
+		: requestedView;
+	const allDaysSelected = view === "list" && dayParam?.trim() === "all";
 	const requestedDay = parseDayKey(dayParam);
 	const dayKey = requestedDay && days.includes(requestedDay)
 		? requestedDay
 		: defaultScheduleDayKey(days, scheduledDayKeys, todayKey);
-	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
-		? "list"
-		: requestedView;
+	/** URL day for list discover: concrete key or `"all"`. Other views always use a concrete day. */
+	const dayQuery = allDaysSelected ? "all" : dayKey;
 	const roomFilter = roomParam?.trim() || "all";
 
 	const publicSlots = slots.filter((slot) =>
@@ -347,7 +350,11 @@ export async function PublicSchedule({
 	const roomsForDay =
 		roomNames.length > 0
 			? roomNames
-			: [...new Set(daySlots.map((slot) => slot.roomName))];
+			: [
+					...new Set(
+						(allDaysSelected ? enriched : daySlots).map((slot) => slot.roomName),
+					),
+				];
 
 	const trackColumns = publicScheduleTrackColumns(
 		tracks,
@@ -375,9 +382,11 @@ export async function PublicSchedule({
 						{event.name}
 					</h1>
 					<p className="text-pretty text-sm text-neutral-400">
-						{view === "week"
-							? `${formatDayLabel(weekKeys[0]!, event.timezone)} – ${formatDayLabel(weekKeys[6]!, event.timezone)}`
-							: formatDayLabel(dayKey, event.timezone)}{" "}
+						{allDaysSelected
+							? "All days"
+							: view === "week"
+								? `${formatDayLabel(weekKeys[0]!, event.timezone)} – ${formatDayLabel(weekKeys[6]!, event.timezone)}`
+								: formatDayLabel(dayKey, event.timezone)}{" "}
 						· {event.timezone}
 					</p>
 				</div>
@@ -396,7 +405,8 @@ export async function PublicSchedule({
 									role="tab"
 									aria-selected={active}
 										href={hrefFor(basePath, event.slug, {
-											day: dayKey,
+											// Leaving list+all days restores a concrete day for grid views.
+											day: v === "list" && allDaysSelected ? "all" : dayKey,
 											view: v,
 											room: roomFilter,
 											embed: itineraryEmbed?.slug,
@@ -417,14 +427,34 @@ export async function PublicSchedule({
 
 			<nav aria-label="Event days" className="mb-6 flex flex-wrap items-center gap-2">
 				<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Event days</span>
+				{view === "list" ? (
+					<Link
+						href={hrefFor(basePath, event.slug, {
+							day: "all",
+							view,
+							room: roomFilter,
+							embed: itineraryEmbed?.slug,
+						})}
+						aria-current={allDaysSelected ? "date" : undefined}
+						className={
+							allDaysSelected
+								? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
+								: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"
+						}
+					>
+						All days
+					</Link>
+				) : null}
 				{days.map((key) => (
 					<Link
 						key={key}
 						href={hrefFor(basePath, event.slug, { day: key, view, room: roomFilter, embed: itineraryEmbed?.slug })}
-						aria-current={key === dayKey ? "date" : undefined}
-						className={key === dayKey
-							? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
-							: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"}
+						aria-current={!allDaysSelected && key === dayKey ? "date" : undefined}
+						className={
+							!allDaysSelected && key === dayKey
+								? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
+								: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"
+						}
 					>
 						{formatDayLabel(key, event.timezone)}
 					</Link>
@@ -484,13 +514,13 @@ export async function PublicSchedule({
 						timezone={event.timezone}
 						eventSlug={event.slug}
 						basePath={basePath}
-						initialDayKey={dayKey}
+						initialDayKey={dayQuery}
 						initialRoom={roomFilter}
 						roomOptions={["all", ...roomsForDay].map((room) => ({
 							value: room,
 							label: room === "all" ? "All rooms" : room,
 							href: hrefFor(basePath, event.slug, {
-								day: dayKey,
+								day: dayQuery,
 								view,
 								room,
 								embed: itineraryEmbed?.slug,

@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 
 const SELECT_CLASSES =
-	"w-full min-w-[9rem] rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm text-neutral-100 sm:w-auto";
+	"mt-1.5 block w-full min-w-[9rem] rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm text-neutral-100 sm:w-auto";
 
 const LABEL_CLASSES =
-	"flex flex-col gap-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500";
+	"block text-xs font-medium uppercase tracking-wide text-neutral-500";
 
 export function ScheduleQuerySelect({
 	label,
@@ -21,7 +21,7 @@ export function ScheduleQuerySelect({
 
 	return (
 		<label className={LABEL_CLASSES}>
-			<span>{label}</span>
+			{label}
 			<select
 				value={value}
 				onChange={(event) => {
@@ -55,7 +55,7 @@ export function DiscoverFacetSelect({
 }) {
 	return (
 		<label className={LABEL_CLASSES}>
-			<span>{label}</span>
+			{label}
 			<select
 				value={value}
 				onChange={(event) => onChange(event.target.value)}

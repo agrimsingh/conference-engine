@@ -42,6 +42,7 @@ export function PublicSessionsDiscover({
 	timezone: string;
 	eventSlug: string;
 	basePath: "/e" | "/embed";
+	/** Concrete day key, or `"all"` when Event days → All days is selected. */
 	initialDayKey: string;
 	initialRoom?: string;
 	roomOptions?: Array<{ value: string; label: string; href: string }>;
@@ -49,23 +50,22 @@ export function PublicSessionsDiscover({
 	const [q, setQ] = useState("");
 	const [track, setTrack] = useState("all");
 	const [format, setFormat] = useState("all");
-	const [dayScope, setDayScope] = useState<"day" | "all">("day");
 
 	const tracks = useMemo(() => discoverFacetValues(sessions, "trackName"), [sessions]);
 	const formats = useMemo(() => discoverFacetValues(sessions, "format"), [sessions]);
 
 	const scoped = useMemo(() => {
 		const base =
-			dayScope === "day"
-				? sessions.filter((session) => session.dayKey === initialDayKey)
-				: sessions;
+			initialDayKey === "all"
+				? sessions
+				: sessions.filter((session) => session.dayKey === initialDayKey);
 		return filterPublicDiscoverSessions(base, {
 			q,
 			track,
 			format,
 			location: initialRoom,
 		});
-	}, [sessions, dayScope, initialDayKey, q, track, format, initialRoom]);
+	}, [sessions, initialDayKey, q, track, format, initialRoom]);
 
 	const showTrackFacet = tracks.length > 1;
 	const showFormatFacet = formats.length > 1;
@@ -84,35 +84,6 @@ export function PublicSessionsDiscover({
 					/>
 				</label>
 				<div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-					<div className="flex flex-col gap-1.5">
-						<span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-							Days
-						</span>
-						<div className="flex flex-wrap gap-2">
-							<button
-								type="button"
-								onClick={() => setDayScope("day")}
-								className={
-									dayScope === "day"
-										? "rounded-md bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-100"
-										: "rounded-md border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300"
-								}
-							>
-								This day
-							</button>
-							<button
-								type="button"
-								onClick={() => setDayScope("all")}
-								className={
-									dayScope === "all"
-										? "rounded-md bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-100"
-										: "rounded-md border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300"
-								}
-							>
-								All days
-							</button>
-						</div>
-					</div>
 					{roomOptions && roomOptions.length > 1 ? (
 						<ScheduleQuerySelect
 							label="Room"
