@@ -1,15 +1,39 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { activationReviewPath } from "../review/activation-result";
 
 type Props = {
 	eventSlug: string;
+	planActive?: boolean;
 };
 
-export function ActivatePlanButton({ eventSlug }: Props) {
+export function ActivatePlanButton({ eventSlug, planActive = false }: Props) {
+	const router = useRouter();
 	const [error, setError] = useState<string | null>(null);
 	const [reviewPath, setReviewPath] = useState<string | null>(null);
+	const [alreadyActive, setAlreadyActive] = useState(false);
 	const [pending, setPending] = useState(false);
+
+	const adminReviewHref = `/admin/events/${eventSlug}/review`;
+
+	if (planActive || alreadyActive) {
+		return (
+			<div className="space-y-1 text-sm">
+				<Link
+					href={adminReviewHref}
+					className="font-medium text-neutral-200 underline underline-offset-2"
+				>
+					Open review board
+				</Link>
+				<p className="text-xs text-neutral-500">
+					Plan is active. The committee link is one-shot and cannot be recovered here.
+				</p>
+			</div>
+		);
+	}
 
 	async function onClick() {
 		setPending(true);
@@ -26,13 +50,18 @@ export function ActivatePlanButton({ eventSlug }: Props) {
 			const data = (await response.json()) as {
 				ok?: boolean;
 				error?: string;
-				plan?: { reviewPath?: string; reviewerToken?: string };
 			};
-			if (!response.ok || !data.ok || !data.plan?.reviewPath) {
+			if (!response.ok || !data.ok) {
 				setError(data.error ?? "Activate failed");
 				return;
 			}
-			setReviewPath(data.plan.reviewPath);
+			const link = activationReviewPath(data);
+			if (link) {
+				setReviewPath(link.reviewPath);
+				return;
+			}
+			setAlreadyActive(true);
+			router.refresh();
 		} catch {
 			setError("Network error");
 		} finally {
