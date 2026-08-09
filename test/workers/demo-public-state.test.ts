@@ -20,6 +20,36 @@ async function runDemoSeed(): Promise<void> {
 }
 
 describe("demo public state", () => {
+	it("reseeds approval heads after migration-created revision one", async () => {
+		await runDemoSeed();
+		const submissionId = "demo-sub-amara-diallo";
+		await env.DB.batch([
+			env.DB.prepare("DELETE FROM content_heads WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?").bind(demoEventId, submissionId),
+			env.DB.prepare("DELETE FROM content_revisions WHERE id = ?").bind(`demo-content-${submissionId}`),
+			env.DB.prepare(`INSERT INTO content_revisions (
+				id, event_id, entity_type, entity_id, revision_number, snapshot_json,
+				editor_account_id, editor_name, created_at
+			) VALUES (?, ?, 'session', ?, 1, ?, NULL, 'Migration backfill', ?)`)
+				.bind(`content-backfill-${submissionId}`, demoEventId, submissionId, JSON.stringify({
+					title: "Shipping agents that recover",
+					abstract: "Patterns for durable agent operations.",
+					contentStatus: "approved",
+				}), 1_790_000_000_000),
+		]);
+
+		await runDemoSeed();
+		await runDemoSeed();
+
+		expect(await env.DB.prepare(`SELECT h.approved_revision_id, r.revision_number
+			FROM content_heads h
+			JOIN content_revisions r ON r.id = h.approved_revision_id
+			WHERE h.event_id = ? AND h.entity_type = 'session' AND h.entity_id = ?`)
+			.bind(demoEventId, submissionId).first()).toEqual({
+			approved_revision_id: `demo-content-${submissionId}`,
+			revision_number: 2,
+		});
+	});
+
 	it("seeds a three-day published program with rich speaker profiles and fallback headshots", async () => {
 		await runDemoSeed();
 

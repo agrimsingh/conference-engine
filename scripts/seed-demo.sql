@@ -400,7 +400,13 @@ SELECT
 	s.event_id,
 	'session',
 	s.id,
-	1,
+	COALESCE((
+		SELECT MAX(existing.revision_number) + 1
+		FROM content_revisions existing
+		WHERE existing.event_id = s.event_id
+			AND existing.entity_type = 'session'
+			AND existing.entity_id = s.id
+	), 1),
 	json_object(
 		'title', COALESCE(json_extract(s.answers_json, '$.title'), ''),
 		'abstract', COALESCE(json_extract(s.answers_json, '$.abstract'), ''),
