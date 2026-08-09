@@ -906,27 +906,64 @@ export type PublicSpeakerDirectoryRow = {
 	display_name: string;
 	bio: string | null;
 	has_headshot: number;
+	job_title: string | null;
+	company: string | null;
 };
 
-/** Confirmed speakers on published sessions, one row per person_id. */
-export async function listPublicSpeakersForEvent(
+type SpeakerProfileColumnFlags = {
+	jobTitle: boolean;
+	company: boolean;
+};
+
+async function speakerProfileOptionalColumns(
 	db: D1Database,
-	eventId: string,
-): Promise<PublicSpeakerDirectoryRow[]> {
-	const result = await db
-		.prepare(
-			`SELECT
+): Promise<SpeakerProfileColumnFlags> {
+	try {
+		const info = await db
+			.prepare("PRAGMA table_info(speaker_profiles)")
+			.all<{ name: string }>();
+		const names = new Set(info.results.map((column) => column.name));
+		return {
+			jobTitle: names.has("job_title"),
+			company: names.has("company"),
+		};
+	} catch {
+		return { jobTitle: false, company: false };
+	}
+}
+
+function publicSpeakerSelectSql(columns: SpeakerProfileColumnFlags): string {
+	const jobTitleExpr = columns.jobTitle
+		? "NULLIF(TRIM(sp.job_title), '')"
+		: "NULL";
+	const companyExpr = columns.company
+		? "NULLIF(TRIM(sp.company), '')"
+		: "NULL";
+	return `SELECT
          ss.person_id AS person_id,
          COALESCE(NULLIF(TRIM(sp.display_name), ''), NULLIF(TRIM(ss.name), ''), 'Speaker') AS display_name,
          COALESCE(sp.bio, ss.bio) AS bio,
-         CASE WHEN sp.headshot_asset_id IS NOT NULL THEN 1 ELSE 0 END AS has_headshot
+         CASE WHEN sp.headshot_asset_id IS NOT NULL THEN 1 ELSE 0 END AS has_headshot,
+         ${jobTitleExpr} AS job_title,
+         ${companyExpr} AS company
        FROM submission_speakers ss
        INNER JOIN submissions s ON s.id = ss.submission_id
        LEFT JOIN speaker_profiles sp ON sp.event_id = s.event_id AND sp.person_id = ss.person_id
        WHERE s.event_id = ?
          AND s.status = 'published'
          AND ss.status = 'confirmed'
-         AND ss.person_id IS NOT NULL
+         AND ss.person_id IS NOT NULL`;
+}
+
+/** Confirmed speakers on published sessions, one row per person_id. */
+export async function listPublicSpeakersForEvent(
+	db: D1Database,
+	eventId: string,
+): Promise<PublicSpeakerDirectoryRow[]> {
+	const columns = await speakerProfileOptionalColumns(db);
+	const result = await db
+		.prepare(
+			`${publicSpeakerSelectSql(columns)}
        GROUP BY ss.person_id
        ORDER BY display_name COLLATE NOCASE ASC`,
 		)
@@ -975,20 +1012,11 @@ export async function getPublicSpeakerDirectoryEntry(
 	eventId: string,
 	personId: string,
 ): Promise<PublicSpeakerDirectoryRow | null> {
+	const columns = await speakerProfileOptionalColumns(db);
 	return db
 		.prepare(
-			`SELECT
-         ss.person_id AS person_id,
-         COALESCE(NULLIF(TRIM(sp.display_name), ''), NULLIF(TRIM(ss.name), ''), 'Speaker') AS display_name,
-         COALESCE(sp.bio, ss.bio) AS bio,
-         CASE WHEN sp.headshot_asset_id IS NOT NULL THEN 1 ELSE 0 END AS has_headshot
-       FROM submission_speakers ss
-       INNER JOIN submissions s ON s.id = ss.submission_id
-       LEFT JOIN speaker_profiles sp ON sp.event_id = s.event_id AND sp.person_id = ss.person_id
-       WHERE s.event_id = ?
+			`${publicSpeakerSelectSql(columns)}
          AND ss.person_id = ?
-         AND s.status = 'published'
-         AND ss.status = 'confirmed'
        GROUP BY ss.person_id`,
 		)
 		.bind(eventId, personId)

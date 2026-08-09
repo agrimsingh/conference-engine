@@ -5,6 +5,7 @@ import { loadPublicSession, safeExternalUrl } from "@/lib/sessions/session";
 import { formatClock } from "@/lib/schedule/time";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { SessionShareActions } from "@/components/session-share-actions";
+import { ShowMoreText } from "@/components/show-more-text";
 
 function answersFromJson(raw: string): Record<string, unknown> {
 	try {
@@ -85,9 +86,13 @@ export async function PublicSessionDetail({
 			{abstract ? (
 				<section className="mt-8">
 					<h2 className="text-lg font-medium text-neutral-100">About this session</h2>
-					<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-300">
-						{abstract}
-					</p>
+					<div className="mt-2">
+						<ShowMoreText
+							text={abstract}
+							maxChars={320}
+							className="whitespace-pre-wrap text-sm leading-6 text-neutral-300"
+						/>
+					</div>
 				</section>
 			) : null}
 			{session.speakers.some((speaker) => speaker.bio) ? (
@@ -98,9 +103,9 @@ export async function PublicSessionDetail({
 							<li key={speaker.id}>
 								<p className="font-medium text-neutral-100">{speaker.name}</p>
 								{speaker.bio ? (
-									<p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-neutral-400">
-										{speaker.bio}
-									</p>
+									<div className="mt-1">
+										<ShowMoreText text={speaker.bio} maxChars={220} />
+									</div>
 								) : null}
 							</li>
 						))}

@@ -7,8 +7,10 @@ import {
 	getPublicSpeakerDirectoryEntry,
 	listPublishedSessionsForPublicSpeaker,
 } from "@/lib/db/queries";
+import { ShowMoreText } from "@/components/show-more-text";
 import { titleFromAnswers } from "@/lib/domain";
 import { formatClock } from "@/lib/schedule/time";
+import { speakerAffiliation } from "@/lib/speakers/public-directory";
 
 type PageProps = { params: Promise<{ eventSlug: string; personId: string }> };
 
@@ -33,6 +35,10 @@ export default async function PublicSpeakerProfilePage({ params }: PageProps) {
 	if (!speaker) notFound();
 
 	const sessions = await listPublishedSessionsForPublicSpeaker(db, event.id, personId);
+	const affiliation = speakerAffiliation({
+		jobTitle: speaker.job_title,
+		company: speaker.company,
+	});
 
 	return (
 		<main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
@@ -49,14 +55,21 @@ export default async function PublicSpeakerProfilePage({ params }: PageProps) {
 					name={speaker.display_name}
 					hasHeadshot={speaker.has_headshot === 1}
 				/>
+				{affiliation ? (
+					<p className="mt-2 text-sm text-neutral-400">{affiliation}</p>
+				) : null}
 				<p className="mt-3 text-sm text-neutral-500">{event.name}</p>
 			</header>
 			{speaker.bio ? (
 				<section className="mt-8">
 					<h2 className="text-lg font-medium text-neutral-100">About</h2>
-					<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-300">
-						{speaker.bio}
-					</p>
+					<div className="mt-2">
+						<ShowMoreText
+							text={speaker.bio}
+							maxChars={320}
+							className="whitespace-pre-wrap text-sm leading-6 text-neutral-300"
+						/>
+					</div>
 				</section>
 			) : null}
 			<section className="mt-8">

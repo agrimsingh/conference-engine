@@ -166,6 +166,8 @@ describe("phase 7 public surface", () => {
 				display_name: "Pat Public",
 				bio: "Published bio",
 				has_headshot: 1,
+				job_title: null,
+				company: null,
 			},
 		]);
 		expect(await getPublicSpeakerDirectoryEntry(env.DB, created.eventId, personId)).toMatchObject({

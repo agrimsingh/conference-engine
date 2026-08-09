@@ -7,7 +7,8 @@ type PublicSpeakerAvatarProps = {
 	name: string;
 	hasHeadshot: boolean;
 	profileHref?: string | null;
-	size?: "sm" | "md";
+	size?: "sm" | "md" | "lg";
+	showName?: boolean;
 };
 
 export function PublicSpeakerAvatar({
@@ -17,9 +18,10 @@ export function PublicSpeakerAvatar({
 	hasHeadshot,
 	profileHref,
 	size = "md",
+	showName = true,
 }: PublicSpeakerAvatarProps) {
-	const dim = size === "sm" ? "h-8 w-8" : "h-12 w-12";
-	const px = size === "sm" ? 32 : 48;
+	const dim = size === "lg" ? "h-20 w-20" : size === "sm" ? "h-8 w-8" : "h-12 w-12";
+	const px = size === "lg" ? 80 : size === "sm" ? 32 : 48;
 	const initial = name.trim().slice(0, 1).toUpperCase() || "?";
 	const image =
 		personId && hasHeadshot ? (
@@ -40,11 +42,14 @@ export function PublicSpeakerAvatar({
 			</span>
 		);
 
-	const label = <span className="text-sm text-neutral-300">{name}</span>;
+	const label = showName ? <span className="text-sm text-neutral-300">{name}</span> : null;
 
 	if (profileHref) {
 		return (
-			<Link href={profileHref} className="inline-flex items-center gap-2 hover:underline">
+			<Link
+				href={profileHref}
+				className={showName ? "inline-flex items-center gap-2 hover:underline" : "inline-flex"}
+			>
 				{image}
 				{label}
 			</Link>
@@ -52,7 +57,7 @@ export function PublicSpeakerAvatar({
 	}
 
 	return (
-		<span className="inline-flex items-center gap-2">
+		<span className={showName ? "inline-flex items-center gap-2" : "inline-flex"}>
 			{image}
 			{label}
 		</span>
