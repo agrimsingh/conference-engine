@@ -62,6 +62,9 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 	const [q, setQ] = useState(initialQuery);
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
 	const [csv, setCsv] = useState("email,name,job_title,company,workflow_status,twitter,linkedin,github,website\n");
+	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
+	const [emailSubject, setEmailSubject] = useState("Update from {{event_name}}");
+	const [emailBody, setEmailBody] = useState("Hi {{submitter_name}},\n\n");
 	const [pending, setPending] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
 
@@ -169,21 +172,31 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 		setPending(true);
 		setNotice(null);
 		try {
+			const payload: Record<string, unknown> = {
+				personIds: visible.map((speaker) => speaker.personId),
+				templateKey: emailTemplateKey,
+			};
+			if (emailTemplateKey === "speaker_announcement") {
+				payload.subject = emailSubject;
+				payload.text = emailBody;
+			}
 			const response = await fetch(`/api/admin/events/${eventSlug}/speakers/email`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({
-					personIds: visible.map((speaker) => speaker.personId),
-				}),
+				body: JSON.stringify(payload),
 			});
 			const data = await response.json() as {
 				ok?: boolean;
 				sent?: number;
 				skipped?: number;
+				templateKey?: string;
 				error?: string;
 			};
 			if (!response.ok || !data.ok) setNotice(data.error ?? "Bulk email failed");
-			else setNotice(`${data.sent ?? 0} sent, ${data.skipped ?? 0} skipped (templated task_reminder).`);
+			else {
+				const key = data.templateKey ?? emailTemplateKey;
+				setNotice(`${data.sent ?? 0} sent, ${data.skipped ?? 0} skipped (${key}).`);
+			}
 		} catch {
 			setNotice("Network error");
 		} finally {
@@ -236,9 +249,20 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 							))}
 						</select>
 					</label>
+					<label className="text-sm text-neutral-300">
+						Email type
+						<select
+							value={emailTemplateKey}
+							onChange={(event) => setEmailTemplateKey(event.target.value as "task_reminder" | "speaker_announcement")}
+							className={`mt-1 ${INPUT_CLASSES}`}
+						>
+							<option value="task_reminder">Task reminder</option>
+							<option value="speaker_announcement">Announcement</option>
+						</select>
+					</label>
 					<button
 						type="button"
-						disabled={pending || visible.length === 0}
+						disabled={pending || visible.length === 0 || (emailTemplateKey === "speaker_announcement" && (!emailSubject.trim() || !emailBody.trim()))}
 						onClick={() => void bulkEmail()}
 						className={buttonClasses("secondary", "sm")}
 					>
@@ -251,6 +275,34 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 						Open speaker tasks
 					</Link>
 				</div>
+				{emailTemplateKey === "speaker_announcement" ? (
+					<div className="mt-4 grid gap-3">
+						<label className="text-sm text-neutral-300">
+							Subject
+							<input
+								value={emailSubject}
+								onChange={(event) => setEmailSubject(event.target.value)}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							/>
+						</label>
+						<label className="text-sm text-neutral-300">
+							Body
+							<textarea
+								value={emailBody}
+								onChange={(event) => setEmailBody(event.target.value)}
+								rows={5}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							/>
+						</label>
+						<p className="text-xs text-neutral-500">
+							Tokens: {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{portal_url}}"}.
+						</p>
+					</div>
+				) : (
+					<p className="mt-3 text-xs text-neutral-500">
+						Sends the outstanding-task reminder template to filtered speakers (all required pending tasks).
+					</p>
+				)}
 			</section>
 
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900">

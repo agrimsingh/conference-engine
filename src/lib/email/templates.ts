@@ -13,8 +13,17 @@ export const EDITABLE_MESSAGE_TEMPLATE_KEYS = [
 	"waitlist",
 	"portal_magic_link",
 	"task_reminder",
+	"speaker_announcement",
 	"calendar_invite",
 ] as const;
+
+/** Safe keys organizers may pick from the roster bulk-email composer. */
+export const ROSTER_BULK_EMAIL_KEYS = ["task_reminder", "speaker_announcement"] as const;
+export type RosterBulkEmailKey = (typeof ROSTER_BULK_EMAIL_KEYS)[number];
+
+export function isRosterBulkEmailKey(value: string): value is RosterBulkEmailKey {
+	return (ROSTER_BULK_EMAIL_KEYS as readonly string[]).includes(value);
+}
 
 export type EditableMessageTemplateKey = (typeof EDITABLE_MESSAGE_TEMPLATE_KEYS)[number];
 
@@ -57,6 +66,10 @@ const DEFAULTS: Record<EditableMessageTemplateKey, MessageTemplateDraft> = {
 	task_reminder: {
 		subject: "Reminder: {{outstanding_count}} outstanding speaker tasks for {{event_name}}",
 		text: "Hi {{submitter_name}},\n\nYou still have {{outstanding_count}} outstanding speaker tasks for {{event_name}}:\n\n{{task_list}}\n\n{{portal_hint}}\n\n— conference-engine",
+	},
+	speaker_announcement: {
+		subject: "Update from {{event_name}}",
+		text: "Hi {{submitter_name}},\n\n{{title}}\n\n— conference-engine",
 	},
 	calendar_invite: {
 		subject: "Scheduled: {{title}} @ {{event_name}}",

@@ -1,7 +1,15 @@
 import type { EventSpeakerProfileRow } from "@/lib/db/types";
+import { getEventById } from "@/lib/db/queries";
 import { sendTaskReminders, type ReminderEnv, type ReminderRunResult } from "@/lib/email/reminders";
+import { sendTemplatedEmail } from "@/lib/email/resend";
+import {
+	isRosterBulkEmailKey,
+	renderStoredMessageTemplate,
+	type RosterBulkEmailKey,
+} from "@/lib/email/templates";
 import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writability";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
+import { validatedAppOrigin } from "@/lib/security/origin";
 import { hasFormulaPrefix, parseBoundedCsv } from "@/lib/sessions/csv";
 
 export type { EventSpeakerProfileRow };
@@ -501,13 +509,116 @@ export async function upsertEventSpeakerProfile(
 	return { ok: true, speaker };
 }
 
+export type RosterBulkEmailInput = {
+	eventId: string;
+	personIds: string[];
+	templateKey?: RosterBulkEmailKey;
+	subject?: string;
+	text?: string;
+	now?: number;
+};
+
+export function resolveRosterBulkEmailTemplateKey(value: unknown): RosterBulkEmailKey | null {
+	if (value === undefined || value === null) return "task_reminder";
+	if (typeof value !== "string" || !isRosterBulkEmailKey(value)) return null;
+	return value;
+}
+
 export async function emailRosterSpeakers(
 	env: ReminderEnv,
-	args: { eventId: string; personIds: string[] },
-): Promise<ReminderRunResult & { error?: string }> {
+	args: RosterBulkEmailInput,
+): Promise<ReminderRunResult & { error?: string; templateKey?: RosterBulkEmailKey }> {
 	if (args.personIds.length === 0) return { sent: 0, skipped: 0, error: "No recipients" };
 	if (args.personIds.length > 100) return { sent: 0, skipped: 0, error: "At most 100 recipients per send" };
-	return sendTaskReminders(env, { eventId: args.eventId, personIds: args.personIds });
+	const templateKey = args.templateKey ?? "task_reminder";
+	const now = args.now ?? Date.now();
+
+	if (templateKey === "task_reminder") {
+		const result = await sendTaskReminders(env, {
+			eventId: args.eventId,
+			personIds: args.personIds,
+			now,
+			dueMode: "all_pending",
+		});
+		return { ...result, templateKey };
+	}
+
+	const subject = args.subject?.trim() ?? "";
+	const text = args.text?.trim() ?? "";
+	if (!subject || !text) {
+		return { sent: 0, skipped: 0, error: "subject and text are required for speaker_announcement", templateKey };
+	}
+	if (subject.length > 500 || text.length > 20_000) {
+		return { sent: 0, skipped: 0, error: "Announcement subject or body is too long", templateKey };
+	}
+
+	const event = await getEventById(env.DB, args.eventId);
+	if (!event) return { sent: 0, skipped: 0, error: "Event not found", templateKey };
+	const portalOrigin = validatedAppOrigin(env.APP_ORIGIN);
+	if (!portalOrigin) {
+		return {
+			sent: 0,
+			skipped: args.personIds.length,
+			configurationError: "APP_ORIGIN must be an absolute http(s) origin without a path",
+			templateKey,
+		};
+	}
+	if (!env.AUTH_SECRET) {
+		return {
+			sent: 0,
+			skipped: args.personIds.length,
+			configurationError: "AUTH_SECRET is required for durable reminder delivery",
+			templateKey,
+		};
+	}
+
+	const people = await env.DB
+		.prepare(
+			`SELECT id, email, name FROM people WHERE id IN (${args.personIds.map(() => "?").join(", ")})`,
+		)
+		.bind(...args.personIds)
+		.all<{ id: string; email: string; name: string | null }>();
+	const byId = new Map(people.results.map((row) => [row.id, row]));
+
+	let sent = 0;
+	let skipped = 0;
+	for (const personId of args.personIds) {
+		const person = byId.get(personId);
+		if (!person?.email) {
+			skipped += 1;
+			continue;
+		}
+		const submitterName = person.name?.trim() || "there";
+		const context = {
+			eventName: event.name,
+			submitterName,
+			title: text,
+			portalHint: `Sign in at ${portalOrigin}/portal`,
+			portalUrl: `${portalOrigin}/portal`,
+		};
+		const rendered = renderStoredMessageTemplate({ subject, text }, context);
+		const sendResult = await sendTemplatedEmail(env.DB, {
+			eventId: args.eventId,
+			submissionId: null,
+			toEmail: person.email,
+			templateKey: "speaker_announcement",
+			context,
+			override: rendered,
+			deliveryScope: `roster-announcement:${subject}`,
+			runtime: {
+				authSecret: env.AUTH_SECRET,
+				resendApiKey: env.RESEND_API_KEY,
+				resendFromEmail: env.RESEND_FROM_EMAIL,
+			},
+		});
+		if (!sendResult.ok || sendResult.status === "skipped") {
+			skipped += 1;
+			continue;
+		}
+		sent += 1;
+	}
+
+	return { sent, skipped, templateKey };
 }
 
 export type RosterImportResult =

@@ -107,8 +107,8 @@ describe("self-service configuration", () => {
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('self-required-person', 'required@test.invalid', 'Required', ?)").bind(now),
 			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('self-required-form', 'self-required', 'cfp', 'CFP', 'open', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('self-required-submission', 'self-required-form', 'self-required', 'accepted', '{}', ?, ?)").bind(now, now),
-			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, template_label, template_task_kind, template_required, status, created_at, updated_at) VALUES ('self-required-task', 'self-required', 'self-required-submission', 'self-required-person', 'stage-waiver', 'Stage waiver', 'file', 1, 'pending', ?, ?)").bind(now, now),
-			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, template_label, template_task_kind, template_required, status, created_at, updated_at) VALUES ('self-optional-task', 'self-required', 'self-required-submission', 'self-required-person', 'extra-links', 'Extra links', 'text', 0, 'pending', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, template_label, template_task_kind, template_required, status, due_at, created_at, updated_at) VALUES ('self-required-task', 'self-required', 'self-required-submission', 'self-required-person', 'stage-waiver', 'Stage waiver', 'file', 1, 'pending', ?, ?, ?)").bind(now, now, now),
+			env.DB.prepare("INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, template_label, template_task_kind, template_required, status, due_at, created_at, updated_at) VALUES ('self-optional-task', 'self-required', 'self-required-submission', 'self-required-person', 'extra-links', 'Extra links', 'text', 0, 'pending', ?, ?, ?)").bind(now, now, now),
 		]);
 		const event = await getEventById(env.DB, "self-required");
 		expect(event).not.toBeNull();
@@ -118,7 +118,7 @@ describe("self-service configuration", () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "required-provider" }), { status: 200 }));
 		vi.stubGlobal("fetch", fetchMock);
 		try {
-			const result = await sendTaskReminders({ DB: env.DB, SESSIONS: env.SESSIONS, AUTH_SECRET: "self-required-secret", APP_ORIGIN: "https://conference.example.test", RESEND_API_KEY: "test", RESEND_FROM_EMAIL: "team@example.test" }, { eventId: "self-required", now });
+			const result = await sendTaskReminders({ DB: env.DB, SESSIONS: env.SESSIONS, AUTH_SECRET: "self-required-secret", APP_ORIGIN: "https://conference.example.test", RESEND_API_KEY: "test", RESEND_FROM_EMAIL: "team@example.test" }, { eventId: "self-required", now, dueMode: "due_or_overdue" });
 			expect(result).toEqual({ sent: 1, skipped: 0 });
 			const [, init] = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
 			expect(String(init.body)).toContain("Stage waiver");
