@@ -47,3 +47,10 @@ All true with runtime evidence:
 - Fable final gap council (`6c1d95f5`): **DONE_PREDICATE_MET: yes** — main green (tsc + 260 tests), presets only `minimal`|`conference`.
 - Deferred (roadmap self-conditioned): schedule conflict `warn` policy (board still surfaces conflicts as client errors under `hard`|`allow`); Cloudflare Queues for email — skipped because D1 `email_deliveries` already provides durable ledger/retry without queue bindings.
 - Residual AIE: fixture slug `aie-sandbox` + internal `AIE_*` category-routing constants kept; product placeholders/footer neutralized.
+
+## Accelevents speaker assignment (2026-08-10)
+
+Accelevents does not document speaker-to-session assignment. Capture one real assignment in the browser (DevTools HAR), then read the request: `PUT` on `/session/{id}` with `speakerList` and `speakersAsTag` in the session payload. There is no separate assign endpoint. Implement that observed contract in typed code and tests (`src/lib/integrations/accelevents/`). Never commit the HAR; it contains auth data. Delete it after the fields are known.
+
+Auto sync (migration `0039`): optional daily push at 01:00 UTC from the integrations panel, in addition to preview and manual push. Programme data here remains source of truth; Accelevents only receives updates.
+
