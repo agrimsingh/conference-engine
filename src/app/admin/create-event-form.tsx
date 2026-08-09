@@ -15,6 +15,7 @@ export function CreateEventForm({ canCreate }: Props) {
 	const [timezone, setTimezone] = useState("America/Los_Angeles");
 	const [startDay, setStartDay] = useState("");
 	const [endDay, setEndDay] = useState("");
+	const [preset, setPreset] = useState<"minimal" | "conference">("minimal");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 
@@ -35,7 +36,7 @@ export function CreateEventForm({ canCreate }: Props) {
 			const response = await fetch("/api/admin/events", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ name, slug, timezone, startDay, endDay }),
+				body: JSON.stringify({ name, slug, timezone, startDay, endDay, preset }),
 			});
 			const data = (await response.json()) as {
 				ok?: boolean;
@@ -95,6 +96,17 @@ export function CreateEventForm({ canCreate }: Props) {
 					onChange={(e) => setTimezone(e.target.value)}
 					className={`w-full ${INPUT_CLASSES}`}
 				/>
+			</label>
+			<label className="block space-y-1.5 text-sm">
+				<span className="font-medium text-neutral-200">CFP preset</span>
+				<select
+					value={preset}
+					onChange={(e) => setPreset(e.target.value === "conference" ? "conference" : "minimal")}
+					className={`w-full ${INPUT_CLASSES}`}
+				>
+					<option value="minimal">Minimal (title, abstract, speakers)</option>
+					<option value="conference">Conference (format-conditional fields)</option>
+				</select>
 			</label>
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			<button

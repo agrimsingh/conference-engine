@@ -1,3 +1,4 @@
+import { createConferenceCfpPreset } from "@/lib/domain/conference-cfp-preset";
 import type { FormFieldDef } from "@/lib/domain/form-fields";
 import type { AccountRow } from "@/lib/db/types";
 import { DEFAULT_TASK_TEMPLATES } from "@/lib/domain/task-templates";
@@ -8,45 +9,81 @@ const DEFAULT_TIMEZONE = "America/Los_Angeles";
 /** Reserved namespace for the hidden per-event form used by system workflows. */
 export const SYSTEM_CFP_FORM_SLUG = "__system";
 
-function defaultCfpFields(): FormFieldDef[] {
-	return [
-		{
-			key: "title",
-			label: "Title",
-			fieldType: "text",
-			required: true,
-			position: 0,
-			visibilityRule: { op: "always" },
-			config: {
-				kind: "text",
-				maxLength: 160,
-				placeholder: "Your session title",
+export const EVENT_CFP_PRESET_IDS = ["minimal", "conference"] as const;
+export type EventCfpPresetId = (typeof EVENT_CFP_PRESET_IDS)[number];
+
+export function isEventCfpPresetId(value: unknown): value is EventCfpPresetId {
+	return typeof value === "string" && (EVENT_CFP_PRESET_IDS as readonly string[]).includes(value);
+}
+
+type ResolvedCfpPreset = {
+	title: string;
+	description: string;
+	fields: FormFieldDef[];
+};
+
+function minimalCfpPreset(): ResolvedCfpPreset {
+	return {
+		title: "Call for proposals",
+		description: "Submit a session proposal.",
+		fields: [
+			{
+				key: "title",
+				label: "Title",
+				fieldType: "text",
+				required: true,
+				position: 0,
+				visibilityRule: { op: "always" },
+				config: {
+					kind: "text",
+					maxLength: 160,
+					placeholder: "Your session title",
+				},
 			},
-		},
-		{
-			key: "abstract",
-			label: "Abstract",
-			fieldType: "textarea",
-			required: true,
-			position: 1,
-			visibilityRule: { op: "always" },
-			config: {
-				kind: "textarea",
-				rows: 6,
-				maxLength: 4000,
-				placeholder: "What will attendees learn?",
+			{
+				key: "abstract",
+				label: "Abstract",
+				fieldType: "textarea",
+				required: true,
+				position: 1,
+				visibilityRule: { op: "always" },
+				config: {
+					kind: "textarea",
+					rows: 6,
+					maxLength: 4000,
+					placeholder: "What will attendees learn?",
+				},
 			},
-		},
-		{
-			key: "speakers",
-			label: "Speakers",
-			fieldType: "speaker_block",
-			required: true,
-			position: 2,
-			visibilityRule: { op: "always" },
-			config: { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 },
-		},
-	];
+			{
+				key: "speakers",
+				label: "Speakers",
+				fieldType: "speaker_block",
+				required: true,
+				position: 2,
+				visibilityRule: { op: "always" },
+				config: { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 },
+			},
+		],
+	};
+}
+
+export function resolveCfpPreset(preset: EventCfpPresetId): ResolvedCfpPreset {
+	switch (preset) {
+		case "minimal":
+			return minimalCfpPreset();
+		case "conference": {
+			const conference = createConferenceCfpPreset();
+			return {
+				title: conference.title,
+				description: conference.description,
+				fields: conference.fields,
+			};
+		}
+		default: {
+			const _exhaustive: never = preset;
+			return _exhaustive;
+		}
+	}
 }
 
 export type CreateEventInput = {
@@ -55,6 +92,7 @@ export type CreateEventInput = {
 	timezone?: string;
 	startDay: string;
 	endDay: string;
+	preset?: EventCfpPresetId;
 };
 
 export type CreateEventResult = {
@@ -70,6 +108,8 @@ export async function createEventWithDefaults(
 	const slug = args.slug.trim().toLowerCase();
 	const name = args.name.trim();
 	const timezone = args.timezone?.trim() || DEFAULT_TIMEZONE;
+	const preset = args.preset ?? "minimal";
+	const cfp = resolveCfpPreset(preset);
 	const schedule = validateEventSettings({ startDay: args.startDay, endDay: args.endDay, timezone });
 	if (!schedule.ok) throw new Error(schedule.error);
 	const now = Date.now();
@@ -85,7 +125,7 @@ export async function createEventWithDefaults(
 		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, opens_at, closes_at, created_at, updated_at)
-      VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, "Call for proposals", "Submit a session proposal.", now, now),
+      VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, cfp.title, cfp.description, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, kind, opens_at, closes_at, created_at, updated_at)
       VALUES (?, ?, ?, 'System form', NULL, 'draft', 'system', NULL, NULL, ?, ?)`).bind(systemFormId, eventId, SYSTEM_CFP_FORM_SLUG, now, now),
 		db.prepare(`INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, reviewer_token_digest, created_at, updated_at)
@@ -93,11 +133,14 @@ export async function createEventWithDefaults(
 		db.prepare(`INSERT INTO evaluation_criteria (id, plan_id, label, description, weight, scale_min, scale_max, position, soft_deleted, created_at, updated_at)
 	      VALUES (?, ?, 'Overall', NULL, 1, 1, 5, 0, 0, ?, ?)`).bind(criterionId, planId, now, now),
 	];
-	for (const field of defaultCfpFields()) {
+	for (const field of cfp.fields) {
+		const config = field.helpText?.trim()
+			? { ...field.config, helpText: field.helpText.trim() }
+			: field.config;
 		statements.push(db.prepare(`INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`).bind(
 			crypto.randomUUID(), formId, field.key, field.label, field.fieldType,
-			field.required ? 1 : 0, field.position, JSON.stringify(field.visibilityRule), JSON.stringify(field.config),
+			field.required ? 1 : 0, field.position, JSON.stringify(field.visibilityRule), JSON.stringify(config),
 		));
 	}
 	for (const [position, roomName] of ["Main Stage", "Room B"].entries()) {

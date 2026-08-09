@@ -13,14 +13,14 @@ const FORMAT_IN = (values: string[]): VisibilityRule => ({
 	values,
 });
 
-export type AieCfpPreset = {
+export type ConferenceCfpPreset = {
 	formSlug: string;
 	title: string;
 	description: string;
 	fields: FormFieldDef[];
 };
 
-export function createAieCfpPreset(): AieCfpPreset {
+export function createConferenceCfpPreset(): ConferenceCfpPreset {
 	const fields: FormFieldDef[] = [
 		{
 			key: "format",
@@ -138,7 +138,7 @@ export function createAieCfpPreset(): AieCfpPreset {
 
 	return {
 		formSlug: "cfp",
-		title: "AI Engineer CFP",
+		title: "Call for proposals",
 		description:
 			"Submit a Stage, Lightning, Workshop, or Online session. Fields adapt to your format.",
 		fields,

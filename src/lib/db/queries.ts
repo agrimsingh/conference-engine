@@ -459,6 +459,39 @@ export async function listSubmissionsForEvent(
 	return result.results;
 }
 
+export type CloneableSessionRow = {
+	id: string;
+	event_id: string;
+	event_name: string;
+	event_slug: string;
+	status: string;
+	answers_json: string;
+	submitter_name: string | null;
+};
+
+/** Accepted / scheduled / published sessions across an already-authorized event set. */
+export async function listCloneableSessionsForEvents(
+	db: D1Database,
+	eventIds: string[],
+): Promise<CloneableSessionRow[]> {
+	const ids = [...new Set(eventIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(
+			`SELECT s.id, s.event_id, s.status, s.answers_json, s.submitter_name,
+			        e.name AS event_name, e.slug AS event_slug
+       FROM submissions s
+       INNER JOIN events e ON e.id = s.event_id
+       WHERE s.event_id IN (${placeholders})
+         AND s.status IN ('accepted', 'scheduled', 'published')
+       ORDER BY e.name ASC, s.created_at DESC`,
+		)
+		.bind(...ids)
+		.all<CloneableSessionRow>();
+	return result.results;
+}
+
 export type AdminSubmissionPageFilters = {
 	category: string;
 	label: string;

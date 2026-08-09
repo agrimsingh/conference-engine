@@ -61,6 +61,52 @@ describe("product foundation migration", () => {
 		).bind(created.eventId).first<{ id: string; reviewer_token: string; reviewer_token_digest: string }>();
 		expect(plan).toMatchObject({ reviewer_token: `digest:${plan?.id}` });
 		expect(plan?.reviewer_token_digest).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		expect((await env.DB.prepare(
+			`SELECT f.key FROM form_fields f
+			 INNER JOIN cfp_forms c ON c.id = f.form_id
+			 WHERE c.event_id = ? AND c.slug = 'cfp' ORDER BY f.position`,
+		).bind(created.eventId).all<{ key: string }>()).results.map((row) => row.key)).toEqual([
+			"title",
+			"abstract",
+			"speakers",
+		]);
+	});
+
+	it("seeds the conference CFP preset with format-conditional fields", async () => {
+		await env.DB.prepare(
+			"INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		).bind("conference-owner", "owner@conference-preset.test", "Conference owner", now, now).run();
+		const created = await createEventWithDefaults(env.DB, {
+			name: "Conference preset event",
+			slug: "conference-preset-event",
+			timezone: "UTC",
+			startDay: "2026-09-01",
+			endDay: "2026-09-02",
+			preset: "conference",
+		}, { ...owner, id: "conference-owner", email: "owner@conference-preset.test", name: "Conference owner" });
+
+		const form = await env.DB.prepare(
+			"SELECT title, description FROM cfp_forms WHERE event_id = ? AND slug = 'cfp'",
+		).bind(created.eventId).first<{ title: string; description: string }>();
+		expect(form).toMatchObject({
+			title: "Call for proposals",
+			description: expect.stringMatching(/Stage, Lightning, Workshop, or Online/i),
+		});
+		expect((await env.DB.prepare(
+			`SELECT f.key FROM form_fields f
+			 INNER JOIN cfp_forms c ON c.id = f.form_id
+			 WHERE c.event_id = ? AND c.slug = 'cfp' ORDER BY f.position`,
+		).bind(created.eventId).all<{ key: string }>()).results.map((row) => row.key)).toEqual([
+			"format",
+			"title",
+			"abstract",
+			"duration_minutes",
+			"lightning_hook",
+			"workshop_capacity",
+			"workshop_prereqs",
+			"online_platform",
+			"speakers",
+		]);
 	});
 
 	it("materializes only active D1 templates and fails clearly when an event has none", async () => {
