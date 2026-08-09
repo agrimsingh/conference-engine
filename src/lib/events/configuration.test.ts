@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eventReadiness, type EventConfiguration } from "./configuration";
 
 const complete: EventConfiguration = {
-	event: { id: "event", name: "Conference", timezone: "Asia/Singapore", start_day: "2026-09-01", end_day: "2026-09-02", day_start_minutes: 540, day_end_minutes: 1080, slot_duration_minutes: 30, track_conflict_policy: "hard" },
+	event: { id: "event", name: "Conference", timezone: "Asia/Singapore", start_day: "2026-09-01", end_day: "2026-09-02", day_start_minutes: 540, day_end_minutes: 1080, slot_duration_minutes: 30, track_conflict_policy: "hard", notify_on_submission_create: 1, notify_on_submission_update: 0 },
 	rooms: [{ id: "room", name: "Main", position: 0 }],
 	tracks: [{ id: "track", name: "General", slug: "general", position: 0 }],
 	tasks: [{ id: "task", key: "bio", label: "Bio", task_kind: "text", required: 1, position: 0, instructions: null, due_at: null }],

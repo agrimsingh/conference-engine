@@ -12,6 +12,8 @@ export type ConfigurationEvent = {
 	day_end_minutes: number;
 	slot_duration_minutes: number;
 	track_conflict_policy: TrackConflictPolicy;
+	notify_on_submission_create: number;
+	notify_on_submission_update: number;
 };
 
 export type ConfigurationRoom = { id: string; name: string; position: number };
@@ -50,7 +52,7 @@ function activeRows<T>(result: D1Result<T>): T[] { return result.results; }
 
 export async function loadEventConfiguration(db: D1Database, eventId: string): Promise<EventConfiguration> {
 	const [event, rooms, tracks, tasks, cfp, review, messageTemplates] = await Promise.all([
-		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
+		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy, notify_on_submission_create, notify_on_submission_update FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
 		db.prepare(`SELECT id, key, label, CASE WHEN form_schema_json IS NOT NULL THEN 'form' ELSE task_kind END AS task_kind, required, position, instructions, due_at, form_schema_json FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<Omit<ConfigurationTask, "form_fields"> & { form_schema_json: string | null }>(),
@@ -110,6 +112,14 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 	const valid = validateEventSettings({ startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy: input.trackConflictPolicy });
 	if (!valid.ok) throw new Error(valid.error);
 	const trackConflictPolicy = input.trackConflictPolicy === undefined ? null : parseTrackConflictPolicy(input.trackConflictPolicy);
+	const notifyOnCreate =
+		input.notifyOnSubmissionCreate === undefined
+			? null
+			: parseNotifyFlag(input.notifyOnSubmissionCreate, "Notify on submission create");
+	const notifyOnUpdate =
+		input.notifyOnSubmissionUpdate === undefined
+			? null
+			: parseNotifyFlag(input.notifyOnSubmissionUpdate, "Notify on submission update");
 	const existingSlots = await db
 		.prepare("SELECT starts_at, ends_at FROM agenda_slots WHERE event_id = ?")
 		.bind(eventId)
@@ -131,8 +141,13 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 			throw new Error(`Can't save schedule defaults because an existing session ${boundsError.toLowerCase()}.`);
 		}
 	}
-	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), updated_at = ? WHERE id = ?`)
-		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, Date.now(), eventId).run();
+	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), notify_on_submission_create = COALESCE(?, notify_on_submission_create), notify_on_submission_update = COALESCE(?, notify_on_submission_update), updated_at = ? WHERE id = ?`)
+		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, notifyOnCreate, notifyOnUpdate, Date.now(), eventId).run();
+}
+
+function parseNotifyFlag(value: unknown, label: string): number {
+	if (typeof value !== "boolean") throw new Error(`${label} must be a boolean`);
+	return value ? 1 : 0;
 }
 
 export async function createRoom(db: D1Database, eventId: string, rawName: unknown): Promise<void> {

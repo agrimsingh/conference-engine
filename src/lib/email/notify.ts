@@ -18,6 +18,26 @@ const ORGANIZER_SUBMISSION_TEMPLATE: Record<
 	updated: "submission_updated_organizer",
 };
 
+/** Defaults when columns are absent (pre-migration rows / incomplete fixtures). */
+export function isOrganizerSubmissionNotifyEnabled(
+	event: {
+		notify_on_submission_create?: number | null;
+		notify_on_submission_update?: number | null;
+	},
+	kind: OrganizerSubmissionNotifyKind,
+): boolean {
+	switch (kind) {
+		case "created":
+			return (event.notify_on_submission_create ?? 1) === 1;
+		case "updated":
+			return (event.notify_on_submission_update ?? 0) === 1;
+		default: {
+			const _exhaustive: never = kind;
+			return _exhaustive;
+		}
+	}
+}
+
 export function titleFromAnswersJson(answersJson: string): string {
 	try {
 		const parsed: unknown = JSON.parse(answersJson);
@@ -88,6 +108,7 @@ export async function notifyOrganizersOfSubmission(
 	if (!submission) return [];
 	const event = await getEventById(db, submission.event_id);
 	if (!event) return [];
+	if (!isOrganizerSubmissionNotifyEnabled(event, args.kind)) return [];
 	const members = await listEventMembers(db, event.id);
 	const recipients = new Map<string, string>();
 	for (const member of members) {

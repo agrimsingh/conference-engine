@@ -29,6 +29,8 @@ export type EventRow = {
 	slot_duration_minutes?: number;
 	archived_at?: number | null;
 	airtable_sync_enabled?: number;
+	notify_on_submission_create?: number;
+	notify_on_submission_update?: number;
 	created_at: number;
 	updated_at: number;
 };
