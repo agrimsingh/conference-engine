@@ -9,6 +9,13 @@ import {
 	type ScheduleInterval,
 } from "@/lib/domain";
 import {
+	filterUnplacedRail,
+	findAvailableSlot,
+	publishableOnDay,
+	toPublishConfirmTarget,
+	type PublishConfirmTarget,
+} from "@/lib/schedule/board";
+import {
 	formatClock,
 	formatDayLabel,
 	dayKeyInTimeZone,
@@ -70,6 +77,8 @@ export function ScheduleBoard({
 	const [trackId, setTrackId] = useState<string>(tracks[0]?.id ?? "");
 	const [reassignTrack, setReassignTrack] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [railQuery, setRailQuery] = useState("");
+	const [publishConfirm, setPublishConfirm] = useState<PublishConfirmTarget | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
@@ -112,18 +121,20 @@ export function ScheduleBoard({
 		});
 	}, [sessions, dayKey, timeZone]);
 
-	const pool = useMemo(() => {
-		return sessions.filter((session) => {
-			if (!session.slot) return true;
-			const startDay = new Intl.DateTimeFormat("en-CA", {
-				timeZone,
-				year: "numeric",
-				month: "2-digit",
-				day: "2-digit",
-			}).format(new Date(session.slot.startsAtMs));
-			return startDay !== dayKey;
-		});
-	}, [sessions, dayKey, timeZone]);
+	const pool = useMemo(
+		() => filterUnplacedRail(sessions, railQuery),
+		[sessions, railQuery],
+	);
+
+	const dayPublishable = useMemo(
+		() => publishableOnDay(daySessions),
+		[daySessions],
+	);
+
+	const selectedSession = useMemo(
+		() => sessions.find((session) => session.id === selectedId) ?? null,
+		[sessions, selectedId],
+	);
 
 	const listSessions = useMemo(() => {
 		const rows = daySessions.filter((session) => {
@@ -281,7 +292,42 @@ export function ScheduleBoard({
 		setSelectedId((current) => current === submissionId ? null : submissionId);
 	}
 
-	function mutateAction(submissionId: string, action: "unplace" | "publish" | "unpublish") {
+	function requestPublish(targets: readonly ScheduleSession[]) {
+		if (targets.length === 0) {
+			setError("No scheduled sessions to publish.");
+			return;
+		}
+		setError(null);
+		setPublishConfirm(toPublishConfirmTarget(targets));
+	}
+
+	function findSlotForSelected() {
+		if (!selectedSession) {
+			setError("Select a session first.");
+			return;
+		}
+		const visibleRooms = rooms.filter(
+			(room) => roomFilter === "all" || room === roomFilter,
+		);
+		const slot = findAvailableSlot({
+			session: selectedSession,
+			dayKey,
+			timeZone,
+			timeRows,
+			rooms: visibleRooms,
+			roomIds,
+			dayEndMinutes,
+			intervals,
+		});
+		if (!slot) {
+			setError("No open slot on this day for the selected session.");
+			setMessage(null);
+			return;
+		}
+		placeSession(selectedSession.id, slot.roomName, slot.startMinutes);
+	}
+
+	function mutateAction(submissionId: string, action: "unplace" | "unpublish") {
 		setError(null);
 		startTransition(async () => {
 			try {
@@ -293,9 +339,75 @@ export function ScheduleBoard({
 			const payload = await readJson<{ ok?: boolean; error?: string; status?: string }>(response);
 			if (!response.ok || !payload?.ok) { setError(payload?.error ?? "Schedule update failed"); return; }
 			setSessions((previous) => previous.map((session) => session.id !== submissionId ? session : action === "unplace" ? { ...session, status: payload.status ?? "accepted", slot: null } : { ...session, status: payload.status ?? session.status }));
-			setMessage(action === "unplace" ? "Session returned to the unplaced rail." : action === "publish" ? "Session is now public." : "Session is no longer public.");
+			setMessage(action === "unplace" ? "Session returned to the unplaced rail." : "Session is no longer public.");
 			} catch {
 				setError("Couldn’t save this schedule change. Check your connection and try again.");
+			}
+		});
+	}
+
+	function confirmPublish() {
+		if (!publishConfirm || publishConfirm.sessionIds.length === 0) return;
+		const ids = publishConfirm.sessionIds;
+		const count = ids.length;
+		setPublishConfirm(null);
+		setError(null);
+		startTransition(async () => {
+			try {
+				if (ids.length === 1) {
+					const submissionId = ids[0]!;
+					const response = await fetch(
+						`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`,
+						{
+							method: "PATCH",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({ action: "publish" }),
+						},
+					);
+					const payload = await readJson<{ ok?: boolean; error?: string; status?: string }>(
+						response,
+					);
+					if (!response.ok || !payload?.ok) {
+						setError(payload?.error ?? "Publish failed");
+						return;
+					}
+					setSessions((previous) =>
+						previous.map((session) =>
+							session.id !== submissionId
+								? session
+								: { ...session, status: payload.status ?? "published" },
+						),
+					);
+					setMessage("Session is now public.");
+					return;
+				}
+
+				const response = await fetch(
+					`/api/admin/events/${eventSlug}/sessions/bulk-publish`,
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({ action: "publish", sessionIds: ids }),
+					},
+				);
+				const payload = await readJson<{
+					ok?: boolean;
+					error?: string;
+					changed?: number;
+				}>(response);
+				if (!response.ok || !payload?.ok) {
+					setError(payload?.error ?? "Bulk publish failed");
+					return;
+				}
+				const idSet = new Set(ids);
+				setSessions((previous) =>
+					previous.map((session) =>
+						idSet.has(session.id) ? { ...session, status: "published" } : session,
+					),
+				);
+				setMessage(`Published ${payload.changed ?? count} sessions.`);
+			} catch {
+				setError("Couldn’t publish. Check your connection and try again.");
 			}
 		});
 	}
@@ -362,11 +474,43 @@ export function ScheduleBoard({
 			) : null}
 
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-				<h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-500">
-					Unplaced / other days
-				</h2>
+				<div className="mb-2 flex flex-wrap items-center gap-2">
+					<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+						Unplaced
+					</h2>
+					<label className="ml-auto flex min-w-48 flex-1 items-center gap-2 text-sm text-neutral-300 sm:max-w-xs">
+						<span className="sr-only">Filter unplaced</span>
+						<input
+							type="search"
+							value={railQuery}
+							onChange={(event) => setRailQuery(event.target.value)}
+							placeholder="Filter title, speaker…"
+							className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm text-neutral-100 placeholder:text-neutral-600"
+						/>
+					</label>
+					<button
+						type="button"
+						disabled={!selectedSession || pending}
+						onClick={findSlotForSelected}
+						className="rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-200 disabled:opacity-40"
+					>
+						Find available slot
+					</button>
+					<button
+						type="button"
+						disabled={dayPublishable.length === 0 || pending}
+						onClick={() => requestPublish(dayPublishable)}
+						className="rounded-md border border-indigo-400/60 px-2.5 py-1 text-xs text-indigo-100 disabled:opacity-40"
+					>
+						Publish day ({dayPublishable.length})
+					</button>
+				</div>
 				{pool.length === 0 ? (
-						<p className="text-sm text-neutral-500">All accepted talks are placed on this day.</p>
+					<p className="text-sm text-neutral-500">
+						{railQuery.trim()
+							? "No unplaced sessions match this filter."
+							: "No unplaced sessions. Talks placed on other days stay on those days."}
+					</p>
 				) : (
 					<ul className="flex flex-wrap gap-2">
 						{pool.map((session) => (
@@ -404,12 +548,54 @@ export function ScheduleBoard({
 								</button>
 							</li>
 						))}
-						</ul>
-					)}
-					<p className="mt-2 text-xs text-neutral-500">
-					Drag onto a slot, or click a session then click a cell.
+					</ul>
+				)}
+				<p className="mt-2 text-xs text-neutral-500">
+					Drag onto a slot, click a session then a cell, or use Find available slot.
 				</p>
-				</section>
+			</section>
+
+			{publishConfirm ? (
+				<div
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="publish-confirm-title"
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+				>
+					<div className="w-full max-w-md space-y-3 rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-xl">
+						<h2 id="publish-confirm-title" className="text-base font-medium text-neutral-100">
+							Publish {publishConfirm.sessionIds.length}{" "}
+							{publishConfirm.sessionIds.length === 1 ? "session" : "sessions"}?
+						</h2>
+						<p className="text-sm text-neutral-400">
+							Published sessions appear on the public schedule. This cannot be undone without unpublishing.
+						</p>
+						<ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-neutral-300">
+							{publishConfirm.titles.map((title, index) => (
+								<li key={`${publishConfirm.sessionIds[index]}-${title}`}>{title}</li>
+							))}
+						</ul>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								disabled={pending}
+								onClick={() => setPublishConfirm(null)}
+								className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								disabled={pending}
+								onClick={confirmPublish}
+								className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400"
+							>
+								Publish {publishConfirm.sessionIds.length}
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 
 			{view === "week" || view === "track" || view === "room" ? (
 				<div className={view === "week" ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-7" : "grid gap-3 md:grid-cols-2"}>
@@ -553,7 +739,11 @@ export function ScheduleBoard({
 								</p>
 								<div className="mt-2 flex flex-wrap gap-2">
 									<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
-									{session.status === "published" ? <button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button> : <button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => mutateAction(session.id, "publish")}>Publish</button>}
+									{session.status === "published" ? (
+										<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button>
+									) : session.status === "scheduled" ? (
+										<button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => requestPublish([session])}>Publish</button>
+									) : null}
 								</div>
 								</li>
 							))
