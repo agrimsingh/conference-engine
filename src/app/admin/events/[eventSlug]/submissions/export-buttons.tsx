@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
 	eventSlug: string;
@@ -10,6 +10,30 @@ export function ExportButtons({ eventSlug }: Props) {
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
+	const [syncEnabled, setSyncEnabled] = useState(false);
+	const [syncConfigured, setSyncConfigured] = useState(false);
+	const [syncPending, setSyncPending] = useState(false);
+
+	useEffect(() => {
+		void (async () => {
+			try {
+				const response = await fetch(
+					`/api/admin/events/${eventSlug}/export/airtable/sync`,
+				);
+				const data = (await response.json()) as {
+					ok?: boolean;
+					enabled?: boolean;
+					configured?: boolean;
+				};
+				if (response.ok && data.ok) {
+					setSyncEnabled(Boolean(data.enabled));
+					setSyncConfigured(Boolean(data.configured));
+				}
+			} catch {
+				// ignore initial load errors
+			}
+		})();
+	}, [eventSlug]);
 
 	async function pushAirtable() {
 		setPending(true);
@@ -38,22 +62,70 @@ export function ExportButtons({ eventSlug }: Props) {
 		}
 	}
 
+	async function toggleNightlySync(enabled: boolean) {
+		setSyncPending(true);
+		setError(null);
+		setMessage(null);
+		try {
+			const response = await fetch(
+				`/api/admin/events/${eventSlug}/export/airtable/sync`,
+				{
+					method: "PATCH",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ enabled }),
+				},
+			);
+			const data = (await response.json()) as { ok?: boolean; error?: string; enabled?: boolean };
+			if (!response.ok || !data.ok) {
+				setError(data.error ?? "Could not update nightly Airtable sync");
+				return;
+			}
+			setSyncEnabled(Boolean(data.enabled));
+			setMessage(
+				data.enabled
+					? "Nightly Airtable sync enabled for this event."
+					: "Nightly Airtable sync disabled.",
+			);
+		} catch {
+			setError("Network error");
+		} finally {
+			setSyncPending(false);
+		}
+	}
+
 	return (
-		<div className="flex flex-wrap items-center gap-3 text-sm">
-			<a
-				href={`/api/admin/events/${eventSlug}/export/submissions.csv`}
-				className="font-medium text-neutral-200 underline underline-offset-2"
-			>
-				Download CSV
-			</a>
-			<button
-				type="button"
-				onClick={() => void pushAirtable()}
-				disabled={pending}
-				className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
-			>
-				{pending ? "Pushing…" : "Push to Airtable"}
-			</button>
+		<div className="space-y-3 text-sm">
+			<div className="flex flex-wrap items-center gap-3">
+				<a
+					href={`/api/admin/events/${eventSlug}/export/submissions.csv`}
+					className="font-medium text-neutral-200 underline underline-offset-2"
+				>
+					Download CSV
+				</a>
+				<button
+					type="button"
+					onClick={() => void pushAirtable()}
+					disabled={pending}
+					className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
+				>
+					{pending ? "Pushing…" : "Push to Airtable"}
+				</button>
+			</div>
+			{syncConfigured ? (
+				<label className="flex items-center gap-2 text-neutral-300">
+					<input
+						type="checkbox"
+						checked={syncEnabled}
+						disabled={syncPending}
+						onChange={(event) => void toggleNightlySync(event.target.checked)}
+					/>
+					<span>Nightly Airtable sync (1:00 UTC cron)</span>
+				</label>
+			) : (
+				<p className="text-xs text-neutral-500">
+					Nightly Airtable sync is unavailable until Airtable credentials are configured.
+				</p>
+			)}
 			{message ? <p className="text-xs text-neutral-400">{message}</p> : null}
 			{error ? <p className="text-xs text-red-400">{error}</p> : null}
 		</div>
