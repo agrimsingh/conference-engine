@@ -73,6 +73,7 @@ describe("durable drafts", () => {
 		});
 		expect(result.submissionId).toBe("draft-1");
 		expect(result.replay).toBe(false);
+		expect(result.outcome).toBe("updated");
 		expect(result.editToken).toBeTruthy();
 		expect(statements.some((item) => item.sql.includes("UPDATE submissions"))).toBe(true);
 		expect(statements.some((item) => item.sql.includes("consumed"))).toBe(false);

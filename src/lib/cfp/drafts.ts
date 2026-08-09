@@ -169,6 +169,15 @@ export async function saveDraftForResume(
 	return { draftId: draft.id, token };
 }
 
+export type FinalizeDraftOutcome = "created" | "updated" | "replay";
+
+export type FinalizeDraftResult = {
+	submissionId: string;
+	replay: boolean;
+	editToken: string;
+	outcome: FinalizeDraftOutcome;
+};
+
 async function updateSubmittedInPlace(
 	db: D1Database,
 	args: {
@@ -183,7 +192,7 @@ async function updateSubmittedInPlace(
 		category?: string | null;
 		now: number;
 	},
-): Promise<{ submissionId: string; replay: boolean; editToken: string }> {
+): Promise<FinalizeDraftResult> {
 	const submission = await db.prepare("SELECT status FROM submissions WHERE id = ?").bind(args.submissionId).first<{ status: string }>();
 	if (!submission || !isSubmitterEditableStatus(submission.status)) {
 		throw new SubmissionNotEditableError();
@@ -230,13 +239,13 @@ async function updateSubmittedInPlace(
 		db.prepare("INSERT INTO submission_draft_tokens (token_hash, draft_id, state, expires_at, created_at) VALUES (?, ?, 'current', ?, ?)").bind(hash, args.draftId, args.now + TOKEN_TTL_MS, args.now),
 	]);
 	if ((results[people.length]?.meta.changes ?? 0) === 0) throw new SubmissionNotEditableError();
-	return { submissionId: args.submissionId, replay: false, editToken };
+	return { submissionId: args.submissionId, replay: false, editToken, outcome: "updated" };
 }
 
 export async function finalizeDraft(
 	db: D1Database,
 	args: { secret: string; draftId: string; token: string; submitterName: string; answers: AnswerMap; speakers: SpeakerAnswer[]; category?: string | null; now?: number },
-): Promise<{ submissionId: string; replay: boolean; editToken: string }> {
+): Promise<FinalizeDraftResult> {
 	const now = args.now ?? Date.now();
 	const hash = await hmacHash(args.secret, args.token);
 	const draft = await db.prepare(
@@ -297,17 +306,17 @@ export async function finalizeDraft(
 			const existing = await db.prepare("SELECT submission_id FROM submission_drafts WHERE id = ? AND status = 'submitted'").bind(draft.id).first<{ submission_id: string }>();
 			if (existing?.submission_id) {
 				const token = await rotateDraftToken(db, { secret: args.secret, draftId: draft.id, now });
-				return { submissionId: existing.submission_id, replay: true, editToken: token };
+				return { submissionId: existing.submission_id, replay: true, editToken: token, outcome: "replay" };
 			}
-			return { submissionId, replay: true, editToken };
+			return { submissionId, replay: true, editToken, outcome: "replay" };
 		}
 	} catch (error) {
 		const finalized = await db.prepare("SELECT submission_id FROM submission_drafts WHERE id = ? AND status = 'submitted'").bind(draft.id).first<{ submission_id: string }>();
 		if (finalized?.submission_id) {
 			const token = await rotateDraftToken(db, { secret: args.secret, draftId: draft.id, now });
-			return { submissionId: finalized.submission_id, replay: true, editToken: token };
+			return { submissionId: finalized.submission_id, replay: true, editToken: token, outcome: "replay" };
 		}
 		throw error;
 	}
-	return { submissionId, replay: false, editToken };
+	return { submissionId, replay: false, editToken, outcome: "created" };
 }

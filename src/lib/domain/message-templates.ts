@@ -1,5 +1,7 @@
 export const MESSAGE_TEMPLATE_KEYS = [
 	"submission_received",
+	"submission_received_organizer",
+	"submission_updated_organizer",
 	"acceptance",
 	"rejection",
 	"waitlist",
@@ -49,6 +51,30 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`We received your proposal "${ctx.title}" for ${ctx.eventName}.`,
 			"The program committee will review it and follow up.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
+	submission_received_organizer: (ctx) => ({
+		subject: `New submission: ${ctx.title}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`A new proposal "${ctx.title}" was submitted to ${ctx.eventName}.`,
+			...(ctx.portalHint ? [ctx.portalHint] : []),
+			"Open the event admin to review it.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
+	submission_updated_organizer: (ctx) => ({
+		subject: `Updated submission: ${ctx.title}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`The proposal "${ctx.title}" for ${ctx.eventName} was updated by the submitter.`,
+			...(ctx.portalHint ? [ctx.portalHint] : []),
+			"Open the event admin to review the latest version.",
 			"",
 			"— conference-engine",
 		].join("\n"),
@@ -274,6 +300,10 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 		key !== "organizer_invite" &&
 		// Multiple co-speakers per submission + admin resend.
 		key !== "co_speaker_invite" &&
+		// Fan-out to every event member; email_deliveries dedupes per recipient.
+		key !== "submission_received_organizer" &&
+		// Distinct edits use deliveryScope; retries share the same scope.
+		key !== "submission_updated_organizer" &&
 		// Token rotation on regenerate must be able to mail a new link.
 		key !== "reviewer_invite" &&
 		// Manual outstanding-reviewer nudges may repeat inside a window via deliveryScope.
