@@ -1155,3 +1155,126 @@ export async function insertReviewAssignment(
 		.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at)
 		.run();
 }
+
+export type CockpitSubmissionSqlRow = {
+	id: string;
+	status: string;
+	answers_json: string;
+	submitter_name: string | null;
+	submitter_email: string | null;
+};
+
+export type CockpitIncompleteReviewSqlRow = CockpitSubmissionSqlRow & {
+	assignment_id: string;
+	reviewer_id: string;
+	reviewer_name: string;
+};
+
+/** Submitted / under_review with no assignment on the active plan. */
+export async function listUnassignedReviewSubmissions(
+	db: D1Database,
+	eventId: string,
+	planId: string,
+): Promise<CockpitSubmissionSqlRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+       FROM submissions s
+       WHERE s.event_id = ?
+         AND s.status IN ('submitted', 'under_review')
+         AND NOT EXISTS (
+           SELECT 1 FROM review_assignments ra
+           WHERE ra.plan_id = ? AND ra.submission_id = s.id
+         )
+       ORDER BY s.created_at DESC`,
+		)
+		.bind(eventId, planId)
+		.all<CockpitSubmissionSqlRow>();
+	return result.results;
+}
+
+/** Assignments with no named-reviewer score yet. */
+export async function listIncompleteAssignedReviews(
+	db: D1Database,
+	eventId: string,
+	planId: string,
+): Promise<CockpitIncompleteReviewSqlRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT
+         s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email,
+         ra.id AS assignment_id, ra.reviewer_id AS reviewer_id, r.name AS reviewer_name
+       FROM review_assignments ra
+       INNER JOIN reviewers r ON r.id = ra.reviewer_id
+       INNER JOIN submissions s ON s.id = ra.submission_id
+       WHERE ra.plan_id = ?
+         AND s.event_id = ?
+         AND s.status IN ('submitted', 'under_review')
+         AND r.revoked_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM evaluation_scores es
+           WHERE es.plan_id = ra.plan_id
+             AND es.submission_id = ra.submission_id
+             AND es.reviewer_id = ra.reviewer_id
+         )
+       ORDER BY s.created_at DESC, r.name ASC`,
+		)
+		.bind(planId, eventId)
+		.all<CockpitIncompleteReviewSqlRow>();
+	return result.results;
+}
+
+/** Scored on the active plan but still submitted / under_review. */
+export async function listReviewedUndecidedSubmissions(
+	db: D1Database,
+	eventId: string,
+	planId: string,
+): Promise<CockpitSubmissionSqlRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+       FROM submissions s
+       WHERE s.event_id = ?
+         AND s.status IN ('submitted', 'under_review')
+         AND EXISTS (
+           SELECT 1 FROM evaluation_scores es
+           WHERE es.plan_id = ? AND es.submission_id = s.id
+         )
+       ORDER BY s.updated_at DESC`,
+		)
+		.bind(eventId, planId)
+		.all<CockpitSubmissionSqlRow>();
+	return result.results;
+}
+
+export async function listAcceptedUnscheduledSubmissions(
+	db: D1Database,
+	eventId: string,
+): Promise<CockpitSubmissionSqlRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+       FROM submissions s
+       WHERE s.event_id = ? AND s.status = 'accepted'
+       ORDER BY s.updated_at DESC`,
+		)
+		.bind(eventId)
+		.all<CockpitSubmissionSqlRow>();
+	return result.results;
+}
+
+export async function listScheduledUnpublishedSubmissions(
+	db: D1Database,
+	eventId: string,
+): Promise<CockpitSubmissionSqlRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT s.id, s.status, s.answers_json, s.submitter_name, s.submitter_email
+       FROM submissions s
+       WHERE s.event_id = ? AND s.status = 'scheduled'
+       ORDER BY s.updated_at DESC`,
+		)
+		.bind(eventId)
+		.all<CockpitSubmissionSqlRow>();
+	return result.results;
+}

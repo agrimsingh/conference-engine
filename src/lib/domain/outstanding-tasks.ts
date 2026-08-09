@@ -94,7 +94,12 @@ export function groupOutstandingTasks(
 }
 
 export function shouldRefetchOnInvalidate(reason: string): boolean {
-	return reason.startsWith("tasks") || reason.startsWith("schedule");
+	return (
+		reason.startsWith("tasks") ||
+		reason.startsWith("schedule") ||
+		reason.startsWith("review.") ||
+		reason.startsWith("email.")
+	);
 }
 
 export function parseInvalidateMessage(

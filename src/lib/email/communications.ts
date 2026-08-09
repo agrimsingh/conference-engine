@@ -38,6 +38,23 @@ export async function listEventDeliveryHistory(
 	return result.results;
 }
 
+/** Failed deliveries with replay envelopes, newest first. */
+export async function listFailedEventDeliveries(
+	db: D1Database,
+	eventId: string,
+	limit = 50,
+): Promise<DeliveryHistoryRow[]> {
+	const result = await db.prepare(
+		`SELECT d.delivery_key, d.submission_id, d.template_key, d.to_email, d.subject, d.status,
+			d.provider_id, d.error, d.attempt_count, d.updated_at, d.sent_at,
+			EXISTS (SELECT 1 FROM email_delivery_envelopes e WHERE e.delivery_key = d.delivery_key) AS replayable
+		 FROM email_deliveries d
+		 WHERE d.event_id = ? AND d.status = 'failed'
+		 ORDER BY updated_at DESC LIMIT ?`,
+	).bind(eventId, Math.max(1, Math.min(limit, 200))).all<DeliveryHistoryRow>();
+	return result.results;
+}
+
 /** One manual reminder is still one email per person/event, even with many tasks. */
 export async function listReminderRecipients(
 	db: D1Database,

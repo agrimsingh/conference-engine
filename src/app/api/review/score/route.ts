@@ -5,8 +5,10 @@ import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getEventBySlug,
+	getSubmissionById,
 } from "@/lib/db/queries";
 import { upsertEvaluationScore } from "@/lib/evaluation/score";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 
 type Body = {
 	token?: unknown;
@@ -89,5 +91,9 @@ export async function POST(request: Request) {
 		);
 	}
 
-	return NextResponse.json({ ok: true, score: result.score });
+	const submission = await getSubmissionById(db, submissionId);
+	const broadcasted = submission
+		? await broadcastEventInvalidate(submission.event_id, "review.score")
+		: false;
+	return NextResponse.json({ ok: true, score: result.score, broadcasted });
 }
