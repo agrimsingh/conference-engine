@@ -41,3 +41,9 @@ All true with runtime evidence:
 - Prefer EventRoom WebSocket (`broadcasted`); 2s poll fallback under `next dev` (`polling`). Worker intercepts `/api/admin/events/*/room` upgrades in production.
 - Broadcast reasons: `tasks.complete`, `tasks.upload`, `tasks.accept`, `schedule.mutate`.
 - Public API: `GET /api/v1/events/[slug]/{submissions,schedule}` behind `PUBLIC_API_KEY` (`Authorization: Bearer` or `x-api-key`).
+
+## Roadmap phases 0–9 (2026-08-09)
+
+- Fable final gap council (`6c1d95f5`): **DONE_PREDICATE_MET: yes** — main green (tsc + 260 tests), presets only `minimal`|`conference`.
+- Deferred (roadmap self-conditioned): schedule conflict `warn` policy (board still surfaces conflicts as client errors under `hard`|`allow`); Cloudflare Queues for email — skipped because D1 `email_deliveries` already provides durable ledger/retry without queue bindings.
+- Residual AIE: fixture slug `aie-sandbox` + internal `AIE_*` category-routing constants kept; product placeholders/footer neutralized.

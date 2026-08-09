@@ -691,7 +691,7 @@ npm run deploy`}
 					<div className="flex items-center gap-2">
 						<LogoMark />
 						<span>
-							conference-engine — built for the AI Engineer hackathon
+							conference-engine — CFP to stage for conference organizers
 						</span>
 					</div>
 					<div className="flex items-center gap-5">

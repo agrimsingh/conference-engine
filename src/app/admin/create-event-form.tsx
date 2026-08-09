@@ -100,7 +100,7 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					className={`w-full ${INPUT_CLASSES}`}
-					placeholder="AI Engineer 2026"
+					placeholder="Summit 2026"
 				/>
 			</label>
 			<div className="grid gap-4 sm:grid-cols-2">
@@ -115,7 +115,7 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 					value={slug}
 					onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
 					className={`w-full ${INPUT_CLASSES}`}
-					placeholder="aie-2026"
+					placeholder="summit-2026"
 					pattern="(?:[a-z0-9]|-)+"
 				/>
 			</label>
