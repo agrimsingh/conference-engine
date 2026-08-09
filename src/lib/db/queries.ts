@@ -897,26 +897,6 @@ export async function getActiveEvaluationPlan(
 		.first<EvaluationPlanRow>();
 }
 
-export async function getEvaluationPlanByToken(
-	db: D1Database,
-	token: string,
-): Promise<EvaluationPlanRow | null> {
-	return db
-		.prepare("SELECT * FROM evaluation_plans WHERE reviewer_token = ?")
-		.bind(token)
-		.first<EvaluationPlanRow>();
-}
-
-export async function getReviewerByToken(
-	db: D1Database,
-	token: string,
-): Promise<ReviewerRow | null> {
-	return db
-		.prepare("SELECT * FROM reviewers WHERE token = ?")
-		.bind(token)
-		.first<ReviewerRow>();
-}
-
 export async function listReviewersForPlan(
 	db: D1Database,
 	planId: string,

@@ -1,5 +1,6 @@
-import { getEventBySlug, getSubmissionById, listSpeakersForSubmission } from "@/lib/db/queries";
+import { getEventBySlug, getSubmissionById, listAgendaTracks, listSpeakersForSubmission } from "@/lib/db/queries";
 import type { SubmissionRow, SubmissionSpeakerRow } from "@/lib/db/types";
+import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { ensureTaskTemplates, materializeAcceptedSpeaker, prepareMaterializationWriteFence, MaterializationClaimLostError, MATERIALIZATION_WRITE_FENCE_PREDICATE, type MaterializationWriteFence, type MaterializedSpeakerResources } from "@/lib/speakers/materialize";
 import { hasFormulaPrefix, parseBoundedCsv, type CsvRecord } from "./csv";
 
@@ -391,15 +392,19 @@ export async function cloneSession(db: D1Database, args: { targetEventId: string
 	return { id: created.id, source };
 }
 
-export type PublicSession = { event: { id: string; slug: string; name: string; timezone: string }; submission: SubmissionRow; slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null }; speakers: SubmissionSpeakerRow[] };
+export type PublicSession = { event: { id: string; slug: string; name: string; timezone: string }; submission: SubmissionRow; slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null; trackName: string }; speakers: SubmissionSpeakerRow[] };
 
 export async function loadPublicSession(db: D1Database, eventSlug: string, submissionId: string): Promise<PublicSession | null> {
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) return null;
 	const row = await db.prepare(`SELECT s.*, a.id AS agenda_slot_id, a.room_name AS agenda_room_name, a.starts_at AS agenda_starts_at, a.ends_at AS agenda_ends_at, a.track_id AS agenda_track_id FROM submissions s INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id WHERE s.id = ? AND s.event_id = ? AND s.status = 'published'`).bind(submissionId, event.id).first<(SubmissionRow & { agenda_slot_id: string; agenda_room_name: string; agenda_starts_at: number; agenda_ends_at: number; agenda_track_id: string | null })>();
 	if (!row) return null;
-	const speakers = (await listSpeakersForSubmission(db, submissionId)).filter((speaker) => speaker.status === "confirmed");
-	return { event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone }, submission: row, slot: { id: row.agenda_slot_id, roomName: row.agenda_room_name, startsAt: row.agenda_starts_at, endsAt: row.agenda_ends_at, trackId: row.agenda_track_id }, speakers };
+	const [speakers, tracks] = await Promise.all([
+		listSpeakersForSubmission(db, submissionId),
+		listAgendaTracks(db, event.id, { includeRetired: true }),
+	]);
+	const track = publicScheduleTrack(row.agenda_track_id, tracks);
+	return { event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone }, submission: row, slot: { id: row.agenda_slot_id, roomName: row.agenda_room_name, startsAt: row.agenda_starts_at, endsAt: row.agenda_ends_at, trackId: row.agenda_track_id, trackName: track.name }, speakers: speakers.filter((speaker) => speaker.status === "confirmed") };
 }
 
 function parseAnswers(raw: string): Record<string, unknown> {
