@@ -3,7 +3,7 @@
 import { useState, type ChangeEvent } from "react";
 import { INPUT_CLASSES } from "@/components/ui";
 import { uploadAcceptAttr } from "@/lib/cfp/file-upload";
-import { isFileUploadAnswer, type FileUploadAnswer, type FormFieldDef, type SpeakerAnswer } from "@/lib/domain";
+import { isFileUploadAnswer, type FileUploadAnswer, type FormFieldDef, type SpeakerAnswer } from "@/lib/domain/form-fields";
 
 export type CfpFieldInputProps = {
 	field: FormFieldDef;

@@ -9,11 +9,13 @@ import {
 	cockpitSectionCaption,
 	cockpitSectionPreview,
 	cockpitTotalBlockers,
+	type CockpitSnapshot,
+} from "@/lib/domain/cockpit";
+import {
 	parseInvalidateMessage,
 	shouldRefetchOnInvalidate,
-	type CockpitSnapshot,
 	type LiveSyncTransport,
-} from "@/lib/domain";
+} from "@/lib/domain/outstanding-tasks";
 import { bootstrapRoomTicket } from "@/lib/realtime/room-client";
 
 type Props = {

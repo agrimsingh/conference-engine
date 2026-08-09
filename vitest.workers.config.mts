@@ -28,6 +28,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(rootDir, "./src"),
+			react: path.resolve(rootDir, "./test/workers/react-shim.cjs"),
 		},
 	},
 	test: {

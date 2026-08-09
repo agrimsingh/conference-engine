@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
-import { DECISION_REGISTRY, renderDecisionPreviews, type DecisionAction } from "@/lib/domain";
+import { DECISION_REGISTRY, renderDecisionPreviews, type DecisionAction } from "@/lib/domain/decisions";
 import { buildScoreComparisonMatrix } from "@/lib/evaluation/score-matrix";
 import {
 	sortScoreMatrixRows,

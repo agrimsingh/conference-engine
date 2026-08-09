@@ -13,8 +13,10 @@ export default async function AdminTeamPage({ params }: Props) {
 	const { eventSlug } = await params;
 	const db = await getDb();
 	const access = await assertCanManageEvent(db, eventSlug);
-	const members = await listEventMembers(db, access.event.id);
-	const bypass = await isAdminBypass();
+	const [members, bypass] = await Promise.all([
+		listEventMembers(db, access.event.id),
+		isAdminBypass(),
+	]);
 	const canRemove = access.membership?.role === "owner" || bypass;
 	const canTransfer = access.membership?.role === "owner" || bypass;
 	const canInviteAsOwner = access.membership?.role === "owner" || bypass;

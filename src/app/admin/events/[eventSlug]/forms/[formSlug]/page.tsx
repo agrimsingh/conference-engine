@@ -6,8 +6,14 @@ import { assertCanManageEvent } from "@/lib/auth/admin";
 import { rowToFieldDef, countFormSubmissions } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug, listFormFields } from "@/lib/db/queries";
-import { parseCategoryRoute, parseFormSections } from "@/lib/domain";
-import { FormBuilder } from "./form-builder";
+import dynamic from "next/dynamic";
+import { parseCategoryRoute } from "@/lib/domain/category-routing";
+import { parseFormSections } from "@/lib/domain/form-sections";
+
+const FormBuilder = dynamic(
+	() => import("./form-builder").then((m) => ({ default: m.FormBuilder })),
+	{ loading: () => <div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden /> },
+);
 
 type Props = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -20,8 +26,10 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 	const form = await getFormBySlug(db, event.id, formSlug);
 	if (!form) notFound();
 
-	const rows = await listFormFields(db, form.id);
-	const submissionCount = await countFormSubmissions(db, form.id);
+	const [rows, submissionCount] = await Promise.all([
+		listFormFields(db, form.id),
+		countFormSubmissions(db, form.id),
+	]);
 	const fields = rows.map((row) => {
 		const def = rowToFieldDef(row);
 		return {

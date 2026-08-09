@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type {
 	AccountRow,
 	AgendaTrackRow,
@@ -32,12 +33,12 @@ import {
 	type SubmissionQueueTab,
 } from "@/lib/domain";
 
-export async function getEventBySlug(
+export const getEventBySlug = cache(async (
 	db: D1Database,
 	slug: string,
-): Promise<EventRow | null> {
+): Promise<EventRow | null> => {
 	return db.prepare("SELECT * FROM events WHERE slug = ?").bind(slug).first<EventRow>();
-}
+});
 
 export async function getEventById(
 	db: D1Database,
@@ -73,6 +74,52 @@ export async function listPeopleByIds(
 		.prepare(`SELECT * FROM people WHERE id IN (${placeholders})`)
 		.bind(...ids)
 		.all<PersonRow>();
+	return result.results;
+}
+
+/** Submission rows for an already-authorized collection. */
+export async function listSubmissionsByIds(
+	db: D1Database,
+	submissionIds: string[],
+): Promise<SubmissionRow[]> {
+	const ids = [...new Set(submissionIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(`SELECT * FROM submissions WHERE id IN (${placeholders})`)
+		.bind(...ids)
+		.all<SubmissionRow>();
+	return result.results;
+}
+
+/** One person's speaker profiles across events, in one query. */
+export async function listSpeakerProfilesForPerson(
+	db: D1Database,
+	personId: string,
+	eventIds: string[],
+): Promise<SpeakerProfileRow[]> {
+	const ids = [...new Set(eventIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(`SELECT * FROM speaker_profiles WHERE person_id = ? AND event_id IN (${placeholders})`)
+		.bind(personId, ...ids)
+		.all<SpeakerProfileRow>();
+	return result.results;
+}
+
+/** Agenda slots for an already-authorized collection of submissions. */
+export async function listAgendaSlotsBySubmissionIds(
+	db: D1Database,
+	submissionIds: string[],
+): Promise<AgendaSlotRow[]> {
+	const ids = [...new Set(submissionIds)];
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(", ");
+	const result = await db
+		.prepare(`SELECT * FROM agenda_slots WHERE submission_id IN (${placeholders})`)
+		.bind(...ids)
+		.all<AgendaSlotRow>();
 	return result.results;
 }
 

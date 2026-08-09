@@ -7,7 +7,7 @@ import {
 	detectConflicts,
 	formatScheduleConflicts,
 	type ScheduleInterval,
-} from "@/lib/domain";
+} from "@/lib/domain/schedule";
 import {
 	filterUnplacedRail,
 	findAvailableSlot,

@@ -9,12 +9,14 @@ import {
 } from "@/components/ui";
 import {
 	canTransitionSubmission,
+	isSubmissionStatus,
+} from "@/lib/domain/submission-status";
+import {
 	DECISION_ACTIONS,
 	DECISION_REGISTRY,
-	isSubmissionStatus,
 	type DecisionAction,
-	type RenderedMessage,
-} from "@/lib/domain";
+} from "@/lib/domain/decisions";
+import { type RenderedMessage } from "@/lib/domain/message-templates";
 
 type Props = {
 	eventSlug: string;

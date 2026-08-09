@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export async function getCloudflareEnv(): Promise<CloudflareEnv> {
+export const getCloudflareEnv = cache(async (): Promise<CloudflareEnv> => {
 	const { env } = await getCloudflareContext({ async: true });
 	return env;
-}
+});
 
 export async function getDb(): Promise<D1Database> {
 	const env = await getCloudflareEnv();

@@ -6,7 +6,12 @@ import { getActiveEvaluationPlan, listAssignmentsForPlan, listEvaluationScoresFo
 import { listCriteria, listEvaluationPlans } from "@/lib/evaluation/plan";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
-import { ReviewWorkspace } from "./review-workspace";
+import dynamic from "next/dynamic";
+
+const ReviewWorkspace = dynamic(
+	() => import("./review-workspace").then((m) => ({ default: m.ReviewWorkspace })),
+	{ loading: () => <div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden /> },
+);
 
 type Props = { params: Promise<{ eventSlug: string }>; searchParams: Promise<{ plan?: string }> };
 
@@ -15,8 +20,10 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 	const { plan: selectedPlanId } = await searchParams;
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
-	const plans = await listEvaluationPlans(db, event.id);
-	const active = await getActiveEvaluationPlan(db, event.id);
+	const [plans, active] = await Promise.all([
+		listEvaluationPlans(db, event.id),
+		getActiveEvaluationPlan(db, event.id),
+	]);
 	const plan = plans.find((item) => item.id === selectedPlanId) ?? active ?? plans[0] ?? null;
 	if (!plan) {
 		return (

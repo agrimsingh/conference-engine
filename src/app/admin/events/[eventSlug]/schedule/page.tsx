@@ -21,10 +21,13 @@ import {
 	deriveScheduleDays,
 	parseDayKey,
 } from "@/lib/schedule/time";
-import {
-	ScheduleBoard,
-	type ScheduleSession,
-} from "./schedule-board";
+import dynamic from "next/dynamic";
+import type { ScheduleSession } from "./schedule-board";
+
+const ScheduleBoard = dynamic(
+	() => import("./schedule-board").then((m) => ({ default: m.ScheduleBoard })),
+	{ loading: () => <div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden /> },
+);
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;

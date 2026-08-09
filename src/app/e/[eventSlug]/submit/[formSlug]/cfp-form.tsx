@@ -3,14 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CfpFieldInput } from "@/components/cfp-field-input";
 import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
-import {
-	evaluateVisibilityRule,
-	groupFieldsBySection,
-	type AnswerMap,
-	type FormFieldDef,
-	type FormSection,
-	type SpeakerAnswer,
-} from "@/lib/domain";
+import { evaluateVisibilityRule, type AnswerMap } from "@/lib/domain/visibility";
+import { groupFieldsBySection, type FormSection } from "@/lib/domain/form-sections";
+import { type FormFieldDef, type SpeakerAnswer } from "@/lib/domain/form-fields";
 import { renderFormCopy } from "@/lib/cfp/form-copy";
 import { computeCfpProgress } from "@/lib/cfp/form-progress";
 import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";

@@ -28,9 +28,11 @@ export default async function CoSpeakerRespondPage({ params, searchParams }: Pro
 		);
 	}
 
-	const submission = await getSubmissionById(db, speaker.submission_id);
+	const [submission, history] = await Promise.all([
+		getSubmissionById(db, speaker.submission_id),
+		listCoSpeakerInviteHistory(db, speaker.id),
+	]);
 	const event = submission ? await getEventById(db, submission.event_id) : null;
-	const history = await listCoSpeakerInviteHistory(db, speaker.id);
 	const title = submission
 		? titleFromAnswersJson(submission.answers_json)
 		: "(unknown talk)";

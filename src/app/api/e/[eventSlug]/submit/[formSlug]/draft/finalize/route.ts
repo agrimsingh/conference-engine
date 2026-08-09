@@ -25,10 +25,11 @@ export async function POST(request: Request, context: Context) {
 	if (!token || !name || !answers) return NextResponse.json({ ok: false, errors: ["token, submitterName, answers required"] }, { status: 400 });
 	const payloadError = validateCfpPayloadBounds(answers);
 	if (payloadError) return NextResponse.json({ ok: false, errors: [payloadError] }, { status: 413 });
-	const db = await getDb();
-	const secret = await getAuthSecret();
-	const draft = await loadDraftForResume(db, { secret, token });
-	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
+	const [db, secret] = await Promise.all([getDb(), getAuthSecret()]);
+	const [draft, loaded] = await Promise.all([
+		loadDraftForResume(db, { secret, token }),
+		loadCfpForm(db, eventSlug, formSlug, { requireOpen: true }),
+	]);
 	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form, Date.now())) return NextResponse.json({ ok: false, errors: ["CFP form not found or unavailable"] }, { status: 404 });
 	try {
 		assertEventWritable(loaded.event);

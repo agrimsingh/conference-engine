@@ -2,14 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { CfpFieldInput } from "@/components/cfp-field-input";
-import {
-	evaluateVisibilityRule,
-	groupFieldsBySection,
-	type AnswerMap,
-	type FormFieldDef,
-	type FormSection,
-	type SpeakerAnswer,
-} from "@/lib/domain";
+import { evaluateVisibilityRule, type AnswerMap } from "@/lib/domain/visibility";
+import { groupFieldsBySection, type FormSection } from "@/lib/domain/form-sections";
+import { type FormFieldDef, type SpeakerAnswer } from "@/lib/domain/form-fields";
 
 type PreviewField = FormFieldDef & { id?: string };
 

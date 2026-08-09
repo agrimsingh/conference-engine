@@ -5,8 +5,8 @@ import { getDb } from "@/lib/db/cloudflare";
 import { listDeliverableBundles } from "@/lib/content/deliverables";
 import {
 	listEventsByIds,
-	getAgendaSlotBySubmission,
-	getSpeakerProfile,
+	listAgendaSlotsBySubmissionIds,
+	listSpeakerProfilesForPerson,
 	listSubmissionsForPerson,
 	listSpeakersForSubmissions,
 	listTasksForPerson,
@@ -58,24 +58,24 @@ export default async function PortalPage({ searchParams }: Props) {
 	}
 
 	const db = await getDb();
-	const submissions = await listSubmissionsForPerson(db, session.personId);
-	const tasks = await listTasksForPerson(db, session.personId);
-	const deliverables = await listDeliverableBundles(db, { personId: session.personId });
-	const [actionTasks, portalResources] = await Promise.all([
+	const [submissions, tasks, deliverables, actionTasks, portalResources, profileEvents] = await Promise.all([
+		listSubmissionsForPerson(db, session.personId),
+		listTasksForPerson(db, session.personId),
+		listDeliverableBundles(db, { personId: session.personId }),
 		listSpeakerActionAssignments(db, { personId: session.personId }),
 		listPublishedPortalResourcesForSpeaker(db, session.personId),
+		db.prepare("SELECT event_id FROM event_speaker_profiles WHERE person_id = ?").bind(session.personId).all<{ event_id: string }>(),
 	]);
 
-	const profileEvents = await db.prepare("SELECT event_id FROM event_speaker_profiles WHERE person_id = ?").bind(session.personId).all<{ event_id: string }>();
 	const eventRows = await listEventsByIds(db, [...submissions.map((submission) => submission.event_id), ...profileEvents.results.map((row) => row.event_id)]);
 	const events = new Map(eventRows.map((event) => [event.id, event]));
-	const [speakersBySubmission, profiles, slots] = await Promise.all([
+	const [speakersBySubmission, profileRows, slotRows] = await Promise.all([
 		listSpeakersForSubmissions(db, submissions.map((submission) => submission.id)),
-		Promise.all(eventRows.map(async (event) => [event.id, await getSpeakerProfile(db, event.id, session.personId)] as const)),
-		Promise.all(submissions.map(async (submission) => [submission.id, await getAgendaSlotBySubmission(db, submission.id)] as const)),
+		listSpeakerProfilesForPerson(db, session.personId, eventRows.map((event) => event.id)),
+		listAgendaSlotsBySubmissionIds(db, submissions.map((submission) => submission.id)),
 	]);
-	const profilesByEvent = new Map(profiles);
-	const slotsBySubmission = new Map(slots);
+	const profilesByEvent = new Map(profileRows.map((profile) => [profile.event_id, profile]));
+	const slotsBySubmission = new Map(slotRows.map((slot) => [slot.submission_id, slot]));
 	const firstSubmissionIdByEvent = new Map<string, string>();
 	for (const submission of submissions) {
 		if (!firstSubmissionIdByEvent.has(submission.event_id)) firstSubmissionIdByEvent.set(submission.event_id, submission.id);

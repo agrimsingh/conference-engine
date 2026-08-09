@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
-import { FIELD_TYPES, type CategoryRoute, type FieldType, type FormFieldDef, type FormSection, type VisibilityRule } from "@/lib/domain";
+import { FIELD_TYPES, type FieldType, type FormFieldDef } from "@/lib/domain/form-fields";
+import { type CategoryRoute } from "@/lib/domain/category-routing";
+import { type FormSection } from "@/lib/domain/form-sections";
+import { type VisibilityRule } from "@/lib/domain/visibility";
 
 import type { SelectOption } from "@/lib/domain/form-fields";
 import { FormBuilderPreview } from "./form-builder-preview";

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { NextResponse } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
@@ -23,12 +24,12 @@ export async function isAdminBypassEnabled(): Promise<boolean> {
 }
 
 /** True only when bypass is allowed in this environment AND the cookie is set. */
-export async function isAdminBypass(): Promise<boolean> {
+export const isAdminBypass = cache(async (): Promise<boolean> => {
 	if (!(await isAdminBypassEnabled())) return false;
 	const { cookies } = await import("next/headers");
 	const jar = await cookies();
 	return jar.get(ADMIN_BYPASS_COOKIE)?.value === "1";
-}
+});
 
 export async function requireAdminBypass(): Promise<void> {
 	if (!(await isAdminBypass())) {

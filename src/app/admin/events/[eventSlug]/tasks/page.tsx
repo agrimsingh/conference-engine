@@ -3,8 +3,8 @@ import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { listDeliverableBundles } from "@/lib/content/deliverables";
 import { getDb } from "@/lib/db/cloudflare";
-import { getPersonById, getSubmissionById, listTasksForEvent } from "@/lib/db/queries";
-import { titleFromAnswers } from "@/lib/domain";
+import { listPeopleByIds, listSubmissionsByIds, listTasksForEvent } from "@/lib/db/queries";
+import { titleFromAnswers } from "@/lib/domain/schedule";
 import { DeliverablesDashboard, type DeliverableDashboardRow } from "./deliverables-dashboard";
 import { ActionTasksDashboard } from "./action-tasks-dashboard";
 import { listEventSpeakerRoster } from "@/lib/speakers/roster";
@@ -19,18 +19,12 @@ export default async function AdminTasksPage({ params }: { params: Promise<{ eve
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
 	const [tasks, bundles, speakers, actions] = await Promise.all([listTasksForEvent(db, event.id), listDeliverableBundles(db, { eventId: event.id }), listEventSpeakerRoster(db, event.id), listSpeakerActionAssignments(db, { eventId: event.id })]);
-	const personLabels = new Map<string, string>();
-	const sessionLabels = new Map<string, string>();
-	for (const task of tasks) {
-		if (!personLabels.has(task.person_id)) {
-			const person = await getPersonById(db, task.person_id);
-			personLabels.set(task.person_id, person?.name?.trim() || person?.email || task.person_id);
-		}
-		if (!sessionLabels.has(task.submission_id)) {
-			const submission = await getSubmissionById(db, task.submission_id);
-			sessionLabels.set(task.submission_id, submission ? titleFromAnswers(parseAnswers(submission.answers_json)) : task.submission_id);
-		}
-	}
+	const [people, submissions] = await Promise.all([
+		listPeopleByIds(db, tasks.map((task) => task.person_id)),
+		listSubmissionsByIds(db, tasks.map((task) => task.submission_id)),
+	]);
+	const personLabels = new Map(people.map((person) => [person.id, person.name?.trim() || person.email || person.id]));
+	const sessionLabels = new Map(submissions.map((submission) => [submission.id, titleFromAnswers(parseAnswers(submission.answers_json))]));
 	const rows: DeliverableDashboardRow[] = tasks.filter((task) => (task.template_task_kind ?? "file") === "file").map((task) => ({
 		id: task.id, personId: task.person_id, speaker: personLabels.get(task.person_id) ?? task.person_id,
 		session: sessionLabels.get(task.submission_id) ?? task.submission_id,

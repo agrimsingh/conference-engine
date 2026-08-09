@@ -31,10 +31,11 @@ export default async function PublicSpeakerProfilePage({ params }: PageProps) {
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) notFound();
 
-	const speaker = await getPublicSpeakerDirectoryEntry(db, event.id, personId);
+	const [speaker, sessions] = await Promise.all([
+		getPublicSpeakerDirectoryEntry(db, event.id, personId),
+		listPublishedSessionsForPublicSpeaker(db, event.id, personId),
+	]);
 	if (!speaker) notFound();
-
-	const sessions = await listPublishedSessionsForPublicSpeaker(db, event.id, personId);
 	const affiliation = speakerAffiliation({
 		jobTitle: speaker.job_title,
 		company: speaker.company,
