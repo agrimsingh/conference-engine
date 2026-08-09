@@ -6,3 +6,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:10:52Z	wave0	Aborted shared-tree parallel agents and created five git worktrees	agents were writing the same working tree and mixing diffs	/tmp/ce-wave0-salvage + wt-*	recovered
 2026-08-09T08:11:39Z	wave0	Relaunched five poteto-agents into wt-* worktrees	best-of-n shared the parent tree; real git worktrees enforce separation	b088/3067/2f01/894f/d84a	running
 2026-08-09T08:13:40Z	wave0	Merged activate-plan-button fix to main	already-active plans link to review instead of false-fail	979e3cf	tests pending push
+2026-08-09T08:13:42Z	wave0	Removed wt-activate after merge	unit done	979e3cf on main	done
