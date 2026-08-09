@@ -16,3 +16,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:19:03Z	process	Per-unit test bars are advisory during waves	Wave0 skipped some must-have tests; logged so audit trail stops rotting; batch debt separately	fable §3.3	policy
 2026-08-09T08:19:38Z	wave0	Landed Wave0 test debt + review slug fix	Fable §4.1; tests advisory policy logged	activate/clone/preset400/policy + review page	green
 2026-08-09T08:20:37Z	wave1	Merged setup+review+cockpit to main	blast-radius order setup→review→cockpit; public still WIP	23a8d5b/2bcfdfe/d0bb28c	125 unit + 104 workers green
+2026-08-09T08:21:27Z	wave1	Merged public surface to main	headshots ICS share speakers; wave1 almost closed	0931221	tests green
