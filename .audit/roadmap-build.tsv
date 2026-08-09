@@ -25,3 +25,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:34:09Z	phase-e	DONE_PREDICATE_MET yes	Fable spot-checked phases 0-9; MUST-FIX none; logged Queues/warn deferrals; neutralized product AIE placeholders	6c1d95f5 @ a403954	roadmap complete
 2026-08-09T08:46:27Z	release	Opened fix worktrees CI/upload/cockpit/docs	prod lag + red CI + correctness gaps	8e3cc02	running
 2026-08-09T08:47:25Z	release	Merged README routes docs	migrations 0022-0024 + public API routes documented	4ee2326	merged
+2026-08-09T08:47:56Z	release	Merged CI lint fix	derive section key; next/image avatar	f44d302	lint+tsc green
