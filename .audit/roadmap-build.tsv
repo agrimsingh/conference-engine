@@ -18,3 +18,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:20:37Z	wave1	Merged setup+review+cockpit to main	blast-radius order setup→review→cockpit; public still WIP	23a8d5b/2bcfdfe/d0bb28c	125 unit + 104 workers green
 2026-08-09T08:21:27Z	wave1	Merged public surface to main	headshots ICS share speakers; wave1 almost closed	0931221	tests green
 2026-08-09T08:21:39Z	wave1	Launched builder/applicant/platform/verify worktrees	Phases 3,4,8,9 after wave1 merges	1cfd127	running
+2026-08-09T08:25:35Z	wave1	Merged applicant Phase 4 to main	RL+autosave+progress+review step; section stub for P3	7ba2d76	tests green
