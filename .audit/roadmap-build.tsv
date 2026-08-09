@@ -23,3 +23,5 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:29:07Z	wave1	Merged builder+verify; roadmap phases 0-9 on main	P3 rebase resolved via FormSection aliases + migration 0024; P9 lifecycle+CI+backup	56f7ed8/89ad1bd	146 unit + 114 workers
 2026-08-09T08:30:01Z	process	Stopped roadmap loop shell	Phases 0-9 already on main; stale Wave0 prompt only generating ticks	pid 33793	killed
 2026-08-09T08:34:09Z	phase-e	DONE_PREDICATE_MET yes	Fable spot-checked phases 0-9; MUST-FIX none; logged Queues/warn deferrals; neutralized product AIE placeholders	6c1d95f5 @ a403954	roadmap complete
+2026-08-09T08:46:27Z	release	Opened fix worktrees CI/upload/cockpit/docs	prod lag + red CI + correctness gaps	8e3cc02	running
+2026-08-09T08:47:25Z	release	Merged README routes docs	migrations 0022-0024 + public API routes documented	4ee2326	merged
