@@ -36,7 +36,22 @@ export async function createSpeakerActionTask(db: D1Database, args: {
 	const personIds = uniqueRecipientIds(args.personIds);
 	if (!personIds) throw new Error("Choose 1 to 100 speakers");
 	if (args.dueAt !== null && !Number.isFinite(args.dueAt)) throw new Error("Enter a valid due date");
-	const roster = await db.prepare(`SELECT person_id FROM event_speaker_profiles WHERE event_id = ? AND person_id IN (${personIds.map(() => "?").join(",")})`).bind(args.eventId, ...personIds).all<{ person_id: string }>();
+	const roster = await db.prepare(`SELECT person_id FROM (
+		SELECT esp.person_id AS person_id
+		FROM event_speaker_profiles esp
+		WHERE esp.event_id = ?
+		UNION
+		SELECT ss.person_id AS person_id
+		FROM submission_speakers ss
+		INNER JOIN submissions s ON s.id = ss.submission_id
+		WHERE s.event_id = ?
+			AND s.status IN ('accepted', 'scheduled', 'published')
+			AND ss.status IN ('pending', 'confirmed')
+			AND ss.person_id IS NOT NULL
+	) event_roster
+	WHERE person_id IN (${personIds.map(() => "?").join(",")})`)
+		.bind(args.eventId, args.eventId, ...personIds)
+		.all<{ person_id: string }>();
 	if (roster.results.length !== personIds.length) throw new Error("Every assignee must belong to this event's speaker roster");
 	const now = args.now ?? Date.now();
 	const taskId = crypto.randomUUID();
