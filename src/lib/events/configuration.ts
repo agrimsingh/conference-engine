@@ -24,6 +24,8 @@ export type EventConfiguration = {
 	tasks: ConfigurationTask[];
 	cfp: { id: string; slug: string; title: string; status: "draft" | "open" | "closed"; fieldCount: number } | null;
 	review: { id: string; name: string; status: string; criteriaCount: number } | null;
+	/** Saved event_message_templates rows; product defaults apply when zero. */
+	messageTemplateCount: number;
 };
 
 function trimmed(value: unknown, label: string, max = 120): string {
@@ -36,13 +38,14 @@ function trimmed(value: unknown, label: string, max = 120): string {
 function activeRows<T>(result: D1Result<T>): T[] { return result.results; }
 
 export async function loadEventConfiguration(db: D1Database, eventId: string): Promise<EventConfiguration> {
-	const [event, rooms, tracks, tasks, cfp, review] = await Promise.all([
+	const [event, rooms, tracks, tasks, cfp, review, messageTemplates] = await Promise.all([
 		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
 		db.prepare(`SELECT id, key, label, task_kind, required, position FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<ConfigurationTask>(),
 		db.prepare(`SELECT id, slug, title, status FROM cfp_forms WHERE event_id = ? AND kind = 'public' ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; slug: string; title: string; status: "draft" | "open" | "closed" }>(),
 		db.prepare(`SELECT id, name, status FROM evaluation_plans WHERE event_id = ? ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; name: string; status: string }>(),
+		db.prepare(`SELECT COUNT(*) AS count FROM event_message_templates WHERE event_id = ?`).bind(eventId).first<{ count: number }>(),
 	]);
 	if (!event) throw new Error("Event not found");
 	const [fieldCount, criteriaCount] = await Promise.all([
@@ -54,13 +57,14 @@ export async function loadEventConfiguration(db: D1Database, eventId: string): P
 		rooms: activeRows(rooms), tracks: activeRows(tracks), tasks: activeRows(tasks),
 		cfp: cfp ? { ...cfp, fieldCount: fieldCount?.count ?? 0 } : null,
 		review: review ? { ...review, criteriaCount: criteriaCount?.count ?? 0 } : null,
+		messageTemplateCount: messageTemplates?.count ?? 0,
 	};
 }
 
 export type ReadinessItem = { key: string; label: string; complete: boolean; href: string; detail: string };
 
 export function eventReadiness(configuration: EventConfiguration, eventSlug: string): ReadinessItem[] {
-	const { event, rooms, tracks, tasks, cfp, review } = configuration;
+	const { event, rooms, tracks, tasks, cfp, review, messageTemplateCount } = configuration;
 	const detailCheck = validateEventSettings({ startDay: event.start_day ?? "", endDay: event.end_day ?? "", timezone: event.timezone, dayStartMinutes: event.day_start_minutes, dayEndMinutes: event.day_end_minutes, slotDurationMinutes: event.slot_duration_minutes });
 	const base = `/admin/events/${eventSlug}`;
 	return [
@@ -70,6 +74,15 @@ export function eventReadiness(configuration: EventConfiguration, eventSlug: str
 		{ key: "cfp", label: "Public CFP", complete: Boolean(cfp && cfp.title.trim() && cfp.fieldCount > 0), href: `${base}/forms`, detail: cfp ? `${cfp.fieldCount} active field${cfp.fieldCount === 1 ? "" : "s"}; ${cfp.status}.` : "Create a public CFP." },
 		{ key: "review", label: "Review plan", complete: Boolean(review && review.criteriaCount > 0), href: `${base}/review`, detail: review ? `${review.criteriaCount} active criterion${review.criteriaCount === 1 ? "" : "s"}.` : "Create a review plan and criterion." },
 		{ key: "tasks", label: "Speaker tasks", complete: tasks.length > 0, href: `${base}/settings#tasks`, detail: tasks.length ? `${tasks.length} active template${tasks.length === 1 ? "" : "s"}.` : "Add at least one speaker task template." },
+		{
+			key: "communications",
+			label: "Communication templates",
+			complete: messageTemplateCount > 0,
+			href: `${base}/communications`,
+			detail: messageTemplateCount > 0
+				? `${messageTemplateCount} custom template${messageTemplateCount === 1 ? "" : "s"} saved.`
+				: "Review acceptance, rejection, and portal email copy.",
+		},
 		{ key: "cfp-open", label: "Open for proposals", complete: cfp?.status === "open", href: `${base}/forms`, detail: cfp?.status === "open" ? "The public CFP is accepting submissions." : "Open the CFP when you are ready to accept submissions." },
 	];
 }

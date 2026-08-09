@@ -118,7 +118,10 @@ export default async function AdminHomePage({ searchParams }: Props) {
 				<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
 					Create event
 				</h2>
-				<CreateEventForm canCreate={Boolean(account) || bypassActive} />
+				<CreateEventForm
+					canCreate={Boolean(account) || bypassActive}
+					cloneSources={events.map((event) => ({ slug: event.slug, name: event.name }))}
+				/>
 			</section>
 		</main>
 	);
