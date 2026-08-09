@@ -60,3 +60,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T18:16:57Z	fix	Fan withdraw+dead-schedule+org-notify prefs	Outlook skipped (no mailbox)	69ef9db	started
 2026-08-09T18:18:27Z	fix	Merged delete dead scheduleSubmission	entire schedule.ts gone; EventRoom untouched	f493663	tsc green
 2026-08-09T18:21:05Z	fix	Merged organizer notify prefs	0038 create=on update=off; settings toggles	3e22fca	unit green
+2026-08-09T18:22:05Z	fix	Merged withdraw scheduled/published + restore	unplace+CANCEL; restore→under_review	fee7e25	unit+workers green
