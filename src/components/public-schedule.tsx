@@ -689,12 +689,21 @@ export async function PublicSchedule({
 						Speakers
 					</Link>
 				) : null}
-				<Link
-					className="font-medium text-neutral-200 underline underline-offset-2"
-					href={`/e/${event.slug}/submit/cfp`}
-				>
-					Submit a talk
-				</Link>
+				{event.mode === "demo" ? (
+					<Link
+						className="font-medium text-neutral-200 underline underline-offset-2"
+						href="/demo?perspective=applicant"
+					>
+						Explore the CFP
+					</Link>
+				) : (
+					<Link
+						className="font-medium text-neutral-200 underline underline-offset-2"
+						href={`/e/${event.slug}/submit/cfp`}
+					>
+						Submit a talk
+					</Link>
+				)}
 			</p>
 		</main>
 	);

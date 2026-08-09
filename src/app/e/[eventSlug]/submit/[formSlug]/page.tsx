@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isCfpBeforeOpensAt, isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { loadCfpForm } from "@/lib/cfp/load-form";
@@ -20,9 +21,12 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 
 	// eslint-disable-next-line react-hooks/purity -- request-time lifecycle check in a server component
 	const now = Date.now();
-	if (loaded.form.status !== "open") notFound();
-	if (!isCfpOpenNow(loaded.form, now)) {
-		const opensLater = isCfpBeforeOpensAt(loaded.form, now);
+	// Draft forms stay private. Closed (or not-yet-open) forms render a real page
+	// so public schedule / share links don't hard-404 — especially the read-only demo.
+	if (loaded.form.status === "draft") notFound();
+	if (loaded.form.status !== "open" || !isCfpOpenNow(loaded.form, now)) {
+		const opensLater = loaded.form.status === "open" && isCfpBeforeOpensAt(loaded.form, now);
+		const isDemo = loaded.event.mode === "demo";
 		return (
 			<main className="px-4 py-10">
 				<div className="mx-auto max-w-2xl space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 px-5 py-8">
@@ -35,8 +39,26 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 					<p className="text-pretty text-sm text-neutral-400">
 						{opensLater
 							? `${loaded.form.title} is not accepting proposals yet. Please return after the announced opening time.`
-							: `${loaded.form.title} is no longer accepting submissions.`}
+							: isDemo
+								? `${loaded.form.title} is closed in this read-only demo. Browse the field structure and lifecycle from the demo walkthrough, or open the public schedule.`
+								: `${loaded.form.title} is no longer accepting submissions.`}
 					</p>
+					{isDemo ? (
+						<p className="flex flex-wrap gap-4 pt-2 text-sm">
+							<Link
+								className="font-medium text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+								href="/demo?perspective=applicant"
+							>
+								Explore the CFP demo
+							</Link>
+							<Link
+								className="font-medium text-neutral-200 underline underline-offset-2 hover:text-neutral-100"
+								href={`/e/${eventSlug}/schedule`}
+							>
+								Public schedule
+							</Link>
+						</p>
+					) : null}
 				</div>
 			</main>
 		);
