@@ -54,15 +54,24 @@ describe("Accelevents one-way D1 sync", () => {
 			async createSession(payload) { calls.push(`session:${payload.title}`); return `session-${calls.length}`; },
 			async updateSession(externalId) { calls.push(`session-update:${externalId}`); },
 			async findSpeakerByEmail() { return null; },
+			async assignSpeakersToSession(externalId, _session, speakers) {
+				calls.push(`assign:${externalId}:${speakers.map((speaker) => speaker.externalId).join(",")}`);
+			},
 		};
 		const pushed = await syncAcceleventsEvent(env.DB, { eventId, timezone: "UTC", secret: env.AUTH_SECRET, dryRun: false, api });
 		expect(pushed).toMatchObject({ ok: true, dryRun: false, configured: true, failures: [] });
-		expect(calls).toEqual(["speaker:ada@accelevents.test", "session:Accepted talk", "session:Scheduled talk"]);
+		expect(calls).toEqual([
+			"speaker:ada@accelevents.test",
+			"session:Accepted talk",
+			"assign:session-2:speaker-101",
+			"session:Scheduled talk",
+			"assign:session-4:speaker-101",
+		]);
 		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM accelevents_sync_mappings WHERE event_id = ?").bind(eventId).first<{ count: number }>())?.count).toBe(3);
 
 		const repeated = await syncAcceleventsEvent(env.DB, { eventId, timezone: "UTC", secret: env.AUTH_SECRET, dryRun: false, api });
 		expect(repeated.actions.every((action) => action.operation === "skip")).toBe(true);
-		expect(calls).toHaveLength(3);
+		expect(calls).toHaveLength(5);
 
 		await env.DB.prepare("UPDATE submissions SET answers_json = ? WHERE id = ?").bind(JSON.stringify({ title: "Changed scheduled talk", abstract: "Ready for the agenda" }), `${eventId}-scheduled`).run();
 		const failingApi: AcceleventsApi = {
@@ -113,6 +122,7 @@ describe("Accelevents one-way D1 sync", () => {
 				expect(email).toBe(speakerEmail);
 				return "speaker-reconciled-101";
 			},
+			async assignSpeakersToSession() {},
 		};
 
 		const first = await syncAcceleventsEvent(env.DB, { eventId, timezone: "UTC", secret: env.AUTH_SECRET, dryRun: false, api });
@@ -129,6 +139,64 @@ describe("Accelevents one-way D1 sync", () => {
 		expect(speakerPosts).toBe(1);
 		expect(speakerLookups).toBe(1);
 		expect(await env.DB.prepare("SELECT external_id, sync_state FROM accelevents_sync_mappings WHERE event_id = ? AND local_kind = 'speaker'").bind(eventId).first()).toEqual({ external_id: "speaker-reconciled-101", sync_state: "synced" });
+	});
+
+	it("retries a failed speaker assignment without creating the session twice", async () => {
+		const eventId = "accelevents-assignment-retry";
+		await seedSyncEvent(eventId, "assignment-retry@accelevents.test");
+		await saveAcceleventsIntegration(env.DB, {
+			eventId,
+			eventUrl: "external-event-assignment-retry",
+			externalEventId: 505,
+			sessionTypeFormat: "IN_PERSON",
+			apiKey: "worker-test-key",
+			secret: env.AUTH_SECRET,
+		});
+
+		let sessionCreates = 0;
+		let acceptedAssignments = 0;
+		const api: AcceleventsApi = {
+			async createSpeaker() { return "speaker-assignment-101"; },
+			async updateSpeaker() {},
+			async createSession(payload) {
+				sessionCreates += 1;
+				return payload.title === "Accepted talk" ? "session-accepted-101" : "session-scheduled-102";
+			},
+			async updateSession() {},
+			async findSpeakerByEmail() { return null; },
+			async assignSpeakersToSession(externalSessionId) {
+				if (externalSessionId !== "session-accepted-101") return;
+				acceptedAssignments += 1;
+				if (acceptedAssignments === 1) throw new Error("Accelevents assignment failed");
+			},
+		};
+
+		const first = await syncAcceleventsEvent(env.DB, {
+			eventId,
+			timezone: "UTC",
+			secret: env.AUTH_SECRET,
+			dryRun: false,
+			api,
+		});
+		expect(first).toMatchObject({
+			ok: false,
+			failures: [{
+				kind: "session",
+				localId: `${eventId}-accepted`,
+				message: "Accelevents assignment failed",
+			}],
+		});
+
+		const retry = await syncAcceleventsEvent(env.DB, {
+			eventId,
+			timezone: "UTC",
+			secret: env.AUTH_SECRET,
+			dryRun: false,
+			api,
+		});
+		expect(retry).toMatchObject({ ok: true, failures: [] });
+		expect(sessionCreates).toBe(2);
+		expect(acceptedAssignments).toBe(2);
 	});
 
 	it("allows only one concurrent sync plan to claim each create before any provider POST", async () => {
@@ -162,6 +230,7 @@ describe("Accelevents one-way D1 sync", () => {
 			},
 			async updateSession() {},
 			async findSpeakerByEmail() { return null; },
+			async assignSpeakersToSession() {},
 		};
 
 		const first = syncAcceleventsEvent(env.DB, { eventId, timezone: "UTC", secret: env.AUTH_SECRET, dryRun: false, api });

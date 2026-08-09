@@ -1,4 +1,8 @@
-import { createAcceleventsApi, type AcceleventsApi } from "./api";
+import {
+	createAcceleventsApi,
+	type AcceleventsApi,
+	type AcceleventsAssignedSpeaker,
+} from "./api";
 import {
 	claimAcceleventsCreate,
 	listAcceleventsSyncMappings,
@@ -44,6 +48,7 @@ type SyncSession = {
 	readonly abstract: string;
 	readonly startsAt: number | null;
 	readonly endsAt: number | null;
+	readonly speakerLocalIds: readonly string[];
 };
 
 type SyncPlanInput = {
@@ -71,6 +76,7 @@ type AcceleventsSpeakerSyncAction = AcceleventsSyncActionBase & {
 type AcceleventsSessionSyncAction = AcceleventsSyncActionBase & {
 	readonly kind: "session";
 	readonly payload: AcceleventsSessionPayload;
+	readonly speakerLocalIds: readonly string[];
 };
 
 export type AcceleventsSyncAction =
@@ -96,6 +102,7 @@ export type AcceleventsSyncResult = {
 };
 
 type SourceSpeakerRow = {
+	submission_id: string;
 	person_id: string | null;
 	name: string | null;
 	email: string;
@@ -174,10 +181,10 @@ function mappingFor(
 }
 
 function operationFor(
-	payload: AcceleventsSpeakerPayload | AcceleventsSessionPayload,
+	fingerprintValue: unknown,
 	mapping: AcceleventsSyncMapping | undefined,
 ): Pick<AcceleventsSyncActionBase, "operation" | "externalId" | "sourceFingerprint" | "previousFingerprint"> {
-	const sourceFingerprint = JSON.stringify(payload);
+	const sourceFingerprint = JSON.stringify(fingerprintValue);
 	return {
 		operation: mapping?.syncState === "creating"
 			? "reconcile"
@@ -209,8 +216,9 @@ export function buildAcceleventsSyncPlan(input: SyncPlanInput): AcceleventsSyncP
 			kind: "session",
 			localId: session.localId,
 			payload,
+			speakerLocalIds: session.speakerLocalIds,
 			...operationFor(
-				payload,
+				{ payload, speakerLocalIds: session.speakerLocalIds },
 				mappingFor(input.mappings, "session", session.localId),
 			),
 		}) satisfies AcceleventsSessionSyncAction;
@@ -241,7 +249,7 @@ async function loadSyncSources(
 ): Promise<{ readonly speakers: readonly SyncSpeaker[]; readonly sessions: readonly SyncSession[] }> {
 	const [speakerRows, sessionRows] = await Promise.all([
 		db.prepare(
-			`SELECT ss.person_id, COALESCE(p.name, ss.name) AS name, ss.email,
+			`SELECT ss.submission_id, ss.person_id, COALESCE(p.name, ss.name) AS name, ss.email,
 				sp.bio, COALESCE(sp.job_title, esp.job_title) AS job_title,
 				COALESCE(sp.company, esp.company) AS company
 			 FROM submission_speakers ss
@@ -264,8 +272,14 @@ async function loadSyncSources(
 	]);
 
 	const speakersById = new Map<string, SyncSpeaker>();
+	const speakerIdsBySubmission = new Map<string, string[]>();
 	for (const row of speakerRows.results) {
 		const localId = row.person_id ? `person:${row.person_id}` : `email:${row.email.trim().toLowerCase()}`;
+		const submissionSpeakerIds = speakerIdsBySubmission.get(row.submission_id) ?? [];
+		if (!submissionSpeakerIds.includes(localId)) {
+			submissionSpeakerIds.push(localId);
+			speakerIdsBySubmission.set(row.submission_id, submissionSpeakerIds);
+		}
 		if (!speakersById.has(localId)) {
 			speakersById.set(localId, {
 				localId,
@@ -288,6 +302,7 @@ async function loadSyncSources(
 				abstract: content.abstract,
 				startsAt: row.starts_at,
 				endsAt: row.ends_at,
+				speakerLocalIds: speakerIdsBySubmission.get(row.id) ?? [],
 			};
 		}),
 	};
@@ -329,6 +344,17 @@ export async function syncAcceleventsEvent(
 	if (!config) return { ok: false, dryRun: false, configured: false, actions: [], failures: [] };
 	const api = args.api ?? createAcceleventsApi(config);
 	const failures: AcceleventsSyncFailure[] = [];
+	const currentMappings = new Map(
+		mappings.map((mapping) => [`${mapping.localKind}:${mapping.localId}`, mapping]),
+	);
+	const speakerActions = new Map(
+		plan.actions
+			.filter((action): action is AcceleventsSpeakerSyncAction => action.kind === "speaker")
+			.map((action) => [action.localId, action]),
+	);
+	const rememberMapping = (mapping: AcceleventsSyncMapping): void => {
+		currentMappings.set(`${mapping.localKind}:${mapping.localId}`, mapping);
+	};
 	for (const action of plan.actions) {
 		if (action.operation === "skip") continue;
 		try {
@@ -344,15 +370,36 @@ export async function syncAcceleventsEvent(
 				if (action.previousFingerprint !== action.sourceFingerprint) {
 					await api.updateSpeaker(externalId, action.payload);
 				}
-				await saveAcceleventsSyncMapping(db, {
+				const reconciledMapping = {
 					eventId: args.eventId,
 					localKind: action.kind,
 					localId: action.localId,
 					externalId,
 					sourceFingerprint: action.sourceFingerprint,
 					syncState: "synced",
-				});
+				} as const;
+				await saveAcceleventsSyncMapping(db, reconciledMapping);
+				rememberMapping(reconciledMapping);
 				continue;
+			}
+			const assignedSpeakers: AcceleventsAssignedSpeaker[] = [];
+			if (action.kind === "session") {
+				for (const localSpeakerId of action.speakerLocalIds) {
+					const speakerAction = speakerActions.get(localSpeakerId);
+					const speakerMapping = currentMappings.get(`speaker:${localSpeakerId}`);
+					if (!speakerAction || !speakerMapping?.externalId) {
+						const speakerFailed = failures.some(
+							(failure) => failure.kind === "speaker" && failure.localId === localSpeakerId,
+						);
+						if (speakerFailed) continue;
+						throw new Error(`Accelevents speaker mapping is missing for session ${action.localId}`);
+					}
+					assignedSpeakers.push({
+						externalId: speakerMapping.externalId,
+						...speakerAction.payload,
+					});
+				}
+				if (assignedSpeakers.length !== action.speakerLocalIds.length) continue;
 			}
 			if (action.operation === "create") {
 				const claimed = await claimAcceleventsCreate(db, {
@@ -371,16 +418,33 @@ export async function syncAcceleventsEvent(
 			} else {
 				if (action.operation === "create") externalId = await api.createSession(action.payload);
 				else if (externalId) await api.updateSession(externalId, action.payload);
+				if (externalId && action.operation === "create") {
+					const pendingAssignmentMapping = {
+						eventId: args.eventId,
+						localKind: action.kind,
+						localId: action.localId,
+						externalId,
+						sourceFingerprint: action.previousFingerprint ?? "",
+						syncState: "synced",
+					} as const;
+					await saveAcceleventsSyncMapping(db, pendingAssignmentMapping);
+					rememberMapping(pendingAssignmentMapping);
+				}
+				if (externalId && assignedSpeakers.length > 0) {
+					await api.assignSpeakersToSession(externalId, action.payload, assignedSpeakers);
+				}
 			}
 			if (!externalId) throw new Error("Accelevents mapping is missing an external ID");
-			await saveAcceleventsSyncMapping(db, {
+			const syncedMapping = {
 				eventId: args.eventId,
 				localKind: action.kind,
 				localId: action.localId,
 				externalId,
 				sourceFingerprint: action.sourceFingerprint,
 				syncState: "synced",
-			});
+			} as const;
+			await saveAcceleventsSyncMapping(db, syncedMapping);
+			rememberMapping(syncedMapping);
 		} catch (error) {
 			failures.push(actionFailure(action, error));
 		}

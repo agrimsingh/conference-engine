@@ -23,6 +23,36 @@ export type AcceleventsApi = {
 	createSession(payload: AcceleventsSessionPayload): Promise<string>;
 	updateSession(externalId: string, payload: AcceleventsSessionPayload): Promise<void>;
 	findSpeakerByEmail(externalEventId: number, email: string): Promise<string | null>;
+	assignSpeakersToSession(
+		externalSessionId: string,
+		session: AcceleventsSessionPayload,
+		speakers: readonly AcceleventsAssignedSpeaker[],
+	): Promise<void>;
+};
+
+export type AcceleventsAssignedSpeaker = AcceleventsSpeakerPayload & {
+	readonly externalId: string;
+};
+
+type AcceleventsSessionAssignmentPayload = AcceleventsSessionPayload & {
+	readonly [key: string]: unknown;
+	readonly speakerList: readonly {
+		readonly speakerId: number | string;
+		readonly firstName: string;
+		readonly lastName: string;
+		readonly email: string;
+		readonly bio: string;
+		readonly company: string;
+		readonly title: string;
+	}[];
+	readonly speakersAsTag: readonly {
+		readonly speakerId: number | string;
+		readonly name: string;
+		readonly email: string;
+		readonly firstName: string;
+		readonly lastName: string;
+		readonly imageUrl: string;
+	}[];
 };
 
 function endpoint(eventUrl: string, suffix: string): string {
@@ -65,6 +95,50 @@ function normalizedEmail(value: string): string {
 	return value.trim().toLowerCase();
 }
 
+function providerId(value: string): number | string {
+	const numeric = Number(value);
+	return Number.isSafeInteger(numeric) && String(numeric) === value ? numeric : value;
+}
+
+function sessionRecord(value: unknown): Readonly<Record<string, unknown>> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new AcceleventsApiError(502, "Accelevents did not return a session object");
+	}
+	const nested = Reflect.get(value, "data");
+	const source = nested && typeof nested === "object" && !Array.isArray(nested) ? nested : value;
+	const record: Record<string, unknown> = {};
+	for (const key of Object.keys(source)) record[key] = Reflect.get(source, key);
+	return record;
+}
+
+function assignmentPayload(
+	currentSession: Readonly<Record<string, unknown>>,
+	session: AcceleventsSessionPayload,
+	speakers: readonly AcceleventsAssignedSpeaker[],
+): AcceleventsSessionAssignmentPayload {
+	return {
+		...currentSession,
+		...session,
+		speakerList: speakers.map((speaker) => ({
+			speakerId: providerId(speaker.externalId),
+			firstName: speaker.firstName,
+			lastName: speaker.lastName,
+			email: speaker.email,
+			bio: speaker.bio,
+			company: speaker.company,
+			title: speaker.title,
+		})),
+		speakersAsTag: speakers.map((speaker) => ({
+			speakerId: providerId(speaker.externalId),
+			name: `${speaker.firstName} ${speaker.lastName}`.trim(),
+			email: speaker.email,
+			firstName: speaker.firstName,
+			lastName: speaker.lastName,
+			imageUrl: "",
+		})),
+	};
+}
+
 function speakerIdByEmail(value: unknown, email: string): string | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	const data = Reflect.get(value, "data");
@@ -95,7 +169,7 @@ export function createAcceleventsApi(config: {
 	async function request(
 		path: string,
 		method: "POST" | "PUT" | "GET",
-		payload?: AcceleventsSpeakerPayload | AcceleventsSessionPayload,
+		payload?: AcceleventsSpeakerPayload | AcceleventsSessionPayload | AcceleventsSessionAssignmentPayload,
 	): Promise<unknown> {
 		const response = await fetchWithBoundedRetry(endpoint(config.eventUrl, path), {
 			method,
@@ -136,6 +210,15 @@ export function createAcceleventsApi(config: {
 				size: "5",
 			});
 			return speakerIdByEmail(await request(`/speaker?${query.toString()}`, "GET"), email);
+		},
+		async assignSpeakersToSession(externalSessionId, session, speakers) {
+			const path = `/session/${encodeURIComponent(externalSessionId)}`;
+			const currentSession = sessionRecord(await request(path, "GET"));
+			await request(
+				path,
+				"PUT",
+				assignmentPayload(currentSession, session, speakers),
+			);
 		},
 	};
 }

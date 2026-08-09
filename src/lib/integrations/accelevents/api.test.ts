@@ -58,4 +58,55 @@ describe("Accelevents API client", () => {
 		})).rejects.toThrow("connection closed after provider accepted");
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
+
+	it("links speakers by updating the session with the HAR-observed speaker projections", async () => {
+		const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+			async (input, init) => init?.method === "GET" && String(input).includes("/session/")
+				? new Response(JSON.stringify({ sessionId: 437249, capacity: 250, tracks: [] }), { status: 200 })
+				: new Response("ok", { status: 200 }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		const api = createAcceleventsApi({ eventUrl: "demo-event", apiKey: "private-key" });
+
+		await api.assignSpeakersToSession("437249", {
+			title: "HAR Assignment Test Session",
+			description: "Assignment contract test",
+			format: "OTHER",
+			sessionTypeFormat: "IN_PERSON",
+			hideSessionFromAttendees: true,
+		}, [{
+			externalId: "9182",
+			firstName: "HAR",
+			lastName: "Test Speaker",
+			email: "speaker@example.test",
+			bio: "",
+			company: "",
+			title: "",
+		}]);
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+		const [, init] = fetchMock.mock.calls[1] ?? [];
+		expect(init).toMatchObject({ method: "PUT" });
+		expect(JSON.parse(String(init?.body))).toMatchObject({
+			sessionId: 437249,
+			capacity: 250,
+			title: "HAR Assignment Test Session",
+			speakerList: [{
+				speakerId: 9182,
+				firstName: "HAR",
+				lastName: "Test Speaker",
+				email: "speaker@example.test",
+			}],
+			speakersAsTag: [{
+				speakerId: 9182,
+				name: "HAR Test Speaker",
+				email: "speaker@example.test",
+				imageUrl: "",
+			}],
+		});
+		expect(fetchMock.mock.calls[1]?.[0]).toBe(
+			"https://api.accelevents.com/rest/host/event/demo-event/session/437249",
+		);
+	});
 });

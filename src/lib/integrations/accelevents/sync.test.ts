@@ -23,6 +23,7 @@ describe("Accelevents sync plan", () => {
 					abstract: "A proposal that is not yet scheduled.",
 					startsAt: null,
 					endsAt: null,
+					speakerLocalIds: ["person-ada"],
 				},
 				{
 					localId: "submission-scheduled",
@@ -31,6 +32,7 @@ describe("Accelevents sync plan", () => {
 					abstract: "A talk with an agenda slot.",
 					startsAt: 1_735_689_600_000,
 					endsAt: 1_735_693_200_000,
+					speakerLocalIds: ["person-ada"],
 				},
 			],
 			mappings: [
