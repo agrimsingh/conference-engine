@@ -24,6 +24,13 @@ import type {
 	TaskTemplateRow,
 } from "./types";
 import { COCKPIT_BLOCKER_LIST_LIMIT } from "@/lib/domain/cockpit";
+import {
+	adminQueueSql,
+	decisionNotifiedSqlExists,
+	isDecisionOutcomeStatus,
+	SUBMISSION_QUEUE_TABS,
+	type SubmissionQueueTab,
+} from "@/lib/domain";
 
 export async function getEventBySlug(
 	db: D1Database,
@@ -501,6 +508,7 @@ export type AdminSubmissionPageFilters = {
 	sort: "newest" | "title" | "status";
 	page: number;
 	pageSize: number;
+	queue?: SubmissionQueueTab;
 };
 
 export type SubmissionFacetCounts = {
@@ -510,9 +518,11 @@ export type SubmissionFacetCounts = {
 	byLabel: Array<{ value: string; count: number }>;
 };
 
+export type SubmissionQueueCounts = Record<SubmissionQueueTab, number>;
+
 function adminSubmissionWhere(
 	eventId: string,
-	filters: Pick<AdminSubmissionPageFilters, "category" | "label" | "status" | "query">,
+	filters: Pick<AdminSubmissionPageFilters, "category" | "label" | "status" | "query" | "queue">,
 ): { sql: string; binds: unknown[] } {
 	const clauses = ["s.event_id = ?"];
 	const binds: unknown[] = [eventId];
@@ -525,6 +535,8 @@ function adminSubmissionWhere(
 		binds.push(filters.label);
 	}
 	if (filters.status !== "all") { clauses.push("s.status = ?"); binds.push(filters.status); }
+	const queueClause = filters.queue ? adminQueueSql(filters.queue) : null;
+	if (queueClause) clauses.push(queueClause);
 	if (filters.query) {
 		const like = `%${filters.query.toLowerCase()}%`;
 		clauses.push(`(
@@ -589,6 +601,74 @@ export async function getSubmissionFacetCounts(db: D1Database, eventId: string):
 		db.prepare(`SELECT sl.label AS value, COUNT(*) AS count FROM submission_labels sl JOIN submissions s ON s.id = sl.submission_id WHERE s.event_id = ? GROUP BY sl.label ORDER BY sl.label COLLATE NOCASE ASC`).bind(eventId).all<{ value: string; count: number }>(),
 	]);
 	return { total: total?.count ?? 0, byCategory: categories.results, byStatus: statuses.results, byLabel: labels.results };
+}
+
+export async function getSubmissionQueueCounts(
+	db: D1Database,
+	eventId: string,
+): Promise<SubmissionQueueCounts> {
+	const counts = Object.fromEntries(
+		SUBMISSION_QUEUE_TABS.map((tab) => [tab, 0]),
+	) as SubmissionQueueCounts;
+	const total = await db
+		.prepare("SELECT COUNT(*) AS count FROM submissions s WHERE s.event_id = ?")
+		.bind(eventId)
+		.first<{ count: number }>();
+	counts.all = total?.count ?? 0;
+	await Promise.all(
+		SUBMISSION_QUEUE_TABS.filter((tab) => tab !== "all").map(async (tab) => {
+			const clause = adminQueueSql(tab);
+			const row = await db
+				.prepare(
+					`SELECT COUNT(*) AS count FROM submissions s WHERE s.event_id = ? AND ${clause}`,
+				)
+				.bind(eventId)
+				.first<{ count: number }>();
+			counts[tab] = row?.count ?? 0;
+		}),
+	);
+	return counts;
+}
+
+/**
+ * Derives decision-notified state from email_deliveries for the matching
+ * acceptance/rejection/waitlist template. No dual-write column.
+ */
+export async function listDecisionNotifiedForSubmissions(
+	db: D1Database,
+	submissionIds: string[],
+): Promise<Map<string, boolean>> {
+	const notified = new Map<string, boolean>();
+	if (submissionIds.length === 0) return notified;
+	const uniqueIds = [...new Set(submissionIds)];
+	for (const id of uniqueIds) notified.set(id, false);
+
+	const chunkSize = 100;
+	for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+		const chunk = uniqueIds.slice(i, i + chunkSize);
+		const placeholders = chunk.map(() => "?").join(", ");
+		const result = await db
+			.prepare(
+				`SELECT s.id
+         FROM submissions s
+         WHERE s.id IN (${placeholders})
+           AND s.status IN ('accepted', 'rejected', 'waitlisted')
+           AND ${decisionNotifiedSqlExists()}`,
+			)
+			.bind(...chunk)
+			.all<{ id: string }>();
+		for (const row of result.results) notified.set(row.id, true);
+	}
+	return notified;
+}
+
+export function decisionNotifiedLabel(
+	status: string,
+	decisionNotified: boolean,
+): "Notified" | "Unnotified" | null {
+	if (status === "scheduled" || status === "published") return "Notified";
+	if (!isDecisionOutcomeStatus(status)) return null;
+	return decisionNotified ? "Notified" : "Unnotified";
 }
 
 export async function getSubmissionById(

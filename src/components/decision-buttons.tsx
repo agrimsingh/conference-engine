@@ -41,7 +41,7 @@ export function DecisionButtons({
 }: Props) {
 	const router = useRouter();
 	const [openAction, setOpenAction] = useState<DecisionAction | null>(null);
-	const [sendEmail, setSendEmail] = useState(true);
+	const [sendEmail, setSendEmail] = useState(false);
 	const [subject, setSubject] = useState("");
 	const [text, setText] = useState("");
 	const [pending, setPending] = useState(false);
@@ -57,7 +57,7 @@ export function DecisionButtons({
 
 	function openConfirm(action: DecisionAction) {
 		setOpenAction(action);
-		setSendEmail(true);
+		setSendEmail(false);
 		setSubject(previews[action].subject);
 		setText(previews[action].text);
 		setError(null);
