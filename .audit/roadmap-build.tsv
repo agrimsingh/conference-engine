@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-08-09T08:09:00Z	frame	Done when Phases 0-9 from the agreed roadmap land on main with green tests and a fable gap council finds no missing links	falsifiable predicate for the autonomous run	council synthesis in prior turn	open
+2026-08-09T08:09:30Z	frame	Rename AIE preset to conference (minimal vs conference)	user rejected brand-coded preset names	user message	open
+2026-08-09T08:10:00Z	design	Ship in waves with disjoint file ownership per parallel agent then serialize commits on main	avoid concurrent writes to the same tree	principle separate-before-serializing	open
+2026-08-09T08:10:27Z	wave0	Launched 5 grok worktree agents for Phase 0 disjoint units	parallel without shared working tree	agents da34/fb79/ac34/fc4d/faa0	running
