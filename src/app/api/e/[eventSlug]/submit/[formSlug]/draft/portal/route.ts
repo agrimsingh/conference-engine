@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createVerifiedDraft, issueDraftResumeToken, loadDraftForResume, saveDraftForResume } from "@/lib/cfp/drafts";
+import { createVerifiedDraft, issueDraftResumeToken, loadDraftForResume, saveDraftForResume, SubmissionNotEditableError } from "@/lib/cfp/drafts";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import type { AnswerMap } from "@/lib/domain";
@@ -37,9 +37,16 @@ export async function POST(request: Request, context: Context) {
 		if (!draft || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id) {
 			return NextResponse.json({ ok: false, error: "Draft not found" }, { status: 404 });
 		}
-		const saved = await saveDraftForResume(db, { secret, token: draftToken, submitterName: name, answers, verifiedEmail: session.email });
-		if (!saved) return NextResponse.json({ ok: false, error: "Draft not found" }, { status: 404 });
-		return NextResponse.json({ ok: true, draftId: saved.draftId, token: saved.token });
+		try {
+			const saved = await saveDraftForResume(db, { secret, token: draftToken, submitterName: name, answers, verifiedEmail: session.email });
+			if (!saved) return NextResponse.json({ ok: false, error: "Draft not found" }, { status: 404 });
+			return NextResponse.json({ ok: true, draftId: saved.draftId, token: saved.token });
+		} catch (error) {
+			if (error instanceof SubmissionNotEditableError) {
+				return NextResponse.json({ ok: false, error: error.message }, { status: 409 });
+			}
+			throw error;
+		}
 	}
 	const draftId = await createVerifiedDraft(db, { eventId: loaded.event.id, formId: loaded.form.id, verifiedEmail: session.email, submitterName: name, answers });
 	const token = await issueDraftResumeToken(db, { secret, draftId, deliveryVerified: true });

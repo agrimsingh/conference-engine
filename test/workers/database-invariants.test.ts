@@ -537,22 +537,27 @@ describe("D1 runtime invariants", () => {
 			speakers: [{ name: `Speaker ${index + 1}`, email: `${index === 0 ? "one" : "two"}@speaker.test` }],
 			now,
 		})));
-		const fulfilled = results.filter((result): result is PromiseFulfilledResult<{ submissionId: string; replay: boolean }> => result.status === "fulfilled");
+		const fulfilled = results.filter((result): result is PromiseFulfilledResult<{ submissionId: string; replay: boolean; editToken: string }> => result.status === "fulfilled");
 		const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 		expect(fulfilled).toHaveLength(1);
 		expect(rejected).toHaveLength(1);
 		expect(String(rejected[0].reason)).toMatch(/submission limit reached/i);
 		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM submissions WHERE form_id = 'draft-form'").first<{ count: number }>())?.count).toBe(1);
 
-		await expect(finalizeDraft(env.DB, {
+		const winner = fulfilled[0]!.value;
+		const replay = await finalizeDraft(env.DB, {
 			secret: "draft-test-secret",
-			draftId: fulfilled[0].value.submissionId,
-			token: drafts.find(({ draftId }) => draftId === fulfilled[0].value.submissionId)?.token ?? "",
+			draftId: winner.submissionId,
+			token: winner.editToken,
 			submitterName: "Replay speaker",
-			answers: {},
-			speakers: [],
-			now,
-		})).resolves.toEqual({ submissionId: fulfilled[0].value.submissionId, replay: true });
+			answers: { title: "Replay talk" },
+			speakers: [{ name: "Replay speaker", email: "one@speaker.test" }],
+			now: now + 1,
+		});
+		expect(replay.submissionId).toBe(winner.submissionId);
+		expect(replay.replay).toBe(false);
+		expect(replay.editToken).toBeTruthy();
+		expect(JSON.parse((await env.DB.prepare("SELECT answers_json FROM submissions WHERE id = ?").bind(winner.submissionId).first<{ answers_json: string }>())?.answers_json ?? "{}")).toMatchObject({ title: "Replay talk" });
 	});
 
 	it("compensates a failed D1 file completion without deleting an older R2 object", async () => {
