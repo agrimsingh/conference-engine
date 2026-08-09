@@ -9,6 +9,7 @@ import {
 	getEventById,
 	getEventBySlug,
 	listEvaluationScoresForPlan,
+	listFormFields,
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
 import { renderDecisionPreviews } from "@/lib/domain";
@@ -117,6 +118,17 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const recusalBySubmission = new Map(
 		reviewerAssignments.map((assignment) => [assignment.submission_id, assignment.recused_at]),
 	);
+	const distinctFormIds = [...new Set(submissions.map((row) => row.form_id))];
+	const formFieldsByFormId = new Map(
+		await Promise.all(
+			distinctFormIds.map(async (formId) => [
+				formId,
+				new Map(
+					(await listFormFields(db, formId)).map((field) => [field.key, field.label]),
+				),
+			] as const),
+		),
+	);
 	const blindReviewer = identity.mode === "reviewer" && plan.blind_review === 1;
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
@@ -161,6 +173,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 					const query = params.toString();
 					return `/api/review/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset${query ? `?${query}` : ""}`;
 				},
+				fieldLabels: formFieldsByFormId.get(row.form_id),
 			}),
 			previews: renderDecisionPreviews({
 				eventName: event.name,

@@ -12,6 +12,7 @@ import {
 	getSubmissionById,
 	listAdminSubmissionIds,
 	listAssignmentsForSubmission,
+	listFormFields,
 	listLabelsForSubmissions,
 	listOutboundForSubmission,
 	listPeopleByIds,
@@ -75,13 +76,14 @@ export default async function AdminSubmissionDetailPage({
 
 	const activePlan = await getActiveEvaluationPlan(db, event.id);
 
-	const [speakers, labelsMap, tasks, configuredTemplates, outboundMessages] =
+	const [speakers, labelsMap, tasks, configuredTemplates, outboundMessages, formFields] =
 		await Promise.all([
 			listSpeakersForSubmission(db, submissionId),
 			listLabelsForSubmissions(db, [submissionId]),
 			listTasksForSubmission(db, submissionId),
 			listEventMessageTemplates(db, event.id),
 			listOutboundForSubmission(db, submissionId),
+			listFormFields(db, row.form_id),
 		]);
 
 	const [reviewers, assignments] = activePlan
@@ -129,10 +131,12 @@ export default async function AdminSubmissionDetailPage({
 		}),
 	) as Record<DecisionAction, RenderedMessage>;
 
+	const fieldLabels = new Map(formFields.map((field) => [field.key, field.label]));
 	const answerDisplays = buildSubmissionAnswerDisplays(answers, {
 		submissionId: row.id,
 		downloadHref: (fieldKey) =>
 			`/api/admin/events/${event.slug}/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset`,
+		fieldLabels,
 	});
 
 	const speakerSummaries: SpeakerSummary[] = speakers.map((speaker) => ({

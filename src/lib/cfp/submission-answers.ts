@@ -26,14 +26,17 @@ export function buildSubmissionAnswerDisplays(
 		submissionId: string;
 		downloadHref: (fieldKey: string) => string;
 		excludeKeys?: ReadonlySet<string>;
+		fieldLabels?: ReadonlyMap<string, string>;
 	},
 ): SubmissionAnswerDisplay[] {
 	const exclude = args.excludeKeys ?? new Set(["speakers", "title"]);
 	const displays: SubmissionAnswerDisplay[] = [];
 
-	for (const [key, value] of Object.entries(answers)) {
-		if (exclude.has(key)) continue;
-		const label = humanizeKey(key);
+	const appendDisplayForKey = (key: string) => {
+		const value = answers[key];
+		if (value === undefined) return;
+		if (exclude.has(key)) return;
+		const label = args.fieldLabels?.get(key) ?? humanizeKey(key);
 
 		if (isFileUploadAnswer(value)) {
 			displays.push({
@@ -43,13 +46,26 @@ export function buildSubmissionAnswerDisplays(
 				filename: value.filename,
 				downloadHref: args.downloadHref(key),
 			});
-			continue;
+			return;
 		}
 
 		const text = formatScalar(value);
 		if (text) {
 			displays.push({ kind: "text", key, label, value: text });
 		}
+	};
+
+	// When fieldLabels is provided, ordered keys come first (Map insertion order), then leftover answer keys.
+	const keys =
+		args.fieldLabels !== undefined
+			? [
+					...args.fieldLabels.keys(),
+					...Object.keys(answers).filter((key) => !args.fieldLabels!.has(key)),
+				]
+			: Object.keys(answers);
+
+	for (const key of keys) {
+		appendDisplayForKey(key);
 	}
 
 	return displays;
