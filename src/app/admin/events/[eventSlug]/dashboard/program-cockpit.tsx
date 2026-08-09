@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button, EmptyState, noticeClasses, StatusPill, buttonClasses } from "@/components/ui";
 import {
+	COCKPIT_SECTION_PREVIEW_COUNT,
 	cockpitBlockerCounts,
 	cockpitSectionCaption,
+	cockpitSectionPreview,
 	cockpitTotalBlockers,
 	parseInvalidateMessage,
 	shouldRefetchOnInvalidate,
@@ -26,6 +28,32 @@ type SnapshotResponse = {
 };
 
 const POLL_MS = 2000;
+
+function useExpanded(): [boolean, () => void] {
+	const [expanded, setExpanded] = useState(false);
+	return [expanded, () => setExpanded((value) => !value)];
+}
+
+function ShowMoreToggle({
+	itemCount,
+	expanded,
+	onToggle,
+}: {
+	itemCount: number;
+	expanded: boolean;
+	onToggle: () => void;
+}) {
+	if (itemCount <= COCKPIT_SECTION_PREVIEW_COUNT) return null;
+	return (
+		<button
+			type="button"
+			onClick={onToggle}
+			className="mt-2 text-xs font-medium text-neutral-400 hover:text-neutral-200"
+		>
+			{expanded ? "Show fewer" : `Show all ${itemCount}`}
+		</button>
+	);
+}
 
 export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 	const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -203,6 +231,51 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 
 	const counts = cockpitBlockerCounts(snapshot);
 	const total = cockpitTotalBlockers(snapshot);
+	const [pendingCoSpeakersExpanded, togglePendingCoSpeakers] = useExpanded();
+	const [outstandingTasksExpanded, toggleOutstandingTasks] = useExpanded();
+	const [needsReviewActivationExpanded, toggleNeedsReviewActivation] = useExpanded();
+	const [unassignedReviewsExpanded, toggleUnassignedReviews] = useExpanded();
+	const [incompleteReviewsExpanded, toggleIncompleteReviews] = useExpanded();
+	const [reviewedUndecidedExpanded, toggleReviewedUndecided] = useExpanded();
+	const [acceptedUnscheduledExpanded, toggleAcceptedUnscheduled] = useExpanded();
+	const [scheduledUnpublishedExpanded, toggleScheduledUnpublished] = useExpanded();
+	const [failedDeliveriesExpanded, toggleFailedDeliveries] = useExpanded();
+	const visiblePendingCoSpeakers = cockpitSectionPreview(
+		snapshot.pendingCoSpeakers,
+		pendingCoSpeakersExpanded,
+	);
+	const visibleOutstandingTaskGroups = cockpitSectionPreview(
+		snapshot.outstandingTasks.groups,
+		outstandingTasksExpanded,
+	);
+	const visibleNeedsReviewActivation = cockpitSectionPreview(
+		snapshot.needsReviewActivation,
+		needsReviewActivationExpanded,
+	);
+	const visibleUnassignedReviews = cockpitSectionPreview(
+		snapshot.unassignedReviews,
+		unassignedReviewsExpanded,
+	);
+	const visibleIncompleteReviews = cockpitSectionPreview(
+		snapshot.incompleteReviews,
+		incompleteReviewsExpanded,
+	);
+	const visibleReviewedUndecided = cockpitSectionPreview(
+		snapshot.reviewedUndecided,
+		reviewedUndecidedExpanded,
+	);
+	const visibleAcceptedUnscheduled = cockpitSectionPreview(
+		snapshot.acceptedUnscheduled,
+		acceptedUnscheduledExpanded,
+	);
+	const visibleScheduledUnpublished = cockpitSectionPreview(
+		snapshot.scheduledUnpublished,
+		scheduledUnpublishedExpanded,
+	);
+	const visibleFailedDeliveries = cockpitSectionPreview(
+		snapshot.failedDeliveries,
+		failedDeliveriesExpanded,
+	);
 
 	return (
 		<div className="space-y-6">
@@ -233,25 +306,36 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 				{(
 					[
-						["Tasks", counts.outstandingTasks],
-						["Co-speakers", counts.pendingCoSpeakers],
-						["Needs plan", counts.needsReviewActivation],
-						["Unassigned", counts.unassignedReviews],
-						["Incomplete reviews", counts.incompleteReviews],
-						["Undecided", counts.reviewedUndecided],
-						["Unscheduled", counts.acceptedUnscheduled],
-						["Unpublished", counts.scheduledUnpublished],
-						["Failed email", counts.failedDeliveries],
+						["Tasks", counts.outstandingTasks, "tasks"],
+						["Co-speakers", counts.pendingCoSpeakers, "co-speakers"],
+						["Needs plan", counts.needsReviewActivation, "needs-plan"],
+						["Unassigned", counts.unassignedReviews, "unassigned"],
+						["Incomplete reviews", counts.incompleteReviews, "incomplete-reviews"],
+						["Undecided", counts.reviewedUndecided, "undecided"],
+						["Unscheduled", counts.acceptedUnscheduled, "unscheduled"],
+						["Unpublished", counts.scheduledUnpublished, "unpublished"],
+						["Failed email", counts.failedDeliveries, "failed-email"],
 					] as const
-				).map(([label, count]) => (
+				).map(([label, count, anchorKey]) => (
 					<li
 						key={label}
-						className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 last:col-span-2 sm:last:col-span-1"
+						className={`rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 last:col-span-2 sm:last:col-span-1${count === 0 ? " opacity-50" : ""}`}
 					>
-						<p className="text-xs text-neutral-500">{label}</p>
-						<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-100">
-							{count}
-						</p>
+						{count > 0 ? (
+							<a href={`#cockpit-${anchorKey}`} className="block hover:opacity-90">
+								<p className="text-xs text-neutral-500">{label}</p>
+								<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-100">
+									{count}
+								</p>
+							</a>
+						) : (
+							<>
+								<p className="text-xs text-neutral-600">{label}</p>
+								<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-600">
+									{count}
+								</p>
+							</>
+						)}
 					</li>
 				))}
 			</ul>
@@ -271,7 +355,10 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			) : null}
 
 			{snapshot.pendingCoSpeakers.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-co-speakers"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Co-speakers awaiting confirmation</p>
 						<span className="text-xs text-neutral-500">
@@ -279,7 +366,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</span>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.pendingCoSpeakers.map((item) => (
+						{visiblePendingCoSpeakers.map((item) => (
 							<li
 								key={item.speakerId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -317,11 +404,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.pendingCoSpeakers.length}
+						expanded={pendingCoSpeakersExpanded}
+						onToggle={togglePendingCoSpeakers}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.outstandingTasks.groups.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-tasks"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Outstanding required speaker tasks</p>
 						<div className="flex items-center gap-2">
@@ -342,7 +437,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</div>
 					</div>
 					<ul className="mt-3 space-y-3">
-						{snapshot.outstandingTasks.groups.map((group) => (
+						{visibleOutstandingTaskGroups.map((group) => (
 							<li key={group.key} className="rounded-md border border-neutral-800 px-3 py-2">
 								<div className="flex flex-wrap items-baseline justify-between gap-2">
 									<p className="font-medium text-neutral-100">
@@ -391,11 +486,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.outstandingTasks.groups.length}
+						expanded={outstandingTasksExpanded}
+						onToggle={toggleOutstandingTasks}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.needsReviewActivation.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-needs-plan"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<div>
 							<p className="font-medium text-neutral-100">Review plan not active</p>
@@ -424,7 +527,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</div>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.needsReviewActivation.map((item) => (
+						{visibleNeedsReviewActivation.map((item) => (
 							<li
 								key={item.submissionId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -442,11 +545,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.needsReviewActivation.length}
+						expanded={needsReviewActivationExpanded}
+						onToggle={toggleNeedsReviewActivation}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.unassignedReviews.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-unassigned"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-end justify-between gap-2">
 						<div>
 							<p className="font-medium text-neutral-100">No reviewer assignment</p>
@@ -481,7 +592,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						)}
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.unassignedReviews.map((item) => (
+						{visibleUnassignedReviews.map((item) => (
 							<li
 								key={item.submissionId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -514,11 +625,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.unassignedReviews.length}
+						expanded={unassignedReviewsExpanded}
+						onToggle={toggleUnassignedReviews}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.incompleteReviews.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-incomplete-reviews"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Incomplete assigned reviews</p>
 						<Link
@@ -529,7 +648,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</Link>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.incompleteReviews.map((item) => (
+						{visibleIncompleteReviews.map((item) => (
 							<li
 								key={item.assignmentId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -550,17 +669,25 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.incompleteReviews.length}
+						expanded={incompleteReviewsExpanded}
+						onToggle={toggleIncompleteReviews}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.reviewedUndecided.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-undecided"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Reviewed but undecided</p>
 						<span className="text-xs text-neutral-500">Decisions send no email from here</span>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.reviewedUndecided.map((item) => (
+						{visibleReviewedUndecided.map((item) => (
 							<li
 								key={item.submissionId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -609,11 +736,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.reviewedUndecided.length}
+						expanded={reviewedUndecidedExpanded}
+						onToggle={toggleReviewedUndecided}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.acceptedUnscheduled.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-unscheduled"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Accepted but unscheduled</p>
 						<Link
@@ -624,7 +759,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</Link>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.acceptedUnscheduled.map((item) => (
+						{visibleAcceptedUnscheduled.map((item) => (
 							<li
 								key={item.submissionId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -642,11 +777,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.acceptedUnscheduled.length}
+						expanded={acceptedUnscheduledExpanded}
+						onToggle={toggleAcceptedUnscheduled}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.scheduledUnpublished.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-unpublished"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Scheduled but unpublished</p>
 						<Button
@@ -668,7 +811,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</Button>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.scheduledUnpublished.map((item) => (
+						{visibleScheduledUnpublished.map((item) => (
 							<li
 								key={item.submissionId}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -700,11 +843,19 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.scheduledUnpublished.length}
+						expanded={scheduledUnpublishedExpanded}
+						onToggle={toggleScheduledUnpublished}
+					/>
 				</section>
 			) : null}
 
 			{snapshot.failedDeliveries.length > 0 ? (
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section
+					id="cockpit-failed-email"
+					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Failed email deliveries</p>
 						<Link
@@ -715,7 +866,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						</Link>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
-						{snapshot.failedDeliveries.map((delivery) => (
+						{visibleFailedDeliveries.map((delivery) => (
 							<li
 								key={delivery.deliveryKey}
 								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
@@ -758,6 +909,11 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 							</li>
 						))}
 					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.failedDeliveries.length}
+						expanded={failedDeliveriesExpanded}
+						onToggle={toggleFailedDeliveries}
+					/>
 				</section>
 			) : null}
 		</div>

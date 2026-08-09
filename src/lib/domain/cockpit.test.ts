@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	COCKPIT_SECTION_PREVIEW_COUNT,
 	cockpitBlockerCounts,
 	cockpitSectionCaption,
+	cockpitSectionHasMore,
+	cockpitSectionPreview,
 	cockpitTotalBlockers,
 	type CockpitSnapshot,
 } from "./cockpit";
@@ -79,6 +82,41 @@ describe("cockpitBlockerCounts", () => {
 			failedDeliveries: 1,
 		});
 		expect(cockpitTotalBlockers(snapshot)).toBe(8);
+	});
+});
+
+describe("cockpitSectionPreview", () => {
+	it("returns the first preview count when collapsed", () => {
+		const items = [1, 2, 3, 4, 5, 6, 7];
+		expect(cockpitSectionPreview(items, false)).toEqual([1, 2, 3, 4, 5]);
+	});
+
+	it("returns all items when expanded", () => {
+		const items = [1, 2, 3, 4, 5, 6, 7];
+		expect(cockpitSectionPreview(items, true)).toEqual(items);
+	});
+
+	it("returns the full list when shorter than preview count", () => {
+		const items = [1, 2, 3];
+		expect(cockpitSectionPreview(items, false)).toEqual(items);
+	});
+});
+
+describe("cockpitSectionHasMore", () => {
+	it("is true when collapsed and list exceeds preview count", () => {
+		expect(cockpitSectionHasMore(Array(COCKPIT_SECTION_PREVIEW_COUNT + 1), false)).toBe(
+			true,
+		);
+	});
+
+	it("is false when expanded even if list exceeds preview count", () => {
+		expect(cockpitSectionHasMore(Array(COCKPIT_SECTION_PREVIEW_COUNT + 1), true)).toBe(
+			false,
+		);
+	});
+
+	it("is false when list fits within preview count", () => {
+		expect(cockpitSectionHasMore(Array(COCKPIT_SECTION_PREVIEW_COUNT), false)).toBe(false);
 	});
 });
 

@@ -147,8 +147,11 @@ export {
 
 export {
 	COCKPIT_BLOCKER_LIST_LIMIT,
+	COCKPIT_SECTION_PREVIEW_COUNT,
 	cockpitBlockerCounts,
 	cockpitSectionCaption,
+	cockpitSectionHasMore,
+	cockpitSectionPreview,
 	cockpitTotalBlockers,
 	type CockpitBlockerKey,
 	type CockpitFailedDeliveryItem,

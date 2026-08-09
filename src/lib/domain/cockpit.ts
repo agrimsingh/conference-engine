@@ -3,6 +3,23 @@ import type { OutstandingTaskGroup, PendingCoSpeakerItem } from "./outstanding-t
 /** Max rows returned per cockpit blocker section; totals may be higher. */
 export const COCKPIT_BLOCKER_LIST_LIMIT = 50;
 
+/** Default visible rows per cockpit section before inline expand. */
+export const COCKPIT_SECTION_PREVIEW_COUNT = 5;
+
+export function cockpitSectionPreview<T>(
+	items: readonly T[],
+	expanded: boolean,
+): readonly T[] {
+	return expanded ? items : items.slice(0, COCKPIT_SECTION_PREVIEW_COUNT);
+}
+
+export function cockpitSectionHasMore(
+	items: readonly unknown[],
+	expanded: boolean,
+): boolean {
+	return !expanded && items.length > COCKPIT_SECTION_PREVIEW_COUNT;
+}
+
 export type CockpitSubmissionRef = {
 	submissionId: string;
 	title: string;
