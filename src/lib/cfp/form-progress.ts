@@ -1,5 +1,6 @@
 import {
 	evaluateVisibilityRule,
+	isFileUploadAnswer,
 	type AnswerMap,
 	type FormFieldDef,
 } from "@/lib/domain";
@@ -33,8 +34,12 @@ function isRequiredFieldComplete(field: FormFieldDef, answer: unknown): boolean 
 			);
 			return speakers.length >= min;
 		}
-		default:
-			return false;
+		case "file_upload":
+			return isFileUploadAnswer(answer) && answer.filename.trim().length > 0;
+		default: {
+			const _exhaustive: never = field.config;
+			return _exhaustive;
+		}
 	}
 }
 

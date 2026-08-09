@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
+import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
@@ -138,10 +139,16 @@ export default async function ReviewPage({ searchParams }: Props) {
 			category: displayCategory(row.category),
 			format: typeof parsedAnswers.format === "string" ? parsedAnswers.format : null,
 			assignment: identity.mode === "reviewer" ? "Assigned to you" : "Committee review",
-			answers: Object.entries(parsedAnswers)
-				.filter(([key]) => key !== "speakers")
-				.map(([key, value]) => ({ label: key.replaceAll("_", " "), value: Array.isArray(value) ? value.join(", ") : typeof value === "string" || typeof value === "number" ? String(value) : JSON.stringify(value) }))
-				.filter((answer) => answer.value && answer.value !== "{}"),
+			answers: buildSubmissionAnswerDisplays(parsedAnswers, {
+				submissionId: row.id,
+				downloadHref: (fieldKey) => {
+					const params = new URLSearchParams();
+					if (accessToken) params.set("token", accessToken);
+					else if (admin && event.slug) params.set("eventSlug", event.slug);
+					const query = params.toString();
+					return `/api/review/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset${query ? `?${query}` : ""}`;
+				},
+			}),
 			previews: renderDecisionPreviews({
 				eventName: event.name,
 				submitterName: row.submitter_name ?? "there",

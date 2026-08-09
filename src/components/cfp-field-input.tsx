@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, type ChangeEvent } from "react";
 import { INPUT_CLASSES } from "@/components/ui";
 import { uploadAcceptAttr } from "@/lib/cfp/file-upload";
-import type { FileUploadAnswer, FormFieldDef, SpeakerAnswer } from "@/lib/domain";
+import { isFileUploadAnswer, type FileUploadAnswer, type FormFieldDef, type SpeakerAnswer } from "@/lib/domain";
 
 export type CfpFieldInputProps = {
 	field: FormFieldDef;
@@ -269,73 +270,21 @@ export function CfpFieldInput({
 				</fieldset>
 			);
 		}
-		case "file_upload": {
-			const upload = isFileUploadAnswer(value) ? value : null;
-			const busy = uploadBusyKey === field.key;
+		case "file_upload":
 			return (
-				<div className="flex flex-col gap-1 text-sm">
-					{label}
-					{field.helpText ? (
-						<span className="text-xs text-neutral-500">{field.helpText}</span>
-					) : null}
-					{upload ? (
-						<p className="rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-300">
-							{upload.filename}
-							{!preview ? (
-								<button
-									type="button"
-									className="ml-3 text-neutral-400 underline underline-offset-2 hover:text-neutral-100"
-									onClick={() => onChange(null)}
-								>
-									Remove
-								</button>
-							) : null}
-						</p>
-					) : preview ? (
-						<p className="rounded-md border border-dashed border-neutral-700 px-3 py-4 text-xs text-neutral-500">
-							File upload (preview only)
-						</p>
-					) : (
-						<label className="flex flex-col gap-1">
-							<input
-								type="file"
-								required={field.required}
-								aria-required={field.required || undefined}
-								accept={uploadAcceptAttr(field.config)}
-								disabled={busy || !uploadBaseUrl}
-								className="text-xs text-neutral-300 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-800 file:px-3 file:py-2 file:text-neutral-100"
-								onChange={(event) => {
-									const file = event.target.files?.[0];
-									event.target.value = "";
-									if (!file || !uploadBaseUrl) return;
-									onUploadStart?.(field.key);
-									void fetch(`${uploadBaseUrl}?fieldKey=${encodeURIComponent(field.key)}`, {
-										method: "POST",
-										body: (() => {
-											const body = new FormData();
-											body.set("file", file);
-											return body;
-										})(),
-									})
-										.then(async (response) => {
-											const json = await response.json() as { ok?: boolean; upload?: FileUploadAnswer; error?: string };
-											if (!response.ok || !json.ok || !json.upload) {
-												throw new Error(json.error ?? "Upload failed");
-											}
-											onChange(json.upload);
-										})
-										.catch(() => onChange(null))
-										.finally(() => onUploadEnd?.(field.key));
-								}}
-							/>
-							<span className="text-xs text-neutral-500">
-								{busy ? "Uploading…" : `Max ${Math.floor((field.config.maxBytes ?? 10 * 1024 * 1024) / (1024 * 1024))}MB`}
-							</span>
-						</label>
-					)}
-				</div>
+				<CfpFileUploadField
+					field={field}
+					config={field.config}
+					value={value}
+					preview={preview}
+					uploadBaseUrl={uploadBaseUrl}
+					busy={uploadBusyKey === field.key}
+					errorMessage={errorMessage}
+					onChange={onChange}
+					onUploadStart={onUploadStart}
+					onUploadEnd={onUploadEnd}
+				/>
 			);
-		}
 		default: {
 			const _exhaustive: never = field.config;
 			return _exhaustive;
@@ -343,8 +292,149 @@ export function CfpFieldInput({
 	}
 }
 
-function isFileUploadAnswer(value: unknown): value is FileUploadAnswer {
-	if (typeof value !== "object" || value === null) return false;
-	const record = value as { assetId?: unknown; filename?: unknown };
-	return typeof record.assetId === "string" && typeof record.filename === "string";
+type CfpFileUploadFieldProps = {
+	field: FormFieldDef;
+	config: Extract<FormFieldDef["config"], { kind: "file_upload" }>;
+	value: unknown;
+	preview: boolean;
+	uploadBaseUrl?: string;
+	busy: boolean;
+	errorMessage?: string;
+	onChange: (value: unknown) => void;
+	onUploadStart?: (fieldKey: string) => void;
+	onUploadEnd?: (fieldKey: string) => void;
+};
+
+function CfpFileUploadField({
+	field,
+	config,
+	value,
+	preview,
+	uploadBaseUrl,
+	busy,
+	errorMessage,
+	onChange,
+	onUploadStart,
+	onUploadEnd,
+}: CfpFileUploadFieldProps) {
+	const [uploadError, setUploadError] = useState<string | null>(null);
+	const upload = isFileUploadAnswer(value) ? value : null;
+	const displayedError = errorMessage ?? uploadError;
+
+	async function deleteUpload(assetId: string) {
+		if (!uploadBaseUrl) return;
+		await fetch(
+			`${uploadBaseUrl}?fieldKey=${encodeURIComponent(field.key)}&assetId=${encodeURIComponent(assetId)}`,
+			{ method: "DELETE" },
+		);
+	}
+
+	async function handleFileSelected(event: ChangeEvent<HTMLInputElement>, previousAssetId: string | null) {
+		const file = event.target.files?.[0];
+		event.target.value = "";
+		if (!file || !uploadBaseUrl) return;
+		setUploadError(null);
+		onUploadStart?.(field.key);
+		try {
+			const response = await fetch(`${uploadBaseUrl}?fieldKey=${encodeURIComponent(field.key)}`, {
+				method: "POST",
+				body: (() => {
+					const body = new FormData();
+					body.set("file", file);
+					return body;
+				})(),
+			});
+			const json = await response.json() as { ok?: boolean; upload?: FileUploadAnswer; error?: string };
+			if (!response.ok || !json.ok || !json.upload) {
+				throw new Error(json.error ?? "Upload failed");
+			}
+			if (previousAssetId && previousAssetId !== json.upload.assetId) {
+				void deleteUpload(previousAssetId);
+			}
+			onChange(json.upload);
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : "Upload failed";
+			setUploadError(message);
+		} finally {
+			onUploadEnd?.(field.key);
+		}
+	}
+
+	const label = (
+		<span className="font-medium">
+			{field.label}
+			{field.required ? " *" : ""}
+		</span>
+	);
+
+	return (
+		<div className="flex flex-col gap-1 text-sm">
+			{label}
+			{field.helpText ? (
+				<span className="text-xs text-neutral-500">{field.helpText}</span>
+			) : null}
+			{displayedError ? (
+				<p id={`cfp-field-error-${field.key}`} role="alert" aria-live="assertive" className="text-sm text-red-300">
+					{displayedError}
+				</p>
+			) : null}
+			{upload ? (
+				<div className="space-y-2">
+					<p className="rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-300">
+						{upload.filename}
+						{!preview ? (
+							<button
+								type="button"
+								className="ml-3 text-neutral-400 underline underline-offset-2 hover:text-neutral-100"
+								onClick={() => {
+									void deleteUpload(upload.assetId);
+									setUploadError(null);
+									onChange(null);
+								}}
+							>
+								Remove
+							</button>
+						) : null}
+					</p>
+					{!preview ? (
+						<label className="inline-flex text-xs text-neutral-400">
+							Replace file
+							<input
+								type="file"
+								className="sr-only"
+								accept={uploadAcceptAttr(config)}
+								disabled={busy || !uploadBaseUrl}
+								onChange={(event) => {
+									void handleFileSelected(event, upload.assetId);
+								}}
+							/>
+						</label>
+					) : null}
+				</div>
+			) : preview ? (
+				<p className="rounded-md border border-dashed border-neutral-700 px-3 py-4 text-xs text-neutral-500">
+					File upload (preview only)
+				</p>
+			) : (
+				<label className="flex flex-col gap-1">
+					<input
+						type="file"
+						required={field.required}
+						aria-required={field.required || undefined}
+						aria-invalid={displayedError ? true : undefined}
+						aria-describedby={displayedError ? `cfp-field-error-${field.key}` : undefined}
+						accept={uploadAcceptAttr(config)}
+						disabled={busy || !uploadBaseUrl}
+						className="text-xs text-neutral-300 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-800 file:px-3 file:py-2 file:text-neutral-100"
+						onChange={(event) => {
+							void handleFileSelected(event, null);
+						}}
+					/>
+					<span className="text-xs text-neutral-500">
+						{busy ? "Uploading…" : `Max ${Math.floor((config.maxBytes ?? 10 * 1024 * 1024) / (1024 * 1024))}MB`}
+					</span>
+				</label>
+			)}
+		</div>
+	);
 }

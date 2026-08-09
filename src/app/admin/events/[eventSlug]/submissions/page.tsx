@@ -23,6 +23,8 @@ import {
 } from "@/lib/domain";
 import { defaultMessageTemplate, listEventMessageTemplates, renderStoredMessageTemplate } from "@/lib/email/templates";
 import { DecisionButtons } from "@/components/decision-buttons";
+import { SubmissionAnswersList } from "@/components/submission-answers-list";
+import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
 import { ActivatePlanButton } from "./activate-plan-button";
 import { AssignmentControls } from "./assignment-controls";
 import { ExportButtons } from "./export-buttons";
@@ -246,6 +248,11 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 									)];
 								}),
 							) as ReturnType<typeof import("@/lib/domain").renderDecisionPreviews>;
+							const answerDisplays = buildSubmissionAnswerDisplays(answers, {
+								submissionId: row.id,
+								downloadHref: (fieldKey) =>
+									`/api/admin/events/${event.slug}/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset`,
+							});
 							return (
 								<li key={row.id} className="px-4 py-3 text-sm">
 									<div className="flex flex-wrap items-start justify-between gap-3">
@@ -294,6 +301,12 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 												}
 											/>
 										</div>
+									) : null}
+									{answerDisplays.length > 0 ? (
+										<details className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs">
+											<summary className="cursor-pointer font-medium text-neutral-300">Proposal answers</summary>
+											<SubmissionAnswersList answers={answerDisplays} />
+										</details>
 									) : null}
 									<div className="mt-3">
 										<DecisionButtons

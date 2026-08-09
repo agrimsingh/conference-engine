@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
-import { effectiveUploadMaxBytes, storeCfpFieldUpload } from "@/lib/cfp/file-upload";
+import { deleteCfpFieldUpload, effectiveUploadMaxBytes, storeCfpFieldUpload } from "@/lib/cfp/file-upload";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb, getFilesBucket } from "@/lib/db/cloudflare";
 import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
@@ -81,4 +81,45 @@ export async function POST(request: Request, context: RouteContext) {
 	}
 
 	return NextResponse.json({ ok: true, upload: result.answer });
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+	const { eventSlug, formSlug } = await context.params;
+	const url = new URL(request.url);
+	const fieldKey = url.searchParams.get("fieldKey")?.trim() ?? "";
+	const assetId = url.searchParams.get("assetId")?.trim() ?? "";
+	if (!fieldKey || !assetId) {
+		return NextResponse.json({ ok: false, error: "fieldKey and assetId are required" }, { status: 400 });
+	}
+
+	const db = await getDb();
+	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
+	if (!loaded) {
+		return NextResponse.json({ ok: false, error: "CFP form not found or closed" }, { status: 404 });
+	}
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return NextResponse.json({ ok: false, error: "This form is read-only" }, { status: 403 });
+		}
+		throw error;
+	}
+
+	const field = loaded.fields.find((item) => item.key === fieldKey);
+	if (!field || field.config.kind !== "file_upload") {
+		return NextResponse.json({ ok: false, error: "Upload field not found" }, { status: 404 });
+	}
+
+	const files = await getFilesBucket();
+	const result = await deleteCfpFieldUpload(db, files, {
+		eventId: loaded.event.id,
+		formId: loaded.form.id,
+		fieldKey,
+		assetId,
+	});
+	if (!result.ok) {
+		return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+	}
+	return NextResponse.json({ ok: true });
 }

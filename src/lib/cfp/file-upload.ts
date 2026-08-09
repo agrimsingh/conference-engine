@@ -118,6 +118,55 @@ export async function storeCfpFieldUpload(
 	};
 }
 
+/** Orphan uploads from closed tabs are not GC'd asynchronously yet; replace/clear deletes synchronously. */
+export async function isCfpAssetReferencedBySubmission(
+	db: D1Database,
+	eventId: string,
+	assetId: string,
+): Promise<boolean> {
+	const row = await db.prepare(
+		`SELECT id FROM submissions WHERE event_id = ? AND answers_json LIKE ? LIMIT 1`,
+	).bind(eventId, `%${assetId}%`).first<{ id: string }>();
+	return Boolean(row);
+}
+
+export async function deleteCfpFieldUpload(
+	db: D1Database,
+	files: R2Bucket,
+	args: {
+		eventId: string;
+		formId: string;
+		fieldKey: string;
+		assetId: string;
+	},
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+	const asset = await db.prepare(
+		`SELECT id, event_id, r2_key, form_id, field_key FROM assets WHERE id = ?`,
+	).bind(args.assetId).first<AssetRow>();
+	if (!asset) return { ok: true };
+	if (
+		asset.event_id !== args.eventId
+		|| asset.form_id !== args.formId
+		|| asset.field_key !== args.fieldKey
+	) {
+		return { ok: false, error: "Upload not found for this field", status: 404 };
+	}
+	if (await isCfpAssetReferencedBySubmission(db, args.eventId, args.assetId)) {
+		return {
+			ok: false,
+			error: "This file is attached to a submitted proposal and cannot be removed",
+			status: 409,
+		};
+	}
+	try {
+		await files.delete(asset.r2_key);
+	} catch {
+		/* best-effort */
+	}
+	await db.prepare(`DELETE FROM assets WHERE id = ?`).bind(args.assetId).run();
+	return { ok: true };
+}
+
 export async function verifyCfpFieldUpload(
 	db: D1Database,
 	args: {
