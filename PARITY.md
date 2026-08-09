@@ -1,6 +1,6 @@
 # Brief parity map
 
-Reference for the Sessionboard-alternative hackathon brief (`research/brief.md`, not in this repo). Rows follow brief order. Routes are verified against this tip unless marked **TBD**.
+Reference for the Sessionboard-alternative hackathon brief (`research/brief.md`, not in this repo). Rows follow brief order. Routes verified against this tip.
 
 Replace `[eventSlug]` with a live slug (`aie-sandbox` locally). `[formSlug]` is a public form slug (`cfp`, `lightning`, or `workshop` on the sandbox fixture).
 
@@ -17,13 +17,15 @@ Replace `[eventSlug]` with a live slug (`aie-sandbox` locally). `[formSlug]` is 
    - Portal: `/portal`
    - Portal APIs: `/api/portal/session`, `/api/portal/profile/[eventId]`, `/api/portal/profile/[eventId]/headshot`, `/api/portal/tasks/[taskId]/*`, `/api/portal/action-tasks/[assignmentId]/complete`
    - Co-speaker confirm: `/co-speaker/[token]`
-   - **TBD (P0):** post-submit thank-you stays on `/e/[eventSlug]/submit/[formSlug]` and redirects to `/portal` after ~10s (no new route)
+   - Post-submit thank-you stays on `/e/[eventSlug]/submit/[formSlug]` with ~10s redirect to `/portal` (countdown + CTA; no new route)
+   - Speaker withdraw: `/api/portal/submissions/[submissionId]/withdraw`
 
 3. Automated templated speaker communications (reminders and calendar invites)
    - Communications console: `/admin/events/[eventSlug]/communications`
    - Reminder APIs: `/api/admin/events/[eventSlug]/communications`, `.../communications/[deliveryKey]/retry`, `/api/admin/events/[eventSlug]/reminders`
    - Calendar: `/api/e/[eventSlug]/sessions/[sessionId]/ics`, `/api/e/[eventSlug]/itinerary/ics`, embed `/api/e/[eventSlug]/embeds/[embedSlug]/ical`
-   - **TBD (P0):** draft-reminder cron when a form `closes_at` is near (worker scheduled job; template key `draft_reminder`; no new page)
+   - Draft reminders: worker cron when form `closes_at` is within 72h (template key `draft_reminder`)
+   - Confirmation email: Resend `submission_received` on submit and draft finalize (prod inbox verified)
 
 4. Submission evaluation and scoring workflows
    - Review board (token): `/review`
@@ -68,8 +70,10 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
    - `/api/v1/openapi.json`
    - `/api/v1/events/[eventSlug]/submissions`, `.../schedule`, `.../speakers`
 
-6. Organizer CSV export
-   - `/api/admin/events/[eventSlug]/export/submissions.csv`
+6. Organizer export
+   - CSV: `/api/admin/events/[eventSlug]/export/submissions.csv`
+   - XLSX: `/api/admin/events/[eventSlug]/export/submissions.xlsx`
+   - CFP upload assets zip: `/api/admin/events/[eventSlug]/export/submission-uploads.zip`
    - Deliverables zip (speaker files, not CFP uploads): `/api/admin/events/[eventSlug]/files/export`
 
 7. Content approval and files
@@ -79,17 +83,13 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
    - `/admin/events/[eventSlug]/team`
    - `/api/admin/events/[eventSlug]/members`, `.../members/leave`, `.../members/transfer`, `.../claim`
 
-## P0 in flight (expected routes)
+## P0 landed (decide ≠ notify)
 
-Sibling agents are wiring these. They are not present on this tip. Expected landing points:
-
-| Work | Expected route or surface |
+| Work | Route or surface |
 | --- | --- |
-| Decide vs notify queues, notified derivation, withdrawn filter | `/admin/events/[eventSlug]/submissions` (queue tabs on the existing page) |
-| Speaker-initiated withdraw | `/api/portal/submissions/[submissionId]/withdraw` (expected; confirm on merge) |
-| Submissions XLSX | `/api/admin/events/[eventSlug]/export/submissions.xlsx` |
-| CFP upload assets zip | `/api/admin/events/[eventSlug]/export/submission-uploads.zip` (expected; label must say CFP uploads, not deliverables) |
-| Confirmation email | no new route; Resend `submission_received` on submit and draft finalize |
+| Queue tabs + notified derivation | `/admin/events/[eventSlug]/submissions` (`?queue=pending\|to_notify\|notified\|withdrawn\|drafts`) |
+| Bulk notify decided | `/api/admin/events/[eventSlug]/submissions/notify` |
+| Speaker-initiated withdraw | `/api/portal/submissions/[submissionId]/withdraw` |
 
 ## Local screenshot twin
 

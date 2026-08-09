@@ -44,3 +44,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T17:14:02Z	p0	Fan-out P0 poteto-agents on Grok	6 worktrees from 6d3d09e694879d192ef20013cf82327c15fd7158	-	started
 2026-08-09T17:17:45Z	p0	Confirmed submission_received on prod Gmail	agrim.singh@gmail.com; Resend+D1 match	8fe2bac	inbox PASS
 2026-08-09T17:18:45Z	p0	Merged success redirect + parity seed	portal countdown; NYC seed; PARITY.md	33c1e95,eac902e	merged
+2026-08-09T17:22:05Z	p0	Merged draft reminders + export + status queues; P0 closed	72h draft cron; xlsx+cfp zip; decide≠notify tabs	2c12aa4,897a4b6,5ce61aa	workers 8/8; tsc/lint green
