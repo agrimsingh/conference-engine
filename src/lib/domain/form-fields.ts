@@ -150,10 +150,16 @@ export function validateFieldAnswer(
 			const max = field.config.maxSpeakers ?? 8;
 			if (answer.length < min) return `Add at least ${min} speaker(s)`;
 			if (answer.length > max) return `At most ${max} speaker(s) allowed`;
+			const seenEmails = new Set<string>();
 			for (const speaker of answer) {
 				if (!isSpeakerAnswer(speaker)) {
 					return "Each speaker needs name and email";
 				}
+				const email = speaker.email.trim().toLowerCase();
+				if (seenEmails.has(email)) {
+					return "Each speaker needs a distinct email";
+				}
+				seenEmails.add(email);
 			}
 			return null;
 		}

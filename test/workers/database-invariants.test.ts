@@ -1,9 +1,9 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { createVerifiedDraft, finalizeDraft, issueDraftResumeToken } from "@/lib/cfp/drafts";
-import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
+import { consumeFixedWindowRateLimit, pruneExpiredRateLimitBuckets } from "@/lib/security/rate-limit";
 import { completeFileTask } from "@/lib/speakers/complete-task";
-import { inviteCoSpeaker, sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
+import { addCoSpeaker, inviteCoSpeaker, removeCoSpeaker, sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { createAuthChallenge, consumeAuthChallenge } from "@/lib/auth/challenges";
 import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
 import { acceptEventInvitation, inviteOrganizerToEvent } from "@/lib/events/invite-member";
@@ -135,6 +135,43 @@ describe("D1 runtime invariants", () => {
 		expect(attempts.filter(Boolean)).toHaveLength(5);
 		const bucket = await env.DB.prepare("SELECT count FROM rate_limit_buckets WHERE bucket = 'worker-test'").first<{ count: number }>();
 		expect(bucket?.count).toBe(5);
+	});
+
+	it("prunes only rate-limit windows older than the retention horizon", async () => {
+		const consume = (subject: string, at: number) => consumeFixedWindowRateLimit(env.DB, {
+			secret: "prune-test-secret", bucket: "prune-test", subject, limit: 5, windowMs: 60_000, now: at,
+		});
+		await consume("stale-principal", now - 25 * 60 * 60_000);
+		await consume("fresh-principal", now);
+		expect(await pruneExpiredRateLimitBuckets(env.DB, { now })).toBe(1);
+		const remaining = await env.DB.prepare("SELECT COUNT(*) AS count FROM rate_limit_buckets WHERE bucket = 'prune-test'").first<{ count: number }>();
+		expect(remaining?.count).toBe(1);
+		expect(await consume("fresh-principal", now)).toBe(true);
+	});
+
+	it("revives a removed co-speaker instead of violating the per-submission email unique index", async () => {
+		await seedEvent("revive-event", "revive-event");
+		await seedForm("revive-event", "revive-form", "revive-form");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('revive-submission', 'revive-form', 'revive-event', 'submitted', '{}', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('revive-primary', 'revive-submission', 'Primary', 'primary@revive.test', 0, 'confirmed')"),
+			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('revive-co', 'revive-submission', 'Co Speaker', 'co@revive.test', 1, 'confirmed')"),
+		]);
+		const removal = await removeCoSpeaker(env.DB, "revive-co");
+		expect(removal.ok).toBe(true);
+
+		const readded = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Co Speaker Again", email: "CO@revive.test" });
+		expect(readded.ok).toBe(true);
+		if (readded.ok) {
+			expect(readded.speaker.id).toBe("revive-co");
+			expect(readded.speaker.status).toBe("pending");
+			expect(readded.speaker.name).toBe("Co Speaker Again");
+		}
+		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM submission_speakers WHERE submission_id = 'revive-submission'").first<{ count: number }>())?.count).toBe(2);
+
+		const duplicate = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Dup", email: "co@revive.test" });
+		expect(duplicate.ok).toBe(false);
+		if (!duplicate.ok) expect(duplicate.status).toBe(409);
 	});
 
 	it("reserves exactly one durable email send and recovers a provider-success finalization gap", async () => {

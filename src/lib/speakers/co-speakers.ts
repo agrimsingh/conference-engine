@@ -431,6 +431,29 @@ export async function addCoSpeaker(
 	}
 
 	const addedAfterAcceptance = isPostAcceptance(submission.status);
+
+	// The unique index on (submission_id, lower(email)) covers removed rows
+	// too, so a previously removed speaker is revived instead of re-inserted.
+	const removed = speakers.find(
+		(speaker) => speaker.status === "removed" && speaker.email === email,
+	);
+	if (removed) {
+		await db
+			.prepare(
+				`UPDATE submission_speakers
+         SET name = ?, status = 'pending', invited_at = NULL, confirmed_at = NULL,
+             added_after_acceptance = ?, confirm_token_hash = NULL
+         WHERE id = ?`,
+			)
+			.bind(name, addedAfterAcceptance ? 1 : 0, removed.id)
+			.run();
+		const revived = await getSubmissionSpeakerById(db, removed.id);
+		if (!revived) {
+			return { ok: false, error: "Speaker missing after update", status: 500 };
+		}
+		return { ok: true, speaker: revived, addedAfterAcceptance };
+	}
+
 	const position =
 		speakers.reduce((max, speaker) => Math.max(max, speaker.position), 0) + 1;
 	const id = crypto.randomUUID();

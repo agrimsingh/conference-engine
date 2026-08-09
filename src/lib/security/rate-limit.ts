@@ -21,3 +21,19 @@ export async function consumeFixedWindowRateLimit(
 	).bind(args.bucket, subjectHash, windowStart, now, args.limit).first<{ count: number }>();
 	return row !== null;
 }
+
+/** Retention must exceed the longest window in use (currently 60min). */
+export const RATE_LIMIT_BUCKET_RETENTION_MS = 24 * 60 * 60_000;
+
+export async function pruneExpiredRateLimitBuckets(
+	db: D1Database,
+	args?: { now?: number; retentionMs?: number },
+): Promise<number> {
+	const now = args?.now ?? Date.now();
+	const retentionMs = args?.retentionMs ?? RATE_LIMIT_BUCKET_RETENTION_MS;
+	const result = await db
+		.prepare(`DELETE FROM rate_limit_buckets WHERE window_start < ?`)
+		.bind(now - retentionMs)
+		.run();
+	return result.meta.changes ?? 0;
+}

@@ -2,6 +2,7 @@
 import { default as handler } from "./.open-next/worker.js";
 import { sendTaskReminders } from "./src/lib/email/reminders";
 import { handleEventRoomUpgrade } from "./src/lib/realtime/room-upgrade";
+import { pruneExpiredRateLimitBuckets } from "./src/lib/security/rate-limit";
 
 export { EventRoom } from "./src/durable-objects/EventRoom";
 
@@ -15,6 +16,9 @@ export default {
 	async scheduled(event, env, ctx) {
 		ctx.waitUntil(
 			sendTaskReminders(env),
+		);
+		ctx.waitUntil(
+			pruneExpiredRateLimitBuckets(env.DB),
 		);
 	},
 };
