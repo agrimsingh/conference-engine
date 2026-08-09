@@ -181,7 +181,10 @@ export type SpeakerProfileRow = {
 	updated_at: number;
 };
 
-/** Organizer roster fields; distinct from portal speaker_profiles. */
+/**
+ * Organizer workflow row. Profile contact fields (job/company/social) are
+ * legacy columns; source of truth is speaker_profiles.
+ */
 export type EventSpeakerProfileRow = {
 	id: string;
 	event_id: string;
