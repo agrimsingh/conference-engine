@@ -6,15 +6,19 @@ import { buttonClasses, noticeClasses } from "@/components/ui";
 
 type Props = {
 	submissionId: string;
+	removesFromSchedule?: boolean;
 };
 
-export function WithdrawButton({ submissionId }: Props) {
+export function WithdrawButton({ submissionId, removesFromSchedule = false }: Props) {
 	const router = useRouter();
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	async function withdraw() {
-		if (!window.confirm("Withdraw this submission? Organizers will see it as withdrawn.")) {
+		const message = removesFromSchedule
+			? "Withdraw this submission? It will be removed from the schedule and calendar invites will be cancelled. Organizers will see it as withdrawn."
+			: "Withdraw this submission? Organizers will see it as withdrawn.";
+		if (!window.confirm(message)) {
 			return;
 		}
 		setPending(true);

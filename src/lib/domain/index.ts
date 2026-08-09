@@ -5,6 +5,7 @@ export {
 	legalTargets,
 	SUBMISSION_STATUSES,
 	transitionSubmission,
+	WITHDRAWN_RESTORE_STATUS,
 	type SubmissionStatus,
 } from "./submission-status";
 

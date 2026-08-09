@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi, type EventAdminAccess } from "@/lib/auth/admin";
 import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
-import { notifyCalendarCancellation, notifyCalendarInvite } from "@/lib/email/notify";
+import { notifyCalendarInvite } from "@/lib/email/notify";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 import { readScheduleJson } from "@/lib/schedule/request";
+import { unplaceScheduledSubmission } from "@/lib/schedule/unplace";
 
 type RouteContext = { params: Promise<{ eventSlug: string; submissionId: string }> };
 
@@ -74,7 +75,30 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
-	return mutateAction("unplace", context);
+	const authorized = await authorizeSchedule(context);
+	if (!authorized.ok) return authorized.response;
+	const { db, access, submissionId } = authorized;
+	const submission = await getSubmissionById(db, submissionId);
+	if (!submission || submission.event_id !== access.event.id) {
+		return NextResponse.json({ ok: false, error: "Submission not found" }, { status: 404 });
+	}
+	const result = await unplaceScheduledSubmission(db, {
+		eventId: access.event.id,
+		submissionId,
+	});
+	if (!result.ok) {
+		return NextResponse.json(
+			{ ok: false, error: result.error },
+			{ status: result.status },
+		);
+	}
+	return NextResponse.json({
+		ok: true,
+		status: result.status,
+		broadcasted: true,
+		email: result.email,
+		icsBytesLength: result.icsBytesLength,
+	});
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -103,7 +127,7 @@ async function mutateAction(
 	const env = await getCloudflareEnv();
 	if (!env.EVENT_ROOM) return NextResponse.json({ ok: false, error: "EVENT_ROOM binding unavailable" }, { status: 503 });
 	const response = await env.EVENT_ROOM.getByName(access.event.id).fetch("https://event-room/schedule", {
-		method: action === "unplace" ? "DELETE" : "PATCH",
+		method: "PATCH",
 		headers: { "content-type": "application/json", "x-ce-event-id": access.event.id },
 		body: JSON.stringify({ submissionId, action, ...(action === "publish" ? { approveContent } : {}) }),
 	});
@@ -111,11 +135,7 @@ async function mutateAction(
 	if (!value || typeof value !== "object" || Array.isArray(value)) return NextResponse.json({ ok: false, error: "Invalid room response" }, { status: 502 });
 	const result = value as Record<string, unknown>;
 	if (result.ok !== true) return NextResponse.json({ ok: false, error: typeof result.error === "string" ? result.error : "Schedule mutation failed" }, { status: response.status });
-	const slot = result.slot as { room_name?: string; starts_at?: number; ends_at?: number; ics_uid?: string; calendar_sequence?: number } | undefined;
-	const cancellation = action === "unplace" && slot && typeof slot.room_name === "string" && typeof slot.starts_at === "number" && typeof slot.ends_at === "number" && typeof slot.ics_uid === "string" && typeof slot.calendar_sequence === "number"
-		? await notifyCalendarCancellation(db, { submissionId, roomName: slot.room_name, startsAtMs: slot.starts_at, endsAtMs: slot.ends_at, icsUid: slot.ics_uid, sequence: slot.calendar_sequence, fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org" })
-		: null;
-	return NextResponse.json({ ok: true, status: result.status, broadcasted: true, email: cancellation?.email ?? null, icsBytesLength: cancellation?.icsBytes.length ?? 0 });
+	return NextResponse.json({ ok: true, status: result.status, broadcasted: true, email: null, icsBytesLength: 0 });
 }
 
 async function authorizeSchedule(context: RouteContext): Promise<

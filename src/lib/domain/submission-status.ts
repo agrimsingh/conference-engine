@@ -12,6 +12,9 @@ export const SUBMISSION_STATUSES = [
 
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 
+/** Organizer restore lands in under_review (review queue), never speaker self-restore. */
+export const WITHDRAWN_RESTORE_STATUS = "under_review" as const satisfies SubmissionStatus;
+
 const LEGAL_TRANSITIONS: Record<SubmissionStatus, readonly SubmissionStatus[]> = {
 	draft: ["submitted", "withdrawn"],
 	submitted: ["under_review", "accepted", "rejected", "waitlisted", "withdrawn"],
@@ -19,9 +22,9 @@ const LEGAL_TRANSITIONS: Record<SubmissionStatus, readonly SubmissionStatus[]> =
 	accepted: ["scheduled", "rejected", "withdrawn"],
 	rejected: ["under_review", "waitlisted"],
 	waitlisted: ["accepted", "rejected", "under_review"],
-	scheduled: ["published", "accepted"],
-	published: ["scheduled"],
-	withdrawn: [],
+	scheduled: ["published", "accepted", "withdrawn"],
+	published: ["scheduled", "withdrawn"],
+	withdrawn: [WITHDRAWN_RESTORE_STATUS],
 };
 
 export class IllegalSubmissionTransitionError extends Error {

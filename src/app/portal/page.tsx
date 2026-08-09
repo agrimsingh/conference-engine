@@ -197,7 +197,12 @@ export default async function PortalPage({ searchParams }: Props) {
 										{isSubmissionStatus(row.status) &&
 										canTransitionSubmission(row.status, "withdrawn") &&
 										events.get(row.event_id)?.mode !== "demo" ? (
-											<WithdrawButton submissionId={row.id} />
+											<WithdrawButton
+												submissionId={row.id}
+												removesFromSchedule={
+													row.status === "scheduled" || row.status === "published"
+												}
+											/>
 										) : null}
 										</li>
 							);
