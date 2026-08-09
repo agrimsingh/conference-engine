@@ -119,6 +119,26 @@ describe("evaluation workflows", () => {
 			.toEqual([{ submission_id: "eval-assignment-a", reviewer_id: original.reviewer.id }]);
 	});
 
+	it("replaces reviewer assignments for 98, 99, 100, and 101 submissions without bind-limit failures", async () => {
+		const eventId = "eval-assignment-boundary-event";
+		await seedEvent(eventId);
+		const submissionIds = Array.from({ length: 101 }, (_, index) => `eval-boundary-${index}`);
+		await env.DB.batch(submissionIds.map((id) => env.DB.prepare(
+			"INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES (?, ?, ?, 'submitted', ?, ?, ?)",
+		).bind(id, `${eventId}-form`, eventId, JSON.stringify({ title: id }), now, now)));
+		const plan = await createEvaluationPlan(env.DB, { eventId, name: "Boundary plan" });
+		const reviewer = await createReviewer(env.DB, { planId: plan.id, name: "Boundary reviewer" });
+		for (const count of [98, 99, 100, 101]) {
+			const selected = submissionIds.slice(0, count);
+			await expect(setBulkSubmissionReviewers(env.DB, {
+				planId: plan.id,
+				submissionIds: selected,
+				reviewerIds: [reviewer.reviewer.id],
+			})).resolves.toMatchObject({ submissionIds: selected });
+			expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM review_assignments WHERE plan_id = ?").bind(plan.id).first()).toEqual({ count });
+		}
+	});
+
 	it("reports bulk accept and reject outcomes without silently hiding partial failures", async () => {
 		await seedEvent("eval-decisions-event");
 		await env.DB.prepare("INSERT INTO task_templates (id, event_id, key, label, task_kind, required, position) VALUES ('eval-decision-template', 'eval-decisions-event', 'bio', 'Bio', 'text', 1, 0)").run();

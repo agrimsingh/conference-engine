@@ -260,13 +260,13 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(input.eventId).first<{ mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
 		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
-		const placeholders = ids.map(() => "?").join(", ");
 		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, s.answers_json,
 		       h.current_revision_id, h.approved_revision_id, a.id AS slot_id
 		  FROM submissions s
 		  LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
 		  LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
-		 WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<PublicationRow>();
+		 WHERE s.event_id = ? AND s.id IN (SELECT value FROM json_each(?))`)
+			.bind(input.eventId, JSON.stringify(ids)).all<PublicationRow>();
 		if (rows.results.length !== ids.length) return { ok: false, error: "One or more sessions are outside this event or no longer exist", status: 404 };
 		if (input.action === "publish") {
 			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id)) return { ok: false, error: "Only scheduled sessions with an agenda slot can be published", status: 409 };
@@ -282,7 +282,8 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			if (input.action === "publish" && input.approveContent) approval = await this.prepareContentApprovals(input.eventId, rows.results, now);
 			await this.env.DB.batch([
 				...approval.statements,
-				this.env.DB.prepare(`UPDATE submissions SET status = ?, updated_at = ? WHERE event_id = ? AND id IN (${placeholders})`).bind(input.action === "publish" ? "published" : "scheduled", now, input.eventId, ...ids),
+				this.env.DB.prepare("UPDATE submissions SET status = ?, updated_at = ? WHERE event_id = ? AND id IN (SELECT value FROM json_each(?))")
+					.bind(input.action === "publish" ? "published" : "scheduled", now, input.eventId, JSON.stringify(ids)),
 			]);
 		} catch (error) {
 			return publicationFailure(error);

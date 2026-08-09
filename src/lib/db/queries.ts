@@ -1290,8 +1290,8 @@ export async function listAssignmentsForPlan(
 export async function listAssignmentsForPlanSubmissions(db: D1Database, planId: string, submissionIds: string[]): Promise<ReviewAssignmentRow[]> {
 	const ids = [...new Set(submissionIds)];
 	if (!ids.length) return [];
-	const placeholders = ids.map(() => "?").join(", ");
-	const result = await db.prepare(`SELECT * FROM review_assignments WHERE plan_id = ? AND submission_id IN (${placeholders}) ORDER BY created_at ASC`).bind(planId, ...ids).all<ReviewAssignmentRow>();
+	const result = await db.prepare("SELECT * FROM review_assignments WHERE plan_id = ? AND submission_id IN (SELECT value FROM json_each(?)) ORDER BY created_at ASC")
+		.bind(planId, JSON.stringify(ids)).all<ReviewAssignmentRow>();
 	return result.results;
 }
 

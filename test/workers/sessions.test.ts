@@ -316,6 +316,37 @@ describe("organizer session creation, lineage, and publication", () => {
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ slot: { trackId: track!.id, trackName: track!.name } });
 	});
 
+	it("publishes 98, 99, and 100 approved sessions atomically and rejects 101", async () => {
+		const created = await event("Publication boundary");
+		const form = await env.DB.prepare("SELECT id FROM cfp_forms WHERE event_id = ? LIMIT 1")
+			.bind(created.eventId).first<{ id: string }>();
+		const ids = Array.from({ length: 100 }, (_, index) => `publication-boundary-${sequence}-${index}`);
+		await env.DB.batch(ids.flatMap((id, index) => {
+			const revisionId = `${id}-revision`;
+			const startsAt = Date.parse("2026-11-01T09:00:00Z") + index * 1_800_000;
+			const snapshot = JSON.stringify({ title: id, abstract: "Boundary" });
+			return [
+				env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, content_status, created_at, updated_at) VALUES (?, ?, ?, 'scheduled', ?, 'approved', ?, ?)")
+					.bind(id, form!.id, created.eventId, snapshot, now, now),
+				env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES (?, ?, ?, 'Main', ?, ?, ?, ?, ?)")
+					.bind(`${id}-slot`, created.eventId, id, startsAt, startsAt + 1_800_000, `${id}@test.invalid`, now, now),
+				env.DB.prepare("INSERT INTO content_revisions (id, event_id, entity_type, entity_id, revision_number, snapshot_json, editor_name, created_at) VALUES (?, ?, 'session', ?, 1, ?, 'Boundary seed', ?)")
+					.bind(revisionId, created.eventId, id, snapshot, now),
+				env.DB.prepare("INSERT INTO content_heads (event_id, entity_type, entity_id, current_revision_id, approved_revision_id, updated_at) VALUES (?, 'session', ?, ?, ?, ?)")
+					.bind(created.eventId, id, revisionId, revisionId, now),
+			];
+		}));
+		const room = env.EVENT_ROOM.getByName(created.eventId);
+		for (const count of [98, 99, 100]) {
+			const selected = ids.slice(0, count);
+			const published = await bulk(room, created.eventId, "publish", selected);
+			expect(published.status).toBe(200);
+			expect(await published.json()).toMatchObject({ ok: true, changed: count });
+			if (count < 100) expect((await bulk(room, created.eventId, "unpublish", selected)).status).toBe(200);
+		}
+		expect((await bulk(room, created.eventId, "publish", [...ids, "publication-boundary-extra"])).status).toBe(400);
+	});
+
 	it("requires explicit approval, then pins the current draft and publishes in one agenda action", async () => {
 		const created = await event("Guided publication");
 		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Agenda-generated title", abstract: "Initial abstract" } });

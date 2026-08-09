@@ -74,9 +74,8 @@ export async function setBulkSubmissionReviewers(
 	const reviewerIds = uniqueNonBlankIds(args.reviewerIds, "reviewerIds");
 	if (!submissionIds.length) throw new AssignmentValidationError("Select at least one submission");
 	if (!reviewerIds.length) throw new AssignmentValidationError("Select at least one reviewer");
-	const placeholders = submissionIds.map(() => "?").join(", ");
-	const owned = await db.prepare(`SELECT s.id FROM submissions s INNER JOIN evaluation_plans p ON p.event_id = s.event_id WHERE p.id = ? AND s.id IN (${placeholders})`)
-		.bind(args.planId, ...submissionIds).all<{ id: string }>();
+	const owned = await db.prepare("SELECT s.id FROM submissions s INNER JOIN evaluation_plans p ON p.event_id = s.event_id WHERE p.id = ? AND s.id IN (SELECT value FROM json_each(?))")
+		.bind(args.planId, JSON.stringify(submissionIds)).all<{ id: string }>();
 	if (owned.results.length !== submissionIds.length) throw new AssignmentValidationError("One or more submissions do not belong to this event", 404);
 	const validReviewerIds = await validatePlanReviewerIds(db, args.planId, reviewerIds);
 	await assertAssignmentCaps(db, args.planId, submissionIds, validReviewerIds);
@@ -91,10 +90,10 @@ async function assertAssignmentCaps(db: D1Database, planId: string, replacingSub
 	const plan = await db.prepare(`SELECT assignment_cap FROM evaluation_plans WHERE id = ?`).bind(planId).first<{ assignment_cap: number | null }>();
 	if (!plan) throw new AssignmentValidationError("Review round not found", 404);
 	if (plan.assignment_cap === null) return;
-	const placeholders = replacingSubmissionIds.map(() => "?").join(", ");
+	const submissionIdsJson = JSON.stringify(replacingSubmissionIds);
 	for (const reviewerId of reviewerIds) {
-		const current = await db.prepare(`SELECT COUNT(*) AS count FROM review_assignments WHERE plan_id = ? AND reviewer_id = ? AND recused_at IS NULL AND submission_id NOT IN (${placeholders})`)
-			.bind(planId, reviewerId, ...replacingSubmissionIds).first<{ count: number }>();
+		const current = await db.prepare("SELECT COUNT(*) AS count FROM review_assignments WHERE plan_id = ? AND reviewer_id = ? AND recused_at IS NULL AND submission_id NOT IN (SELECT value FROM json_each(?))")
+			.bind(planId, reviewerId, submissionIdsJson).first<{ count: number }>();
 		if ((current?.count ?? 0) + replacingSubmissionIds.length > plan.assignment_cap) throw new AssignmentValidationError(`Assignment cap of ${plan.assignment_cap} exceeded for reviewer ${reviewerId}`, 409);
 	}
 }
@@ -137,9 +136,9 @@ async function buildAssignmentRows(
 }
 
 function assignmentStatements(db: D1Database, planId: string, submissionIds: string[], rows: ReviewAssignmentRow[]): D1PreparedStatement[] {
-	const placeholders = submissionIds.map(() => "?").join(", ");
 	return [
-		db.prepare(`DELETE FROM review_assignments WHERE plan_id = ? AND submission_id IN (${placeholders})`).bind(planId, ...submissionIds),
+		db.prepare("DELETE FROM review_assignments WHERE plan_id = ? AND submission_id IN (SELECT value FROM json_each(?))")
+			.bind(planId, JSON.stringify(submissionIds)),
 		...rows.map((row) => db.prepare(`INSERT INTO review_assignments (id, plan_id, reviewer_id, submission_id, created_at, recused_at) VALUES (?, ?, ?, ?, ?, ?)`)
 			.bind(row.id, row.plan_id, row.reviewer_id, row.submission_id, row.created_at, row.recused_at)),
 	];

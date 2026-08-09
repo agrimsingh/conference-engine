@@ -55,15 +55,14 @@ export async function buildPublicItineraryIcs(
 	const event = await getEventBySlug(db, args.eventSlug);
 	if (!event) return { ok: false, status: 404 };
 
-	const placeholders = sessionIds.map(() => "?").join(", ");
 	const rows = await db.prepare(
 		`SELECT s.id, cr.snapshot_json AS answers_json, a.room_name, a.starts_at, a.ends_at, a.ics_uid
 		 FROM submissions s
 		 INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
 		 INNER JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id AND h.approved_revision_id IS NOT NULL
 		 INNER JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id
-		 WHERE s.event_id = ? AND s.status = 'published' AND s.id IN (${placeholders})`,
-	).bind(event.id, ...sessionIds).all<ItineraryRow>();
+		 WHERE s.event_id = ? AND s.status = 'published' AND s.id IN (SELECT value FROM json_each(?))`,
+	).bind(event.id, JSON.stringify(sessionIds)).all<ItineraryRow>();
 
 	// A stale, unpublished, or cross-event id invalidates the whole export.
 	if (rows.results.length !== sessionIds.length) return { ok: false, status: 404 };

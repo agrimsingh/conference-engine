@@ -29,20 +29,20 @@ export async function listDeliverableBundles(
 	const bundles = new Map<string, DeliverableTaskBundle>(tasks.results.map((task) => [task.id, { task, versions: [], comments: [] }]));
 	if (!tasks.results.length) return bundles;
 	const ids = tasks.results.map((task) => task.id);
-	const placeholders = ids.map(() => "?").join(", ");
+	const idsJson = JSON.stringify(ids);
 	const [versions, comments] = await Promise.all([
 		db.prepare(
 			`SELECT dv.*, a.filename, a.content_type
 			 FROM deliverable_versions dv
 			 INNER JOIN assets a ON a.id = dv.asset_id AND a.event_id = dv.event_id
-			 WHERE dv.task_id IN (${placeholders})
+			 WHERE dv.task_id IN (SELECT value FROM json_each(?))
 			 ORDER BY dv.task_id, dv.version_number DESC`,
-		).bind(...ids).all<DeliverableVersionRow & { filename: string | null; content_type: string | null }>(),
+		).bind(idsJson).all<DeliverableVersionRow & { filename: string | null; content_type: string | null }>(),
 		db.prepare(
 			`SELECT * FROM deliverable_comments
-			 WHERE task_id IN (${placeholders})
+			 WHERE task_id IN (SELECT value FROM json_each(?))
 			 ORDER BY created_at ASC`,
-		).bind(...ids).all<DeliverableCommentRow>(),
+		).bind(idsJson).all<DeliverableCommentRow>(),
 	]);
 	for (const version of versions.results) bundles.get(version.task_id)?.versions.push(version);
 	for (const comment of comments.results) bundles.get(comment.task_id)?.comments.push(comment);

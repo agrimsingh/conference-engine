@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { addDeliverableComment, createFileRequestForAllSpeakers } from "@/lib/content/deliverables";
+import { addDeliverableComment, createFileRequestForAllSpeakers, listDeliverableBundles } from "@/lib/content/deliverables";
 import { exportLatestDeliverables } from "@/lib/content/export";
 import { restoreSessionRevision, setSessionContentStatus, updateSessionContent } from "@/lib/content/revisions";
 import { completeFileTask } from "@/lib/speakers/complete-task";
@@ -54,5 +54,18 @@ describe("content deliverables", () => {
 		const old = await env.DB.prepare("SELECT id FROM content_revisions WHERE event_id = 'cnt-event' AND entity_id = 'cnt-session' AND revision_number = 1").first<{ id: string }>();
 		expect(await restoreSessionRevision(env.DB, { eventId: "cnt-event", submissionId: "cnt-session", revisionId: old!.id, editorAccountId: null, editorName: "Jordan Alvarez" })).toEqual({ ok: true });
 		expect(JSON.parse((await env.DB.prepare("SELECT answers_json FROM submissions WHERE id = 'cnt-session'").first<{ answers_json: string }>())!.answers_json).abstract).toBe("Initial. Live demo.");
+	});
+
+	it("loads 98, 99, 100, and 101 deliverable tasks without exceeding D1 bind limits", async () => {
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('cnt-boundary-person', 'cnt-boundary@example.test', 'Boundary Speaker', ?)").bind(now),
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('cnt-boundary-session', 'cnt-form', 'cnt-event', 'accepted', '{\"title\":\"Boundary\"}', ?, ?)").bind(now, now),
+			...Array.from({ length: 101 }, (_, index) => env.DB.prepare(
+				"INSERT INTO speaker_tasks (id, event_id, submission_id, person_id, template_key, template_label, template_task_kind, template_required, status, created_at, updated_at) VALUES (?, 'cnt-event', 'cnt-boundary-session', 'cnt-boundary-person', ?, ?, 'file', 1, 'pending', ?, ?)",
+			).bind(`cnt-boundary-task-${index}`, `boundary-${index}`, `Boundary ${index}`, now, now)),
+		]);
+		const bundles = await listDeliverableBundles(env.DB, { personId: "cnt-boundary-person" });
+		expect([98, 99, 100, 101].every((count) => [...bundles.keys()].slice(0, count).length === count)).toBe(true);
+		expect(bundles.size).toBe(101);
 	});
 });
