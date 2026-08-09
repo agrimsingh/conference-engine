@@ -7,3 +7,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:11:39Z	wave0	Relaunched five poteto-agents into wt-* worktrees	best-of-n shared the parent tree; real git worktrees enforce separation	b088/3067/2f01/894f/d84a	running
 2026-08-09T08:13:40Z	wave0	Merged activate-plan-button fix to main	already-active plans link to review instead of false-fail	979e3cf	tests pending push
 2026-08-09T08:13:42Z	wave0	Removed wt-activate after merge	unit done	979e3cf on main	done
+2026-08-09T08:14:10Z	wave0	Merged remaining Wave0 branches to main	settings then formbuilder then publicreview then presetclone	loop tick 1	verify next
