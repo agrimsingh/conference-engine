@@ -56,14 +56,19 @@ DELETE FROM rate_limit_buckets;
 DELETE FROM production_hardening_migration_guard;
 DELETE FROM events;
 
--- Seed: aie-sandbox event + open CFP form (local writable fixture; conference preset shape)
+-- Seed: aie-sandbox writable fixture. Slug stays stable for URLs and tests.
+-- Display name, tracks, three public forms, and pending/accepted abstracts
+-- mirror an AI.Engineer NYC sandbox shape for screenshot walkthroughs.
 
-INSERT INTO events (id, slug, name, timezone, ownership_claimable, created_at, updated_at)
-VALUES (
+INSERT INTO events (
+	id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at
+) VALUES (
 	'evt_aie_sandbox',
 	'aie-sandbox',
-	'AI Engineer Sandbox',
-	'America/Los_Angeles',
+	'AI.Engineer Sandbox Event – NYC',
+	'America/New_York',
+	'2026-10-12',
+	'2026-10-14',
 	1,
 	1754650000000,
 	1754650000000
@@ -76,16 +81,46 @@ INSERT INTO cfp_forms (
 	'form_aie_cfp',
 	'evt_aie_sandbox',
 	'cfp',
-	'AI Engineer CFP',
-	'Submit a Stage, Lightning, Workshop, or Online session. Fields adapt to your format.',
+	'Call for Speakers',
+	'Mainstage and online proposals for AI.Engineer Sandbox Event – NYC. Fields adapt to your session format.',
 	'open',
 	'public',
 	NULL,
 	NULL,
 	'{"fieldKey":"format","map":{"stage":"Stage","lightning":"Lightning","workshop":"Workshop","online":"Online"}}',
-	NULL,
+	'Thanks for submitting. We review every abstract by hand.',
 	1754650000000,
 	1754650000000
+),
+(
+	'form_aie_lightning',
+	'evt_aie_sandbox',
+	'lightning',
+	'Lightning Talks',
+	'Five to ten minute launches, hot takes, and short demos.',
+	'open',
+	'public',
+	NULL,
+	NULL,
+	'{"fieldKey":"format","map":{"lightning":"Lightning"}}',
+	'Thanks for the lightning proposal.',
+	1754650001000,
+	1754650001000
+),
+(
+	'form_aie_workshop',
+	'evt_aie_sandbox',
+	'workshop',
+	'Workshops',
+	'Hands-on sessions and technical deep dives (one to two hours).',
+	'open',
+	'public',
+	NULL,
+	NULL,
+	'{"fieldKey":"format","map":{"workshop":"Workshop"}}',
+	'Thanks for the workshop proposal.',
+	1754650002000,
+	1754650002000
 );
 
 -- Matches the deterministic 0015 backfill identity for this historical event.
@@ -219,6 +254,194 @@ INSERT INTO form_fields (
 	'{"op":"always"}',
 	'{"kind":"speaker_block","minSpeakers":1,"maxSpeakers":4}',
 	0
+),
+(
+	'field_lt_format',
+	'form_aie_lightning',
+	'format',
+	'Session format',
+	'select',
+	1,
+	0,
+	'{"op":"always"}',
+	'{"kind":"select","options":[{"value":"lightning","label":"Lightning talk"}]}',
+	0
+),
+(
+	'field_lt_title',
+	'form_aie_lightning',
+	'title',
+	'Title',
+	'text',
+	1,
+	1,
+	'{"op":"always"}',
+	'{"kind":"text","maxLength":160,"placeholder":"Your lightning title"}',
+	0
+),
+(
+	'field_lt_abstract',
+	'form_aie_lightning',
+	'abstract',
+	'Abstract',
+	'textarea',
+	1,
+	2,
+	'{"op":"always"}',
+	'{"kind":"textarea","rows":4,"maxLength":2000,"placeholder":"One idea, tightly told"}',
+	0
+),
+(
+	'field_lt_hook',
+	'form_aie_lightning',
+	'lightning_hook',
+	'Lightning hook (one sentence)',
+	'text',
+	1,
+	3,
+	'{"op":"always"}',
+	'{"kind":"text","maxLength":200,"placeholder":"The one idea you will land in 5-10 minutes"}',
+	0
+),
+(
+	'field_lt_speakers',
+	'form_aie_lightning',
+	'speakers',
+	'Speakers',
+	'speaker_block',
+	1,
+	4,
+	'{"op":"always"}',
+	'{"kind":"speaker_block","minSpeakers":1,"maxSpeakers":2}',
+	0
+),
+(
+	'field_ws_format',
+	'form_aie_workshop',
+	'format',
+	'Session format',
+	'select',
+	1,
+	0,
+	'{"op":"always"}',
+	'{"kind":"select","options":[{"value":"workshop","label":"Workshop"}]}',
+	0
+),
+(
+	'field_ws_title',
+	'form_aie_workshop',
+	'title',
+	'Title',
+	'text',
+	1,
+	1,
+	'{"op":"always"}',
+	'{"kind":"text","maxLength":160,"placeholder":"Your workshop title"}',
+	0
+),
+(
+	'field_ws_abstract',
+	'form_aie_workshop',
+	'abstract',
+	'Abstract',
+	'textarea',
+	1,
+	2,
+	'{"op":"always"}',
+	'{"kind":"textarea","rows":6,"maxLength":4000,"placeholder":"What will attendees build or practice?"}',
+	0
+),
+(
+	'field_ws_duration',
+	'form_aie_workshop',
+	'duration_minutes',
+	'Duration (minutes)',
+	'number',
+	1,
+	3,
+	'{"op":"always"}',
+	'{"kind":"number","min":60,"max":120,"step":15}',
+	0
+),
+(
+	'field_ws_capacity',
+	'form_aie_workshop',
+	'workshop_capacity',
+	'Workshop capacity',
+	'number',
+	1,
+	4,
+	'{"op":"always"}',
+	'{"kind":"number","min":8,"max":200,"step":1}',
+	0
+),
+(
+	'field_ws_prereqs',
+	'form_aie_workshop',
+	'workshop_prereqs',
+	'Workshop prerequisites',
+	'textarea',
+	0,
+	5,
+	'{"op":"always"}',
+	'{"kind":"textarea","rows":3,"placeholder":"Laptop? Account signup? Prior experience?"}',
+	0
+),
+(
+	'field_ws_speakers',
+	'form_aie_workshop',
+	'speakers',
+	'Speakers',
+	'speaker_block',
+	1,
+	6,
+	'{"op":"always"}',
+	'{"kind":"speaker_block","minSpeakers":1,"maxSpeakers":4}',
+	0
+);
+
+INSERT INTO agenda_tracks (
+	id, event_id, name, slug, position, soft_deleted, created_at, updated_at
+) VALUES
+(
+	'track_aie_finserv',
+	'evt_aie_sandbox',
+	'FinServ',
+	'finserv',
+	0,
+	0,
+	1754650000000,
+	1754650000000
+),
+(
+	'track_aie_agents',
+	'evt_aie_sandbox',
+	'Agents',
+	'agents',
+	1,
+	0,
+	1754650000000,
+	1754650000000
+),
+(
+	'track_aie_platform',
+	'evt_aie_sandbox',
+	'Platform',
+	'platform',
+	2,
+	0,
+	1754650000000,
+	1754650000000
+),
+(
+	'track_aie_practice',
+	'evt_aie_sandbox',
+	'Practice',
+	'practice',
+	3,
+	0,
+	1754650000000,
+	1754650000000
 );
 
 INSERT INTO task_templates (
@@ -282,4 +505,225 @@ INSERT INTO event_rooms (id, event_id, name, position, created_at) VALUES
 	'Workshop Lab',
 	2,
 	1754650000000
+);
+
+INSERT INTO people (id, email, name, created_at) VALUES
+('person_aie_amara', 'amara.diallo@sandbox.invalid', 'Amara Diallo', 1754650000000),
+('person_aie_jonas', 'jonas.weber@sandbox.invalid', 'Jonas Weber', 1754650000000),
+('person_aie_priya', 'priya.nair@sandbox.invalid', 'Priya Nair', 1754650000000),
+('person_aie_diego', 'diego.reyes@sandbox.invalid', 'Diego Reyes', 1754650000000),
+('person_aie_maya', 'maya.chen@sandbox.invalid', 'Maya Chen', 1754650000000),
+('person_aie_zoe', 'zoe.martin@sandbox.invalid', 'Zoe Martin', 1754650000000),
+('person_aie_kai', 'kai.brooks@sandbox.invalid', 'Kai Brooks', 1754650000000),
+('person_aie_leila', 'leila.rahman@sandbox.invalid', 'Leila Rahman', 1754650000000);
+
+INSERT INTO submissions (
+	id, form_id, event_id, status, answers_json, category, submitter_email, submitter_name,
+	submitter_person_id, origin, created_at, updated_at, submitted_at
+) VALUES
+(
+	'sub_aie_amara',
+	'form_aie_cfp',
+	'evt_aie_sandbox',
+	'accepted',
+	'{"format":"stage","title":"Shipping agents that recover","abstract":"Patterns for durable agent operations in production finance stacks.","duration_minutes":20}',
+	'FinServ',
+	'amara.diallo@sandbox.invalid',
+	'Amara Diallo',
+	'person_aie_amara',
+	'cfp',
+	1754650100000,
+	1754650100000,
+	1754650100000
+),
+(
+	'sub_aie_jonas',
+	'form_aie_cfp',
+	'evt_aie_sandbox',
+	'accepted',
+	'{"format":"stage","title":"What actually breaks in production","abstract":"A field report from operating agent systems under load.","duration_minutes":20}',
+	'Platform',
+	'jonas.weber@sandbox.invalid',
+	'Jonas Weber',
+	'person_aie_jonas',
+	'cfp',
+	1754650200000,
+	1754650200000,
+	1754650200000
+),
+(
+	'sub_aie_priya',
+	'form_aie_cfp',
+	'evt_aie_sandbox',
+	'under_review',
+	'{"format":"stage","title":"Evals beyond vibes","abstract":"A practical quality loop for AI products that ship weekly.","duration_minutes":20}',
+	'Practice',
+	'priya.nair@sandbox.invalid',
+	'Priya Nair',
+	'person_aie_priya',
+	'cfp',
+	1754650300000,
+	1754650300000,
+	1754650300000
+),
+(
+	'sub_aie_diego',
+	'form_aie_cfp',
+	'evt_aie_sandbox',
+	'submitted',
+	'{"format":"online","title":"Structured outputs at scale","abstract":"How typed contracts keep integrations dependable.","duration_minutes":30,"online_platform":"youtube"}',
+	'Platform',
+	'diego.reyes@sandbox.invalid',
+	'Diego Reyes',
+	'person_aie_diego',
+	'cfp',
+	1754650400000,
+	1754650400000,
+	1754650400000
+),
+(
+	'sub_aie_maya',
+	'form_aie_workshop',
+	'evt_aie_sandbox',
+	'accepted',
+	'{"format":"workshop","title":"Build a capable MCP server","abstract":"A hands-on protocol workshop for tool-calling agents.","duration_minutes":90,"workshop_capacity":40,"workshop_prereqs":"Laptop with Node 22."}',
+	'Agents',
+	'maya.chen@sandbox.invalid',
+	'Maya Chen',
+	'person_aie_maya',
+	'cfp',
+	1754650500000,
+	1754650500000,
+	1754650500000
+),
+(
+	'sub_aie_zoe',
+	'form_aie_lightning',
+	'evt_aie_sandbox',
+	'submitted',
+	'{"format":"lightning","title":"The MCP ecosystem one year in","abstract":"A short architecture tour with production lessons.","lightning_hook":"Stop treating tools as an afterthought."}',
+	'Agents',
+	'zoe.martin@sandbox.invalid',
+	'Zoe Martin',
+	'person_aie_zoe',
+	'cfp',
+	1754650600000,
+	1754650600000,
+	1754650600000
+),
+(
+	'sub_aie_kai',
+	'form_aie_cfp',
+	'evt_aie_sandbox',
+	'submitted',
+	'{"format":"stage","title":"A calmer workflow for approvals","abstract":"Risk-sensitive review without bottlenecks in bank AI programs.","duration_minutes":20}',
+	'FinServ',
+	'kai.brooks@sandbox.invalid',
+	'Kai Brooks',
+	'person_aie_kai',
+	'cfp',
+	1754650700000,
+	1754650700000,
+	1754650700000
+),
+(
+	'sub_aie_leila',
+	'form_aie_lightning',
+	'evt_aie_sandbox',
+	'under_review',
+	'{"format":"lightning","title":"Retrieval that knows when to stop","abstract":"Avoid confident answers from weak evidence.","lightning_hook":"Cite or abstain."}',
+	'Practice',
+	'leila.rahman@sandbox.invalid',
+	'Leila Rahman',
+	'person_aie_leila',
+	'cfp',
+	1754650800000,
+	1754650800000,
+	1754650800000
+);
+
+INSERT INTO submission_speakers (
+	id, submission_id, person_id, name, email, bio, position, status, invited_at, confirmed_at, added_after_acceptance, confirm_token_hash
+) VALUES
+(
+	'spk_aie_amara',
+	'sub_aie_amara',
+	'person_aie_amara',
+	'Amara Diallo',
+	'amara.diallo@sandbox.invalid',
+	'Staff engineer building recoverable agents.',
+	0,
+	'confirmed',
+	1754650100000,
+	1754650100000,
+	0,
+	NULL
+),
+(
+	'spk_aie_jonas',
+	'sub_aie_jonas',
+	'person_aie_jonas',
+	'Jonas Weber',
+	'jonas.weber@sandbox.invalid',
+	'Principal platform engineer.',
+	0,
+	'confirmed',
+	1754650200000,
+	1754650200000,
+	0,
+	NULL
+),
+(
+	'spk_aie_maya',
+	'sub_aie_maya',
+	'person_aie_maya',
+	'Maya Chen',
+	'maya.chen@sandbox.invalid',
+	'Protocol engineer focused on MCP.',
+	0,
+	'confirmed',
+	1754650500000,
+	1754650500000,
+	0,
+	NULL
+);
+
+INSERT INTO speaker_profiles (
+	id, event_id, person_id, display_name, bio, job_title, company, headshot_asset_id, created_at, updated_at
+) VALUES
+(
+	'prof_aie_amara',
+	'evt_aie_sandbox',
+	'person_aie_amara',
+	'Amara Diallo',
+	'Staff engineer building recoverable agents.',
+	'Staff Engineer',
+	'Resilient Labs',
+	NULL,
+	1754650100000,
+	1754650100000
+),
+(
+	'prof_aie_jonas',
+	'evt_aie_sandbox',
+	'person_aie_jonas',
+	'Jonas Weber',
+	'Principal platform engineer.',
+	'Principal Platform Engineer',
+	'Tideway Systems',
+	NULL,
+	1754650200000,
+	1754650200000
+),
+(
+	'prof_aie_maya',
+	'evt_aie_sandbox',
+	'person_aie_maya',
+	'Maya Chen',
+	'Protocol engineer focused on MCP.',
+	'Protocol Engineer',
+	'Open Systems Lab',
+	NULL,
+	1754650500000,
+	1754650500000
 );

@@ -51,7 +51,7 @@ npm run preview
 
 | What | Local URL |
 | --- | --- |
-| Writable CFP sandbox | `/e/aie-sandbox/submit/cfp` |
+| Writable CFP sandbox (`AI.Engineer Sandbox Event – NYC`) | `/e/aie-sandbox/submit/cfp` (also `lightning`, `workshop`) |
 | Form builder | `/admin/events/aie-sandbox/forms` |
 | Submissions list → detail | `/admin/events/aie-sandbox/submissions` |
 | Program cockpit | `/admin/events/aie-sandbox/dashboard` |
@@ -71,7 +71,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 | | Purpose |
 | --- | --- |
-| **`aie-sandbox`** | Writable local fixture. Submit → review → schedule → publish without creating an event first. |
+| **`aie-sandbox`** | Writable local fixture named **AI.Engineer Sandbox Event – NYC**. Three public forms (`cfp`, `lightning`, `workshop`) plus pending and accepted abstracts for screenshot walkthroughs. Submit → review → schedule → publish without creating an event first. |
 | **`/demo`** | Read-only seeded walkthrough. Safe to show publicly; mutations are blocked. |
 | **Real event** | Primary path in production: **Create your event** on the homepage / `/admin` after magic-link sign-in. Owned by you; never replace with seed scripts. |
 
