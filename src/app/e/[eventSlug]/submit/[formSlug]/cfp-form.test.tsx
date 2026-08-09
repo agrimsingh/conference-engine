@@ -2,9 +2,11 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormFieldDef } from "@/lib/domain";
-import { CfpForm } from "./cfp-form";
+import { CfpForm, SpeakerPortalRedirect } from "./cfp-form";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -151,5 +153,74 @@ describe("CfpForm progress and review step", () => {
 
 		expect(container.textContent).toContain("Review before submitting");
 		expect(container.textContent).toContain("Check your proposal");
+	});
+});
+
+describe("SpeakerPortalRedirect", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("counts down then navigates to the speaker portal", async () => {
+		const navigate = vi.fn();
+
+		await act(async () => {
+			root.render(
+				<SpeakerPortalRedirect delaySeconds={3} href="/portal" navigate={navigate} />,
+			);
+		});
+
+		expect(container.textContent).toContain("Redirecting to the speaker portal in");
+		expect(container.textContent).toContain("3");
+		const link = container.querySelector('a[href="/portal"]');
+		expect(link?.textContent).toBe("Go to speaker portal");
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1_000);
+		});
+		expect(container.textContent).toContain("2");
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1_000);
+		});
+		expect(container.textContent).toContain("1");
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1_000);
+		});
+		expect(navigate).toHaveBeenCalledWith("/portal");
+	});
+
+	it("pauses auto-redirect when Stay on this page is clicked", async () => {
+		const navigate = vi.fn();
+
+		await act(async () => {
+			root.render(
+				<SpeakerPortalRedirect delaySeconds={5} href="/portal" navigate={navigate} />,
+			);
+		});
+
+		const stay = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "Stay on this page",
+		);
+		expect(stay).toBeTruthy();
+
+		await act(async () => {
+			stay?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+
+		expect(container.textContent).toContain("Auto-redirect paused");
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(10_000);
+		});
+		expect(navigate).not.toHaveBeenCalled();
+		expect(container.querySelector('a[href="/portal"]')?.textContent).toBe(
+			"Go to speaker portal",
+		);
 	});
 });

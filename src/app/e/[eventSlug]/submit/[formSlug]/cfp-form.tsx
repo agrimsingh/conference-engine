@@ -17,6 +17,8 @@ import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";
 import { CfpReviewStep } from "./cfp-review-step";
 
 const AUTOSAVE_DELAY_MS = 2_500;
+const SPEAKER_PORTAL_HREF = "/portal";
+const PORTAL_REDIRECT_SECONDS = 10;
 
 type Props = {
 	eventSlug: string;
@@ -35,6 +37,85 @@ type Props = {
 
 type FormStep = "edit" | "review";
 type AutosaveStatus = "idle" | "saving" | "saved" | "error";
+
+type PortalRedirectState =
+	| { status: "counting"; secondsLeft: number }
+	| { status: "paused"; secondsLeft: number };
+
+function assignLocation(href: string) {
+	window.location.assign(href);
+}
+
+function pauseRedirect(prev: PortalRedirectState): PortalRedirectState {
+	return { status: "paused", secondsLeft: prev.secondsLeft };
+}
+
+export function SpeakerPortalRedirect({
+	href = SPEAKER_PORTAL_HREF,
+	delaySeconds = PORTAL_REDIRECT_SECONDS,
+	navigate = assignLocation,
+}: {
+	href?: string;
+	delaySeconds?: number;
+	navigate?: (href: string) => void;
+}) {
+	const [redirect, setRedirect] = useState<PortalRedirectState>({
+		status: "counting",
+		secondsLeft: delaySeconds,
+	});
+
+	useEffect(() => {
+		if (redirect.status !== "counting") return;
+		if (redirect.secondsLeft <= 0) {
+			navigate(href);
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			setRedirect((prev) =>
+				prev.status === "counting"
+					? { status: "counting", secondsLeft: prev.secondsLeft - 1 }
+					: prev,
+			);
+		}, 1_000);
+		return () => window.clearTimeout(timer);
+	}, [href, navigate, redirect]);
+
+	return (
+		<div className="space-y-3 border-t border-neutral-800 pt-5">
+			<p className="text-sm text-neutral-400" aria-live="polite">
+				{redirect.status === "counting" ? (
+					<>
+						Redirecting to the speaker portal in{" "}
+						<span className="font-medium text-neutral-200 tabular-nums">
+							{redirect.secondsLeft}
+						</span>
+						s…
+					</>
+				) : (
+					<>Auto-redirect paused. You can still open the speaker portal anytime.</>
+				)}
+			</p>
+			<div className="flex flex-wrap items-center gap-3">
+				<a
+					href={href}
+					className={buttonClasses("primary")}
+					onClick={() => setRedirect(pauseRedirect)}
+				>
+					Go to speaker portal
+				</a>
+				{redirect.status === "counting" ? (
+					<button
+						type="button"
+						className={buttonClasses("secondary")}
+						onClick={() => setRedirect(pauseRedirect)}
+					>
+						Stay on this page
+					</button>
+				) : null}
+			</div>
+		</div>
+	);
+}
 
 export function CfpForm({
 	eventSlug,
@@ -306,6 +387,7 @@ export function CfpForm({
 						Edit proposal
 					</button>
 				) : null}
+				<SpeakerPortalRedirect />
 			</div>
 		);
 	}
