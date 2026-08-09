@@ -33,12 +33,13 @@ describe("self-service configuration", () => {
 		expect(configuration.review).toMatchObject({ criteriaCount: 1 });
 		expect(configuration.cfp).toMatchObject({ slug: "cfp", fieldCount: 3 });
 
-		await updateEventConfiguration(env.DB, created.eventId, { name: "Updated event", startDay: "2026-10-03", endDay: "2026-10-04", timezone: "Asia/Tokyo", dayStartMinutes: 600, dayEndMinutes: 1140, slotDurationMinutes: 45 });
+		await updateEventConfiguration(env.DB, created.eventId, { name: "Updated event", startDay: "2026-10-03", endDay: "2026-10-04", timezone: "Asia/Tokyo", dayStartMinutes: 600, dayEndMinutes: 1140, slotDurationMinutes: 45, trackConflictPolicy: "allow" });
 		await createRoom(env.DB, created.eventId, "Workshop");
 		await createTrack(env.DB, created.eventId, "Workshops", "workshops");
 		await createTaskTemplate(env.DB, created.eventId, { key: "release", label: "Release form", kind: "file", required: false });
 		configuration = await loadEventConfiguration(env.DB, created.eventId);
-		expect(configuration.event).toMatchObject({ name: "Updated event", timezone: "Asia/Tokyo", day_start_minutes: 600, day_end_minutes: 1140, slot_duration_minutes: 45 });
+		expect(configuration.event).toMatchObject({ name: "Updated event", timezone: "Asia/Tokyo", day_start_minutes: 600, day_end_minutes: 1140, slot_duration_minutes: 45, track_conflict_policy: "allow" });
+		expect(await getEventById(env.DB, created.eventId)).toMatchObject({ track_conflict_policy: "allow" });
 		expect(configuration.rooms.map((room) => room.name)).toContain("Workshop");
 		expect(configuration.tracks.map((track) => track.slug)).toContain("workshops");
 		expect(configuration.tasks.find((task) => task.key === "release")).toMatchObject({ label: "Release form", required: 0 });

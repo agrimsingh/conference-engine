@@ -56,16 +56,16 @@ export default async function ReviewPage({ searchParams }: Props) {
 				/>
 				{admin ? (
 					<p className="text-sm text-neutral-400">
-						As organizer: activate a plan from{" "}
+						As organizer: open an event from{" "}
 						<Link
 							className="font-medium text-neutral-200 underline underline-offset-2"
-							href="/admin/events/aie-sandbox/submissions"
+							href="/admin"
 						>
-							Submissions
+							Admin
 						</Link>
-						, then reopen this page with{" "}
+						, activate a plan on Submissions, then reopen this page with{" "}
 						<code className="rounded-md bg-neutral-900 px-1.5 py-0.5 text-xs text-neutral-300">
-							?event=aie-sandbox
+							?event=&lt;event-slug&gt;
 						</code>
 						.
 					</p>

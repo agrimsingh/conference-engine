@@ -12,3 +12,6 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:15:02Z	wave1	Created worktrees for cockpit review schedule public setup	Wave0 landed; continue roadmap	e1d5e5a	launching
 2026-08-09T08:15:36Z	council	Security scan NONE; Wave0 merge already landed before late council reports	stale 11pct report superseded by e1d5e5a	3c3d2668 + fb4863a6	noted
 2026-08-09T08:17:52Z	wave1	Merged schedule polish to main	unplaced rail search, find slot, publish confirm modal	5d475df	tests green
+2026-08-09T08:19:03Z	wave0	Fable adjudication accepted; Wave0 council calls moot post-merge	all 10 reviews spot-checked; remaining: 4 test holes + aie-sandbox review link + visibility always footgun	401cff38	adopted
+2026-08-09T08:19:03Z	process	Per-unit test bars are advisory during waves	Wave0 skipped some must-have tests; logged so audit trail stops rotting; batch debt separately	fable §3.3	policy
+2026-08-09T08:19:38Z	wave0	Landed Wave0 test debt + review slug fix	Fable §4.1; tests advisory policy logged	activate/clone/preset400/policy + review page	green
