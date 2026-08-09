@@ -131,4 +131,22 @@ describe("CFP payload bounds", () => {
 			step: 5,
 		});
 	});
+
+	it("accepts file_upload config on field write", () => {
+		const valid = validateFieldWrite({
+			key: "slides",
+			label: "Slides",
+			fieldType: "file_upload",
+			required: false,
+			position: 1,
+			visibilityRule: { op: "always" },
+			config: { kind: "file_upload", accept: ["application/pdf"], maxBytes: 1048576 },
+		});
+		expect(valid).not.toBeTypeOf("string");
+		expect(typeof valid === "string" ? null : valid.config).toEqual({
+			kind: "file_upload",
+			accept: ["application/pdf"],
+			maxBytes: 1048576,
+		});
+	});
 });

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
-import { FIELD_TYPES, type CategoryRoute, type FieldType, type VisibilityRule } from "@/lib/domain";
+import { FIELD_TYPES, type CategoryRoute, type FieldType, type FormFieldDef, type FormSection, type VisibilityRule } from "@/lib/domain";
 
 import type { SelectOption } from "@/lib/domain/form-fields";
+import { FormBuilderPreview } from "./form-builder-preview";
 
 type FieldRow = {
 	id: string;
@@ -17,6 +18,7 @@ type FieldRow = {
 	helpText?: string;
 	visibilityRule: VisibilityRule;
 	config: Record<string, unknown>;
+	sectionKey?: string | null;
 };
 
 type Props = {
@@ -36,6 +38,8 @@ type Props = {
 	initialConfirmationCopy: string;
 	initialReminderCopy: string;
 	initialThankYouCopy: string;
+	initialSections: FormSection[];
+	initialSubmissionCount: number;
 	initialFields: FieldRow[];
 };
 
@@ -94,6 +98,8 @@ type ConfigDraft = {
 	numberMin: string;
 	numberMax: string;
 	numberStep: string;
+	uploadAccept: string;
+	uploadMaxMb: string;
 };
 
 function emptyConfigDraft(): ConfigDraft {
@@ -104,6 +110,8 @@ function emptyConfigDraft(): ConfigDraft {
 		numberMin: "",
 		numberMax: "",
 		numberStep: "",
+		uploadAccept: "",
+		uploadMaxMb: "",
 	};
 }
 
@@ -115,6 +123,8 @@ function configDraftFromField(config: Record<string, unknown>): ConfigDraft {
 		numberMin: typeof config.min === "number" ? String(config.min) : "",
 		numberMax: typeof config.max === "number" ? String(config.max) : "",
 		numberStep: typeof config.step === "number" ? String(config.step) : "",
+		uploadAccept: Array.isArray(config.accept) ? config.accept.join(", ") : "",
+		uploadMaxMb: typeof config.maxBytes === "number" ? String(Math.round(config.maxBytes / (1024 * 1024))) : "",
 	};
 }
 
@@ -322,6 +332,8 @@ export function FormBuilder({
 	initialConfirmationCopy,
 	initialReminderCopy,
 	initialThankYouCopy,
+	initialSections,
+	initialSubmissionCount,
 	initialFields,
 }: Props) {
 	const router = useRouter();
@@ -343,12 +355,17 @@ export function FormBuilder({
 	const [reminderCopy, setReminderCopy] = useState(initialReminderCopy);
 	const [thankYouCopy, setThankYouCopy] = useState(initialThankYouCopy);
 	const [fields, setFields] = useState(initialFields);
+	const [sections, setSections] = useState<FormSection[]>(initialSections);
+	const [dragId, setDragId] = useState<string | null>(null);
+	const canEditKeys = initialSubmissionCount === 0;
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<(
 		{
+			key: string;
 			label: string;
 			required: boolean;
 			helpText: string;
+			sectionKey: string;
 			visibilityOp: VisibilityOp;
 			visibilityFieldKey: string;
 			visibilityValue: string;
@@ -364,6 +381,7 @@ export function FormBuilder({
 		fieldType: "text" as FieldType,
 		required: false,
 		helpText: "",
+		sectionKey: "",
 		visibilityOp: "always" as VisibilityOp,
 		visibilityFieldKey: "",
 		visibilityValue: "",
@@ -371,6 +389,11 @@ export function FormBuilder({
 		options: defaultSelectOptions(),
 		...emptyConfigDraft(),
 	});
+
+	const previewFields = useMemo(
+		() => fields.map((field) => rowToPreviewField(field)),
+		[fields],
+	);
 
 	const base = `/api/admin/events/${eventSlug}/forms/${formSlug}/fields`;
 	const visibilitySourceKeys = fields.filter((field) => field.fieldType === "select").map((field) => field.key);
@@ -418,6 +441,7 @@ export function FormBuilder({
 				confirmationCopy: confirmationCopy.trim() || null,
 				reminderCopy: reminderCopy.trim() || null,
 				thankYouCopy: thankYouCopy.trim() || null,
+				sections,
 			}),
 		});
 		const json = (await res.json()) as { ok?: boolean; error?: string };
@@ -448,6 +472,7 @@ export function FormBuilder({
 				visibilityRule,
 				config,
 				helpText: draft.helpText.trim() || undefined,
+				sectionKey: draft.sectionKey.trim() || null,
 			}),
 		});
 		const json = (await res.json()) as {
@@ -472,6 +497,7 @@ export function FormBuilder({
 			visibilityValue: "",
 			visibilityValues: "",
 			options: defaultSelectOptions(),
+			sectionKey: "",
 			...emptyConfigDraft(),
 		});
 		router.refresh();
@@ -480,9 +506,11 @@ export function FormBuilder({
 	function startEdit(field: FieldRow) {
 		setEditingId(field.id);
 		setEditDraft({
+			key: field.key,
 			label: field.label,
 			required: field.required,
 			helpText: field.helpText ?? "",
+			sectionKey: field.sectionKey ?? "",
 			...visibilityDraftFromRule(field.visibilityRule),
 			options: readSelectOptions(field.config),
 			...configDraftFromField(field.config),
@@ -508,6 +536,14 @@ export function FormBuilder({
 			if (min !== undefined) config.min = min;
 			if (max !== undefined) config.max = max;
 			if (step !== undefined && step > 0) config.step = step;
+			return config;
+		}
+		if (fieldType === "file_upload") {
+			const config: Record<string, unknown> = { kind: "file_upload" };
+			const accept = configDraft.uploadAccept.split(",").map((item) => item.trim()).filter(Boolean);
+			if (accept.length) config.accept = accept;
+			const maxMb = optionalPositiveInt(configDraft.uploadMaxMb);
+			if (maxMb !== undefined) config.maxBytes = maxMb * 1024 * 1024;
 			return config;
 		}
 		const config: Record<string, unknown> = { kind: fieldType };
@@ -542,7 +578,7 @@ export function FormBuilder({
 			body: JSON.stringify({
 				fieldId: field.id,
 				field: {
-					key: field.key,
+					key: editDraft.key.trim(),
 					label: editDraft.label,
 					fieldType: field.fieldType,
 					required: editDraft.required,
@@ -550,6 +586,7 @@ export function FormBuilder({
 					visibilityRule,
 					config: configForFieldEdit(field, editDraft),
 					helpText: editDraft.helpText.trim() || undefined,
+					sectionKey: editDraft.sectionKey.trim() || null,
 				},
 			}),
 		});
@@ -591,13 +628,7 @@ export function FormBuilder({
 		router.refresh();
 	}
 
-	async function move(fieldId: string, dir: -1 | 1) {
-		const index = fields.findIndex((f) => f.id === fieldId);
-		const next = index + dir;
-		if (index < 0 || next < 0 || next >= fields.length) return;
-		const ordered = [...fields];
-		const [item] = ordered.splice(index, 1);
-		ordered.splice(next, 0, item!);
+	async function reorderFields(ordered: FieldRow[]) {
 		setFields(ordered);
 		setBusy(true);
 		const res = await fetch(base, {
@@ -617,8 +648,32 @@ export function FormBuilder({
 		router.refresh();
 	}
 
+	async function move(fieldId: string, dir: -1 | 1) {
+		const index = fields.findIndex((f) => f.id === fieldId);
+		const next = index + dir;
+		if (index < 0 || next < 0 || next >= fields.length) return;
+		const ordered = [...fields];
+		const [item] = ordered.splice(index, 1);
+		ordered.splice(next, 0, item!);
+		await reorderFields(ordered);
+	}
+
+	function dropField(targetId: string) {
+		if (!dragId || dragId === targetId) return;
+		const from = fields.findIndex((field) => field.id === dragId);
+		const to = fields.findIndex((field) => field.id === targetId);
+		if (from < 0 || to < 0) return;
+		const ordered = [...fields];
+		const [item] = ordered.splice(from, 1);
+		ordered.splice(to, 0, item!);
+		setDragId(null);
+		void reorderFields(ordered);
+	}
+
 	return (
 		<div className="space-y-8">
+			<FormBuilderPreview title={title} description={description} sections={sections} fields={previewFields} />
+
 			<section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<h2 className="text-sm font-medium text-neutral-200">Form settings</h2>
 				<label className="block text-xs text-neutral-400">
@@ -714,17 +769,48 @@ export function FormBuilder({
 				</Button>
 			</section>
 
+			<section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+				<h2 className="text-sm font-medium text-neutral-200">Sections</h2>
+				<p className="text-xs text-neutral-500">Optional groups for the public form. Phase 4 adds section navigation; headers render now.</p>
+				<SectionsEditor sections={sections} onChange={setSections} />
+			</section>
+
 			<section className="space-y-3">
 				<h2 className="text-sm font-medium text-neutral-200">Fields</h2>
+				<p className="text-xs text-neutral-500">Drag rows to reorder. Up/Down still work.</p>
 				<ol className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 					{fields.map((field, index) => (
-						<li key={field.id} className="px-4 py-3">
+						<li
+							key={field.id}
+							className={`px-4 py-3 ${dragId === field.id ? "bg-neutral-800/60" : ""}`}
+							draggable={!busy && editingId !== field.id}
+							onDragStart={() => setDragId(field.id)}
+							onDragEnd={() => setDragId(null)}
+							onDragOver={(event) => event.preventDefault()}
+							onDrop={() => dropField(field.id)}
+						>
 							{editingId === field.id && editDraft ? (
 								<div className="space-y-3">
-									<p className="text-xs text-neutral-500">
-										Key <code className="text-neutral-400">{field.key}</code> ·{" "}
-										{field.fieldType} (immutable)
-									</p>
+									<label className="block text-xs text-neutral-400">
+										Key
+										<input
+											className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 disabled:opacity-50"
+											value={editDraft.key}
+											disabled={!canEditKeys}
+											onChange={(e) =>
+												setEditDraft((d) =>
+													d ? { ...d, key: e.target.value } : d,
+												)
+											}
+										/>
+									</label>
+									{!canEditKeys ? (
+										<p className="text-xs text-neutral-500">Keys lock after the first submission to preserve answers_json.</p>
+									) : (
+										<p className="text-xs text-neutral-500">
+											Key <code className="text-neutral-400">{field.key}</code> · {field.fieldType}
+										</p>
+									)}
 									<label className="block text-xs text-neutral-400">
 										Label
 										<input
@@ -761,6 +847,13 @@ export function FormBuilder({
 										/>
 										Required
 									</label>
+									<SectionSelect
+										sections={sections}
+										value={editDraft.sectionKey}
+										onChange={(sectionKey) =>
+											setEditDraft((d) => (d ? { ...d, sectionKey } : d))
+										}
+									/>
 									<VisibilityFields
 										op={editDraft.visibilityOp}
 										fieldKey={editDraft.visibilityFieldKey}
@@ -812,9 +905,13 @@ export function FormBuilder({
 							) : (
 								<div className="flex flex-wrap items-center justify-between gap-3">
 									<div className="min-w-0">
-										<p className="font-medium text-neutral-100">{field.label}</p>
+										<p className="font-medium text-neutral-100">
+											<span className="mr-2 cursor-grab text-neutral-500" aria-hidden="true">⋮⋮</span>
+											{field.label}
+										</p>
 										<p className="text-xs text-neutral-500">
 											{field.key} · {field.fieldType}
+											{field.sectionKey ? ` · section ${field.sectionKey}` : ""}
 											{field.required ? " · required" : ""}
 											{field.helpText ? " · has help" : ""}
 											{" · "}
@@ -914,6 +1011,11 @@ export function FormBuilder({
 						/>
 						Required
 					</label>
+					<SectionSelect
+						sections={sections}
+						value={draft.sectionKey}
+						onChange={(sectionKey) => setDraft((d) => ({ ...d, sectionKey }))}
+					/>
 					<label className="block text-xs text-neutral-400 sm:col-span-2">
 						Help text
 						<input
@@ -978,7 +1080,8 @@ function FieldConfigFields({
 	const showsMaxLength = fieldType === "text" || fieldType === "textarea";
 	const showsRows = fieldType === "textarea";
 	const showsNumber = fieldType === "number";
-	if (!showsPlaceholder && !showsMaxLength && !showsRows && !showsNumber) return null;
+	const showsUpload = fieldType === "file_upload";
+	if (!showsPlaceholder && !showsMaxLength && !showsRows && !showsNumber && !showsUpload) return null;
 
 	return (
 		<div className="grid gap-3 sm:grid-cols-2">
@@ -1050,8 +1153,148 @@ function FieldConfigFields({
 					</label>
 				</>
 			) : null}
+			{showsUpload ? (
+				<>
+					<label className="block text-xs text-neutral-400 sm:col-span-2">
+						Accepted types (comma-separated MIME or patterns)
+						<input
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							placeholder="application/pdf, image/*"
+							value={draft.uploadAccept}
+							onChange={(e) => onChange({ uploadAccept: e.target.value })}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Max size (MB)
+						<input
+							type="number"
+							min={1}
+							max={25}
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							placeholder="10"
+							value={draft.uploadMaxMb}
+							onChange={(e) => onChange({ uploadMaxMb: e.target.value })}
+						/>
+					</label>
+				</>
+			) : null}
 		</div>
 	);
+}
+
+function SectionSelect({
+	sections,
+	value,
+	onChange,
+}: {
+	sections: FormSection[];
+	value: string;
+	onChange: (value: string) => void;
+}) {
+	if (!sections.length) return null;
+	return (
+		<label className="block text-xs text-neutral-400">
+			Section
+			<select
+				className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+			>
+				<option value="">No section</option>
+				{sections.map((section) => (
+					<option key={section.key} value={section.key}>
+						{section.title}
+					</option>
+				))}
+			</select>
+		</label>
+	);
+}
+
+function SectionsEditor({
+	sections,
+	onChange,
+}: {
+	sections: FormSection[];
+	onChange: (sections: FormSection[]) => void;
+}) {
+	return (
+		<div className="space-y-2">
+			{sections.map((section, index) => (
+				<div key={section.key || index} className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-950/40 p-3 sm:grid-cols-2">
+					<label className="block text-xs text-neutral-400">
+						Key
+						<input
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={section.key}
+							onChange={(e) => {
+								const next = [...sections];
+								next[index] = { ...section, key: e.target.value };
+								onChange(next);
+							}}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Title
+						<input
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={section.title}
+							onChange={(e) => {
+								const next = [...sections];
+								next[index] = { ...section, title: e.target.value };
+								onChange(next);
+							}}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400 sm:col-span-2">
+						Description
+						<input
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={section.description ?? ""}
+							onChange={(e) => {
+								const next = [...sections];
+								next[index] = { ...section, description: e.target.value };
+								onChange(next);
+							}}
+						/>
+					</label>
+					<button
+						type="button"
+						className="justify-self-start text-xs text-red-300"
+						onClick={() => onChange(sections.filter((_, i) => i !== index))}
+					>
+						Remove section
+					</button>
+				</div>
+			))}
+			<button
+				type="button"
+				className="text-xs text-emerald-400"
+				onClick={() =>
+					onChange([
+						...sections,
+						{ key: `section_${sections.length + 1}`, title: "New section" },
+					])
+				}
+			>
+				+ Add section
+			</button>
+		</div>
+	);
+}
+
+function rowToPreviewField(field: FieldRow): FormFieldDef {
+	return {
+		key: field.key,
+		label: field.label,
+		fieldType: field.fieldType,
+		required: field.required,
+		position: field.position,
+		visibilityRule: field.visibilityRule,
+		config: field.config as FormFieldDef["config"],
+		helpText: field.helpText,
+		sectionKey: field.sectionKey ?? null,
+	};
 }
 
 function OptionsEditor({

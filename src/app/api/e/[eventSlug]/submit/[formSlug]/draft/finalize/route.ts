@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { finalizeDraft, loadDraftForResume } from "@/lib/cfp/drafts";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
-import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers } from "@/lib/cfp/submit";
+import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswersWithAssets } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
@@ -36,7 +36,12 @@ export async function POST(request: Request, context: Context) {
 		if (error instanceof DemoEventWriteError) return NextResponse.json({ ok: false, errors: ["This form is read-only"] }, { status: 403 });
 		throw error;
 	}
-	const validated = validateSubmissionAnswers(loaded.fields, answers);
+	const validated = await validateSubmissionAnswersWithAssets(db, {
+		eventId: loaded.event.id,
+		formId: loaded.form.id,
+		fields: loaded.fields,
+		answers,
+	});
 	if (!validated.ok) return NextResponse.json(validated, { status: 400 });
 	let result: Awaited<ReturnType<typeof finalizeDraft>>;
 	try {

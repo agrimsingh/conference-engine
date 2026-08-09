@@ -158,6 +158,8 @@ export type AssetRow = {
 	content_type: string | null;
 	filename: string | null;
 	uploaded_by_person_id: string | null;
+	form_id?: string | null;
+	field_key?: string | null;
 	created_at: number;
 };
 

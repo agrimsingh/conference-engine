@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { FormFieldDef, FormSectionDef } from "@/lib/domain";
+import type { FormFieldDef, FormSection } from "@/lib/domain";
 import { groupVisibleFieldsBySection } from "./form-sections";
 
-const sections: FormSectionDef[] = [
+const sections: FormSection[] = [
 	{ key: "basics", title: "Basics" },
 	{ key: "details", title: "Details", description: "Extra context" },
 ];

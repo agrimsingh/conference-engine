@@ -8,6 +8,7 @@ import {
 	type FieldType,
 	type FormFieldDef,
 } from "@/lib/domain";
+import { parseFormSections, serializeFormSections, validateFormSectionsInput, type FormSection } from "@/lib/domain/form-sections";
 import type { VisibilityRule } from "@/lib/domain/visibility";
 import type { CfpFormRow, FormFieldRow } from "@/lib/db/types";
 import { getFormBySlug } from "@/lib/db/queries";
@@ -112,6 +113,7 @@ export async function updateFormMeta(
 		confirmationCopy?: string | null;
 		reminderCopy?: string | null;
 		thankYouCopy?: string | null;
+		sections?: FormSection[] | null;
 	},
 ): Promise<void> {
 	const existing = await db
@@ -161,6 +163,23 @@ export async function updateFormMeta(
 	if (!Number.isInteger(submissionLimit) || submissionLimit < 0) {
 		throw new Error("Submission limit must be a non-negative whole number");
 	}
+	let sectionsJson = existing.sections_json ?? null;
+	if (args.sections !== undefined) {
+		sectionsJson = args.sections === null || args.sections.length === 0
+			? null
+			: serializeFormSections(args.sections);
+	}
+	const sectionKeys = new Set(parseFormSections(sectionsJson).map((section) => section.key));
+	if (sectionKeys.size) {
+		const fields = await db.prepare(
+			"SELECT section_key FROM form_fields WHERE form_id = ? AND soft_deleted = 0 AND section_key IS NOT NULL",
+		).bind(args.formId).all<{ section_key: string }>();
+		for (const field of fields.results) {
+			if (field.section_key && !sectionKeys.has(field.section_key)) {
+				throw new Error(`Section ${field.section_key} is still assigned to a field`);
+			}
+		}
+	}
 	const now = Date.now();
 
 	await db
@@ -168,7 +187,7 @@ export async function updateFormMeta(
 		`UPDATE cfp_forms
        SET title = ?, description = ?, status = ?, opens_at = ?, closes_at = ?, category_routing_json = ?,
            min_speakers = ?, max_speakers = ?, drafts_enabled = ?, submission_limit = ?,
-           welcome_copy = ?, confirmation_copy = ?, reminder_copy = ?, thank_you_copy = ?, updated_at = ?
+           welcome_copy = ?, confirmation_copy = ?, reminder_copy = ?, thank_you_copy = ?, sections_json = ?, updated_at = ?
        WHERE id = ?`,
 		)
 		.bind(
@@ -186,6 +205,7 @@ export async function updateFormMeta(
 			args.confirmationCopy === undefined ? existing.confirmation_copy : args.confirmationCopy,
 			args.reminderCopy === undefined ? existing.reminder_copy : args.reminderCopy,
 			args.thankYouCopy === undefined ? existing.thank_you_copy : args.thankYouCopy,
+			sectionsJson,
 			now,
 			args.formId,
 		)
@@ -201,7 +221,15 @@ export type FieldWriteInput = {
 	visibilityRule: VisibilityRule;
 	config: FieldConfig;
 	helpText?: string;
+	sectionKey?: string | null;
 };
+
+export async function countFormSubmissions(db: D1Database, formId: string): Promise<number> {
+	const row = await db.prepare(
+		"SELECT COUNT(*) AS count FROM submissions WHERE form_id = ? AND submitted_at IS NOT NULL",
+	).bind(formId).first<{ count: number }>();
+	return row?.count ?? 0;
+}
 
 export function validateFieldWrite(input: unknown): FieldWriteInput | string {
 	if (typeof input !== "object" || input === null) return "Invalid field body";
@@ -240,6 +268,12 @@ export function validateFieldWrite(input: unknown): FieldWriteInput | string {
 
 	const helpText =
 		typeof body.helpText === "string" ? body.helpText.trim() : undefined;
+	const sectionKey =
+		body.sectionKey === null || body.sectionKey === ""
+			? null
+			: typeof body.sectionKey === "string"
+				? body.sectionKey.trim() || null
+				: undefined;
 
 	return {
 		key,
@@ -250,6 +284,7 @@ export function validateFieldWrite(input: unknown): FieldWriteInput | string {
 		visibilityRule,
 		config,
 		helpText: helpText || undefined,
+		sectionKey,
 	};
 }
 
@@ -302,14 +337,15 @@ export async function insertFormField(
 	input: FieldWriteInput,
 ): Promise<FormFieldRow> {
 	await assertVisibilityDependency(db, formId, input.key, input.visibilityRule);
+	await assertFieldSection(db, formId, input.sectionKey);
 	const id = newId("field");
 	const now = Date.now();
 	await db
 		.prepare(
 			`INSERT INTO form_fields (
         id, form_id, key, label, field_type, required, position,
-        visibility_rule, config, soft_deleted
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        visibility_rule, config, soft_deleted, section_key
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
 		)
 		.bind(
 			id,
@@ -321,6 +357,7 @@ export async function insertFormField(
 			input.position,
 			JSON.stringify(input.visibilityRule),
 			serializeConfig(input.config, input.helpText),
+			input.sectionKey ?? null,
 		)
 		.run();
 	await db
@@ -346,26 +383,36 @@ export async function updateFormField(
 		.bind(fieldId, formId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
-	// Keys are the answers_json contract; renaming would orphan stored answers.
 	if (input.key !== existing.key) {
-		throw new Error("Field key is immutable after create");
+		const submissionCount = await countFormSubmissions(db, formId);
+		if (submissionCount > 0) {
+			throw new Error("Field key is immutable after submissions exist");
+		}
+		const duplicate = await db.prepare(
+			"SELECT id FROM form_fields WHERE form_id = ? AND key = ? AND soft_deleted = 0 AND id != ?",
+		).bind(formId, input.key, fieldId).first<{ id: string }>();
+		if (duplicate) throw new Error("Another field already uses this key");
+		await assertKeyNotReferenced(db, formId, existing.key, input.key);
 	}
 	await assertVisibilityDependency(db, formId, input.key, input.visibilityRule);
+	await assertFieldSection(db, formId, input.sectionKey);
 
 	await db
 		.prepare(
 			`UPDATE form_fields
-       SET label = ?, field_type = ?, required = ?, position = ?,
-           visibility_rule = ?, config = ?
+       SET key = ?, label = ?, field_type = ?, required = ?, position = ?,
+           visibility_rule = ?, config = ?, section_key = ?
 		 WHERE id = ? AND form_id = ? AND soft_deleted = 0`,
 		)
 		.bind(
+			input.key,
 			input.label,
 			input.fieldType,
 			input.required ? 1 : 0,
 			input.position,
 			JSON.stringify(input.visibilityRule),
 			serializeConfig(input.config, input.helpText),
+			input.sectionKey ?? null,
 			fieldId,
 			formId,
 		)
@@ -415,6 +462,49 @@ export async function softDeleteFormField(
 		.prepare("UPDATE cfp_forms SET updated_at = ? WHERE id = ?")
 		.bind(Date.now(), formId)
 		.run();
+}
+
+async function assertFieldSection(
+	db: D1Database,
+	formId: string,
+	sectionKey: string | null | undefined,
+): Promise<void> {
+	if (!sectionKey) return;
+	const form = await db.prepare("SELECT sections_json FROM cfp_forms WHERE id = ?").bind(formId).first<{ sections_json: string | null }>();
+	if (!form) throw new Error("Form not found");
+	const sections = parseFormSections(form.sections_json);
+	if (!sections.some((section) => section.key === sectionKey)) {
+		throw new Error("sectionKey must reference a configured section");
+	}
+}
+
+async function assertKeyNotReferenced(
+	db: D1Database,
+	formId: string,
+	oldKey: string,
+	newKey: string,
+): Promise<void> {
+	if (oldKey === newKey) return;
+	await db.prepare(
+		`UPDATE form_fields
+		 SET visibility_rule = json_set(visibility_rule, '$.fieldKey', ?)
+		 WHERE form_id = ? AND soft_deleted = 0 AND json_extract(visibility_rule, '$.fieldKey') = ?`,
+	).bind(newKey, formId, oldKey).run();
+	const route = await db.prepare(
+		"SELECT category_routing_json FROM cfp_forms WHERE id = ?",
+	).bind(formId).first<{ category_routing_json: string | null }>();
+	if (route?.category_routing_json) {
+		try {
+			const parsed = JSON.parse(route.category_routing_json) as { fieldKey?: string; map?: Record<string, string> };
+			if (parsed.fieldKey === oldKey) {
+				await db.prepare(
+					"UPDATE cfp_forms SET category_routing_json = ? WHERE id = ?",
+				).bind(JSON.stringify({ ...parsed, fieldKey: newKey }), formId).run();
+			}
+		} catch {
+			/* leave invalid route untouched */
+		}
+	}
 }
 
 async function assertVisibilityDependency(
@@ -484,5 +574,8 @@ export function rowToFieldDef(row: FormFieldRow): FormFieldDef {
 		visibilityRule: JSON.parse(row.visibility_rule) as VisibilityRule,
 		config,
 		helpText,
+		sectionKey: row.section_key ?? null,
 	};
 }
+
+export { validateFormSectionsInput };

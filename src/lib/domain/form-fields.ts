@@ -10,6 +10,7 @@ export const FIELD_TYPES = [
 	"email",
 	"number",
 	"speaker_block",
+	"file_upload",
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -25,7 +26,14 @@ export type FieldConfig =
 	| { kind: "video"; placeholder?: string }
 	| { kind: "email"; placeholder?: string }
 	| { kind: "number"; min?: number; max?: number; step?: number }
-	| { kind: "speaker_block"; minSpeakers?: number; maxSpeakers?: number };
+	| { kind: "speaker_block"; minSpeakers?: number; maxSpeakers?: number }
+	| { kind: "file_upload"; accept?: string[]; maxBytes?: number };
+
+export type FileUploadAnswer = {
+	assetId: string;
+	filename: string;
+	contentType?: string;
+};
 
 export type FormFieldDef = {
 	key: string;
@@ -36,8 +44,7 @@ export type FormFieldDef = {
 	visibilityRule: VisibilityRule;
 	config: FieldConfig;
 	helpText?: string;
-	/** Set when Phase 3 form sections are configured for this field. */
-	sectionKey?: string;
+	sectionKey?: string | null;
 };
 
 type FieldTypeMeta = {
@@ -60,6 +67,10 @@ export const FIELD_TYPE_REGISTRY: Record<FieldType, FieldTypeMeta> = {
 	speaker_block: {
 		type: "speaker_block",
 		defaultConfig: { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 },
+	},
+	file_upload: {
+		type: "file_upload",
+		defaultConfig: { kind: "file_upload", maxBytes: 10 * 1024 * 1024 },
 	},
 };
 
@@ -109,6 +120,12 @@ export function isFieldConfig(value: unknown): value is FieldConfig {
 			return (min === undefined || Number.isInteger(min) && (min as number) >= 1)
 				&& (max === undefined || Number.isInteger(max) && (max as number) >= 1)
 				&& !(typeof min === "number" && typeof max === "number" && min > max);
+		}
+		case "file_upload": {
+			const accept = config.accept;
+			const maxBytes = config.maxBytes;
+			return (accept === undefined || (Array.isArray(accept) && accept.every((item) => typeof item === "string" && item.trim())))
+				&& (maxBytes === undefined || Number.isInteger(maxBytes) && (maxBytes as number) >= 1);
 		}
 		default:
 			return false;
@@ -217,11 +234,24 @@ export function validateFieldAnswer(
 			}
 			return null;
 		}
+		case "file_upload": {
+			if (!isFileUploadAnswer(answer)) return `${field.label} must include an uploaded file`;
+			if (!answer.filename.trim()) return `${field.label} must include a filename`;
+			return null;
+		}
 		default: {
 			const _exhaustive: never = field.config;
 			return _exhaustive;
 		}
 	}
+}
+
+export function isFileUploadAnswer(value: unknown): value is FileUploadAnswer {
+	if (typeof value !== "object" || value === null) return false;
+	const record = value as { assetId?: unknown; filename?: unknown; contentType?: unknown };
+	return typeof record.assetId === "string" && record.assetId.trim().length > 0
+		&& typeof record.filename === "string"
+		&& (record.contentType === undefined || typeof record.contentType === "string");
 }
 
 function isSpeakerAnswer(value: unknown): value is SpeakerAnswer {

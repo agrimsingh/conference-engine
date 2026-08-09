@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
-import { rowToFieldDef } from "@/lib/cfp/form-admin";
+import { rowToFieldDef, countFormSubmissions } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug, listFormFields } from "@/lib/db/queries";
-import { parseCategoryRoute } from "@/lib/domain";
+import { parseCategoryRoute, parseFormSections } from "@/lib/domain";
 import { FormBuilder } from "./form-builder";
 
 type Props = {
@@ -21,6 +21,7 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 	if (!form) notFound();
 
 	const rows = await listFormFields(db, form.id);
+	const submissionCount = await countFormSubmissions(db, form.id);
 	const fields = rows.map((row) => {
 		const def = rowToFieldDef(row);
 		return {
@@ -72,6 +73,8 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 						initialConfirmationCopy={form.confirmation_copy ?? ""}
 						initialReminderCopy={form.reminder_copy ?? ""}
 						initialThankYouCopy={form.thank_you_copy ?? ""}
+						initialSections={parseFormSections(form.sections_json)}
+						initialSubmissionCount={submissionCount}
 						initialFields={fields}
 					/>
 				</div>

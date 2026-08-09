@@ -1,13 +1,13 @@
-import type { FormFieldDef, FormSectionDef } from "@/lib/domain";
+import type { FormFieldDef, FormSection } from "@/lib/domain";
 
 export type CfpSectionGroup = {
-	section: FormSectionDef | null;
+	section: FormSection | null;
 	fields: FormFieldDef[];
 };
 
 /** Groups visible fields by section metadata. Unmapped fields stay in a trailing group. */
 export function groupVisibleFieldsBySection(
-	sections: FormSectionDef[],
+	sections: FormSection[],
 	fields: FormFieldDef[],
 ): CfpSectionGroup[] {
 	if (sections.length === 0) return [{ section: null, fields }];
@@ -18,7 +18,7 @@ export function groupVisibleFieldsBySection(
 
 	const unsectioned: FormFieldDef[] = [];
 	for (const field of fields) {
-		const key = field.sectionKey;
+		const key = field.sectionKey?.trim() || undefined;
 		if (key && sectionKeys.has(key)) buckets.get(key)?.push(field);
 		else unsectioned.push(field);
 	}

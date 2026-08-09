@@ -1,3 +1,4 @@
+import { verifyCfpFieldUpload } from "@/lib/cfp/file-upload";
 import {
 	evaluateVisibilityRule,
 	validateFieldAnswer,
@@ -82,6 +83,34 @@ export function validateSubmissionAnswers(
 
 	if (errors.length) return { ok: false, errors };
 	return { ok: true, visibleAnswers, speakers };
+}
+
+export async function validateSubmissionAnswersWithAssets(
+	db: D1Database,
+	args: {
+		eventId: string;
+		formId: string;
+		fields: FormFieldDef[];
+		answers: AnswerMap;
+	},
+): Promise<SubmitValidation> {
+	const validated = validateSubmissionAnswers(args.fields, args.answers);
+	if (!validated.ok) return validated;
+
+	for (const field of args.fields) {
+		if (field.config.kind !== "file_upload") continue;
+		if (!evaluateVisibilityRule(field.visibilityRule, args.answers)) continue;
+		const answer = validated.visibleAnswers[field.key];
+		const err = await verifyCfpFieldUpload(db, {
+			eventId: args.eventId,
+			formId: args.formId,
+			fieldKey: field.key,
+			answer,
+		});
+		if (err) return { ok: false, errors: [err] };
+	}
+
+	return validated;
 }
 
 export async function insertSubmission(
