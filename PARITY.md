@@ -63,7 +63,7 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
    - Embed admin: `/admin/events/[eventSlug]/embeds`
    - Embed APIs: `/api/e/[eventSlug]/embeds/[embedSlug]`, `.../html`, `.../xml`, `.../ical`, `.../loader.js`
 
-4. Airtable one-way export (stack bonus; D1 stays source of record)
+4. Airtable mirror mode (judgment call: one-way D1→Airtable so teams keep living in sheets; never reverse sync)
    - `/api/admin/events/[eventSlug]/export/airtable`, `.../export/airtable/sync`
 
 5. Keyed public API (stack bonus)
