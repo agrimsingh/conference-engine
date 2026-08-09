@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { PublicSessionsDiscover } from "@/components/public-sessions-discover";
+import { PublicItinerary } from "@/components/public-itinerary";
 import {
 	deriveScheduleDays,
 	dayKeyInTimeZone,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/schedule/time";
 import { speakerRoleLine } from "@/lib/speakers/public-directory";
 
-export type ScheduleView = "list" | "day" | "week" | "track" | "room";
+export type ScheduleView = "itinerary" | "my-schedule" | "list" | "day" | "week" | "track" | "room";
 
 export type PublicScheduleBasePath = "/e" | "/embed";
 
@@ -78,6 +79,8 @@ function parseAnswers(raw: string): Record<string, unknown> {
 
 function parseView(value: string | undefined): ScheduleView {
 	switch (value) {
+		case "itinerary":
+		case "my-schedule":
 		case "day":
 		case "week":
 		case "track":
@@ -91,6 +94,10 @@ function parseView(value: string | undefined): ScheduleView {
 
 function viewLabel(view: ScheduleView): string {
 	switch (view) {
+		case "itinerary":
+			return "Itinerary";
+		case "my-schedule":
+			return "My Schedule";
 		case "list":
 			return "List";
 		case "day":
@@ -210,7 +217,10 @@ export async function PublicSchedule({
 	});
 	const requestedDay = parseDayKey(dayParam);
 	const dayKey = requestedDay && days.includes(requestedDay) ? requestedDay : days[0]!;
-	const view = parseView(viewParam);
+	const requestedView = parseView(viewParam);
+	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
+		? "list"
+		: requestedView;
 	const roomFilter = roomParam?.trim() || "all";
 
 	const publicSlots = slots.filter((slot) =>
@@ -321,7 +331,9 @@ export async function PublicSchedule({
 			.sort((a, b) => a.startsAtMs - b.startsAtMs),
 	);
 
-	const views: ScheduleView[] = ["list", "day", "week", "track", "room"];
+	const views: ScheduleView[] = basePath === "/e"
+		? ["itinerary", "my-schedule", "list", "day", "week", "track", "room"]
+		: ["list", "day", "week", "track", "room"];
 
 	return (
 		<main className="mx-auto max-w-5xl px-4 py-10">
@@ -398,6 +410,48 @@ export async function PublicSchedule({
 					</div>
 				</div>
 			</header>
+
+			<nav aria-label="Event days" className="mb-6 flex flex-wrap items-center gap-2">
+				<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Event days</span>
+				{days.map((key) => (
+					<Link
+						key={key}
+						href={hrefFor(basePath, event.slug, { day: key, view, room: roomFilter })}
+						aria-current={key === dayKey ? "date" : undefined}
+						className={key === dayKey
+							? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
+							: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"}
+					>
+						{formatDayLabel(key, event.timezone)}
+					</Link>
+				))}
+			</nav>
+
+			{view === "itinerary" || view === "my-schedule" ? (
+				<PublicItinerary
+					eventSlug={event.slug}
+					timezone={event.timezone}
+					mode={view}
+					sessions={(view === "itinerary" ? applyRoom(enriched) : enriched).map((slot) => ({
+						id: slot.id,
+						sessionId: slot.submissionId,
+						title: slot.title,
+						abstract: slot.abstract,
+						format: slot.format,
+						roomName: slot.roomName,
+						trackName: slot.track.name,
+						startsAtMs: slot.startsAtMs,
+						endsAtMs: slot.endsAtMs,
+						dayKey: slot.dayKey,
+						detailHref: slot.detailHref,
+						speakers: slot.speakers.map((speaker) => ({
+							name: speaker.name,
+							jobTitle: speaker.jobTitle,
+							company: speaker.company,
+						})),
+					}))}
+				/>
+			) : null}
 
 			{view === "list" ? (
 				enriched.length === 0 ? (
