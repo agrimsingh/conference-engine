@@ -5,7 +5,7 @@ import { isJsonObject, readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
-import { notifySubmissionLifecycle } from "@/lib/email/notify";
+import { notifyOrganizersOfSubmission, notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
@@ -111,11 +111,14 @@ export async function POST(request: Request, context: RouteContext) {
 		throw error;
 	}
 
-	const email = await notifySubmissionLifecycle(db, {
-		submissionId,
-		templateKey: "submission_received",
-		override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal" }),
-	});
+	const [email] = await Promise.all([
+		notifySubmissionLifecycle(db, {
+			submissionId,
+			templateKey: "submission_received",
+			override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal" }),
+		}),
+		notifyOrganizersOfSubmission(db, { submissionId, kind: "created" }),
+	]);
 
 	const coSpeakerInvites = await sendPendingInvitesForSubmission(db, {
 		submissionId,

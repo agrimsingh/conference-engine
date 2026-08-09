@@ -5,7 +5,7 @@ import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmis
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
-import { notifySubmissionLifecycle } from "@/lib/email/notify";
+import { notifyOrganizersOfSubmission, notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { repairSubmissionDelivery } from "@/lib/cfp/delivery";
@@ -55,12 +55,25 @@ export async function POST(request: Request, context: Context) {
 		}
 		throw error;
 	}
+	const organizerKind = result.outcome === "updated" ? "updated" : "created";
+	const confirmationOverride = confirmationCopyOverride(loaded.form.confirmation_copy, {
+		eventName: loaded.event.name,
+		submitterName: name,
+		title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal",
+	});
 	await repairSubmissionDelivery({
-		notify: () => notifySubmissionLifecycle(db, {
-				submissionId: result.submissionId,
-				templateKey: "submission_received",
-				override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName: name, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal" }),
-			}),
+		notify: async () => {
+			await Promise.all([
+				result.outcome === "updated"
+					? Promise.resolve(null)
+					: notifySubmissionLifecycle(db, {
+							submissionId: result.submissionId,
+							templateKey: "submission_received",
+							override: confirmationOverride,
+						}),
+				notifyOrganizersOfSubmission(db, { submissionId: result.submissionId, kind: organizerKind }),
+			]);
+		},
 		inviteCoSpeakers: () => sendPendingInvitesForSubmission(db, { submissionId: result.submissionId, origin: new URL(request.url).origin }),
 	});
 	return NextResponse.json({ ok: true, submissionId: result.submissionId, replay: result.replay, editToken: result.editToken });

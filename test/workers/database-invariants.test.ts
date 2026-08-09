@@ -537,7 +537,7 @@ describe("D1 runtime invariants", () => {
 			speakers: [{ name: `Speaker ${index + 1}`, email: `${index === 0 ? "one" : "two"}@speaker.test` }],
 			now,
 		})));
-		const fulfilled = results.filter((result): result is PromiseFulfilledResult<{ submissionId: string; replay: boolean; editToken: string }> => result.status === "fulfilled");
+		const fulfilled = results.filter((result): result is PromiseFulfilledResult<{ submissionId: string; replay: boolean; editToken: string; outcome: "created" | "updated" | "replay" }> => result.status === "fulfilled");
 		const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
 		expect(fulfilled).toHaveLength(1);
 		expect(rejected).toHaveLength(1);
