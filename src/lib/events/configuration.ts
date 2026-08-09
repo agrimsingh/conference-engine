@@ -15,7 +15,16 @@ export type ConfigurationEvent = {
 
 export type ConfigurationRoom = { id: string; name: string; position: number };
 export type ConfigurationTrack = { id: string; name: string; slug: string; position: number };
-export type ConfigurationTask = { id: string; key: string; label: string; task_kind: "text" | "file"; required: number; position: number };
+export type ConfigurationTask = {
+	id: string;
+	key: string;
+	label: string;
+	task_kind: "text" | "file";
+	required: number;
+	position: number;
+	instructions: string | null;
+	due_at: number | null;
+};
 
 export type EventConfiguration = {
 	event: ConfigurationEvent;
@@ -42,7 +51,7 @@ export async function loadEventConfiguration(db: D1Database, eventId: string): P
 		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
-		db.prepare(`SELECT id, key, label, task_kind, required, position FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<ConfigurationTask>(),
+		db.prepare(`SELECT id, key, label, task_kind, required, position, instructions, due_at FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<ConfigurationTask>(),
 		db.prepare(`SELECT id, slug, title, status FROM cfp_forms WHERE event_id = ? AND kind = 'public' ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; slug: string; title: string; status: "draft" | "open" | "closed" }>(),
 		db.prepare(`SELECT id, name, status FROM evaluation_plans WHERE event_id = ? ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; name: string; status: string }>(),
 		db.prepare(`SELECT COUNT(*) AS count FROM event_message_templates WHERE event_id = ?`).bind(eventId).first<{ count: number }>(),
@@ -174,15 +183,19 @@ export async function deleteTrack(db: D1Database, eventId: string, id: unknown):
 
 export async function createTaskTemplate(db: D1Database, eventId: string, input: Record<string, unknown>): Promise<void> {
 	const key = taskKey(input.key); const label = trimmed(input.label, "Task label"); const kind = taskKind(input.kind); const required = input.required === true ? 1 : 0;
+	const instructions = optionalInstructions(input.instructions);
+	const dueAt = optionalDueAt(input.dueAt ?? input.due_at);
 	const now = Date.now();
-	await db.prepare(`INSERT INTO task_templates (id, event_id, key, label, task_kind, required, position, soft_deleted, created_at, updated_at)
-		SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, 0, ?, ?
+	await db.prepare(`INSERT INTO task_templates (id, event_id, key, label, task_kind, required, position, instructions, due_at, soft_deleted, created_at, updated_at)
+		SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, ?, ?, 0, ?, ?
 		FROM task_templates WHERE event_id = ? AND soft_deleted = 0`)
-		.bind(crypto.randomUUID(), eventId, key, label, kind, required, now, now, eventId).run();
+		.bind(crypto.randomUUID(), eventId, key, label, kind, required, instructions, dueAt, now, now, eventId).run();
 }
 export async function updateTaskTemplate(db: D1Database, eventId: string, input: Record<string, unknown>): Promise<void> {
 	const label = trimmed(input.label, "Task label"); const kind = taskKind(input.kind); if (typeof input.id !== "string" || !input.id) throw new Error("Task id is required");
-	const result = await db.prepare("UPDATE task_templates SET label = ?, task_kind = ?, required = ?, updated_at = ? WHERE id = ? AND event_id = ? AND soft_deleted = 0").bind(label, kind, input.required === true ? 1 : 0, Date.now(), input.id, eventId).run(); if (!result.meta.changes) throw new Error("Task template not found");
+	const instructions = optionalInstructions(input.instructions);
+	const dueAt = optionalDueAt(input.dueAt ?? input.due_at);
+	const result = await db.prepare("UPDATE task_templates SET label = ?, task_kind = ?, required = ?, instructions = ?, due_at = ?, updated_at = ? WHERE id = ? AND event_id = ? AND soft_deleted = 0").bind(label, kind, input.required === true ? 1 : 0, instructions, dueAt, Date.now(), input.id, eventId).run(); if (!result.meta.changes) throw new Error("Task template not found");
 }
 export async function deleteTaskTemplate(db: D1Database, eventId: string, id: unknown): Promise<void> { await softDelete(db, "task_templates", eventId, id, "task template"); }
 
@@ -211,3 +224,24 @@ async function softDelete(db: D1Database, table: "event_rooms" | "agenda_tracks"
 function trackSlug(value: unknown): string { const slug = trimmed(value, "Track slug", 64); if (!/^[a-z0-9-]+$/.test(slug)) throw new Error("Track slug must use lowercase letters, numbers, and hyphens"); return slug; }
 function taskKey(value: unknown): string { const key = trimmed(value, "Task key", 64); if (!/^[a-z0-9-]+$/.test(key)) throw new Error("Task key must use lowercase letters, numbers, and hyphens"); return key; }
 function taskKind(value: unknown): "text" | "file" { if (value === "text" || value === "file") return value; throw new Error("Task kind must be text or file"); }
+function optionalInstructions(value: unknown): string | null {
+	if (value == null || value === "") return null;
+	if (typeof value !== "string") throw new Error("Instructions must be a string");
+	const text = value.trim();
+	if (text.length > 5_000) throw new Error("Instructions are too long (max 5000 characters)");
+	return text || null;
+}
+function optionalDueAt(value: unknown): number | null {
+	if (value == null || value === "") return null;
+	if (typeof value === "number") {
+		if (!Number.isFinite(value) || !Number.isInteger(value)) throw new Error("Due date must be an integer timestamp");
+		return value;
+	}
+	if (typeof value !== "string") throw new Error("Due date must be a timestamp or datetime string");
+	const trimmedValue = value.trim();
+	if (!trimmedValue) return null;
+	if (/^\d+$/.test(trimmedValue)) return Number(trimmedValue);
+	const parsed = Date.parse(trimmedValue);
+	if (!Number.isFinite(parsed)) throw new Error("Due date is invalid");
+	return parsed;
+}

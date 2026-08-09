@@ -42,6 +42,8 @@ export type PublicScheduleProps = {
 type PublicScheduleSpeaker = {
 	personId: string | null;
 	name: string;
+	jobTitle: string | null;
+	company: string | null;
 	hasHeadshot: boolean;
 };
 
@@ -143,6 +145,11 @@ function SpeakerLine({
 								: null
 						}
 					/>
+					{speaker.jobTitle || speaker.company ? (
+						<p className="mt-0.5 text-xs text-neutral-500">
+							{[speaker.jobTitle, speaker.company].filter(Boolean).join(" · ")}
+						</p>
+					) : null}
 				</li>
 			))}
 		</ul>
@@ -220,19 +227,23 @@ export async function PublicSchedule({
 				.map((speaker) => speaker.person_id!),
 		),
 	];
-	const headshotByPerson = new Map<string, boolean>();
+	const profileByPerson = new Map<string, { hasHeadshot: boolean; jobTitle: string | null; company: string | null }>();
 	if (personIds.length > 0) {
 		const placeholders = personIds.map(() => "?").join(", ");
 		const profiles = await db
 			.prepare(
-				`SELECT person_id, headshot_asset_id
+				`SELECT person_id, headshot_asset_id, job_title, company
          FROM speaker_profiles
          WHERE event_id = ? AND person_id IN (${placeholders})`,
 			)
 			.bind(event.id, ...personIds)
-			.all<{ person_id: string; headshot_asset_id: string | null }>();
+			.all<{ person_id: string; headshot_asset_id: string | null; job_title: string | null; company: string | null }>();
 		for (const profile of profiles.results) {
-			headshotByPerson.set(profile.person_id, Boolean(profile.headshot_asset_id));
+			profileByPerson.set(profile.person_id, {
+				hasHeadshot: Boolean(profile.headshot_asset_id),
+				jobTitle: profile.job_title,
+				company: profile.company,
+			});
 		}
 	}
 	for (const slot of publicSlots) {
@@ -257,13 +268,16 @@ export async function PublicSchedule({
 			status: slot.submission_status,
 			speakers: speakers
 				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => ({
-					personId: speaker.person_id,
-					name: speaker.name.trim() || "Speaker",
-					hasHeadshot: speaker.person_id
-						? (headshotByPerson.get(speaker.person_id) ?? false)
-						: false,
-				})),
+				.map((speaker) => {
+					const profile = speaker.person_id ? profileByPerson.get(speaker.person_id) : undefined;
+					return {
+						personId: speaker.person_id,
+						name: speaker.name.trim() || "Speaker",
+						jobTitle: profile?.jobTitle ?? null,
+						company: profile?.company ?? null,
+						hasHeadshot: profile?.hasHeadshot ?? false,
+					};
+				}),
 			dayKey: dayKeyInTimeZone(slot.starts_at, event.timezone),
 			detailHref: `${basePath}/${event.slug}/sessions/${slot.submission_id}`,
 		});

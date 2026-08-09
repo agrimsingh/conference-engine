@@ -11,6 +11,7 @@ import {
 	listTasksForPerson,
 } from "@/lib/db/queries";
 import { SPEAKER_TASK_TYPE_REGISTRY, isSpeakerTaskKey } from "@/lib/domain";
+import { parseSpeakerSocial } from "@/lib/speakers/social";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
 import { TaskChecklist } from "./task-checklist";
@@ -45,6 +46,7 @@ export default async function PortalPage({ searchParams }: Props) {
 	}
 
 	const db = await getDb();
+	const now = Date.now();
 	const submissions = await listSubmissionsForPerson(db, session.personId);
 	const tasks = await listTasksForPerson(db, session.personId);
 
@@ -116,7 +118,18 @@ export default async function PortalPage({ searchParams }: Props) {
 											const event = events.get(row.event_id);
 											const profile = profilesByEvent.get(row.event_id);
 											if (!event || event.mode === "demo" || firstSubmissionIdByEvent.get(row.event_id) !== row.id) return null;
-											return <div className="mt-3"><ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} /></div>;
+											return (
+												<div className="mt-3">
+													<ProfileEditor
+														eventId={event.id}
+														displayName={profile?.display_name ?? session.email}
+														bio={profile?.bio ?? ""}
+														jobTitle={profile?.job_title ?? ""}
+														company={profile?.company ?? ""}
+														social={parseSpeakerSocial(profile?.social_json)}
+													/>
+												</div>
+											);
 										})()}
 										{row.status === "accepted" || row.status === "scheduled" || row.status === "published" ? (
 											<div className="mt-4 border-t border-neutral-800 pt-3">
@@ -127,10 +140,28 @@ export default async function PortalPage({ searchParams }: Props) {
 												{submissionTasks.length === 0 ? (
 													<p className="text-neutral-500">Materials are being prepared by the organizers.</p>
 												) : (
-														<TaskChecklist compact tasks={submissionTasks.map((task) => {
+														<TaskChecklist
+															compact
+															now={now}
+															timeZone={events.get(row.event_id)?.timezone}
+															tasks={submissionTasks.map((task) => {
 															const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
-															return { id: task.id, key: task.template_key, label: task.template_label || meta?.label || task.template_key, kind: task.template_task_kind ?? meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id, required: task.template_required !== 0 };
-																																					})} readOnly={events.get(row.event_id)?.mode === "demo"} />
+															return {
+																id: task.id,
+																key: task.template_key,
+																label: task.template_label || meta?.label || task.template_key,
+																kind: task.template_task_kind ?? meta?.kind ?? "file",
+																status: task.status,
+																accept: meta?.accept ?? [],
+																textValue: task.text_value,
+																assetId: task.asset_id,
+																required: task.template_required !== 0,
+																instructions: task.instructions ?? null,
+																dueAt: task.due_at ?? null,
+															};
+																																					})}
+															readOnly={events.get(row.event_id)?.mode === "demo"}
+														/>
 												)}
 											</div>
 										) : null}

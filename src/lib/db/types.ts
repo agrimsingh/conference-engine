@@ -129,6 +129,8 @@ export type TaskTemplateRow = {
 	task_kind: "text" | "file";
 	required: number;
 	position: number;
+	instructions?: string | null;
+	due_at?: number | null;
 	soft_deleted?: number;
 	created_at?: number;
 	updated_at?: number;
@@ -143,6 +145,8 @@ export type SpeakerTaskRow = {
 	template_label?: string;
 	template_task_kind?: "text" | "file";
 	template_required?: number;
+	instructions?: string | null;
+	due_at?: number | null;
 	status: "pending" | "completed";
 	asset_id: string | null;
 	text_value: string | null;
@@ -169,6 +173,9 @@ export type SpeakerProfileRow = {
 	person_id: string;
 	display_name: string | null;
 	bio: string | null;
+	job_title: string | null;
+	company: string | null;
+	social_json: string | null;
 	headshot_asset_id: string | null;
 	created_at: number;
 	updated_at: number;

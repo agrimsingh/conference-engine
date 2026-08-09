@@ -5,7 +5,7 @@ const complete: EventConfiguration = {
 	event: { id: "event", name: "Conference", timezone: "Asia/Singapore", start_day: "2026-09-01", end_day: "2026-09-02", day_start_minutes: 540, day_end_minutes: 1080, slot_duration_minutes: 30, track_conflict_policy: "hard" },
 	rooms: [{ id: "room", name: "Main", position: 0 }],
 	tracks: [{ id: "track", name: "General", slug: "general", position: 0 }],
-	tasks: [{ id: "task", key: "bio", label: "Bio", task_kind: "text", required: 1, position: 0 }],
+	tasks: [{ id: "task", key: "bio", label: "Bio", task_kind: "text", required: 1, position: 0, instructions: null, due_at: null }],
 	cfp: { id: "cfp", slug: "cfp", title: "Call for papers", status: "open", fieldCount: 3 },
 	review: { id: "review", name: "Default", status: "draft", criteriaCount: 1 },
 	messageTemplateCount: 1,

@@ -905,9 +905,9 @@ export type PublicSpeakerDirectoryRow = {
 	person_id: string;
 	display_name: string;
 	bio: string | null;
-	has_headshot: number;
 	job_title: string | null;
 	company: string | null;
+	has_headshot: number;
 };
 
 type SpeakerProfileColumnFlags = {
