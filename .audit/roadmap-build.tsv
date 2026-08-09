@@ -27,3 +27,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:47:25Z	release	Merged README routes docs	migrations 0022-0024 + public API routes documented	4ee2326	merged
 2026-08-09T08:47:56Z	release	Merged CI lint fix	derive section key; next/image avatar	f44d302	lint+tsc green
 2026-08-09T08:49:25Z	release	Merged cockpit semantics fix	needsReviewActivation + full-score undecided + caps 50	cd13947	tests green
+2026-08-09T08:50:48Z	release	Merged CFP upload E2E fix	download routes + progress + errors + cleanup	2b5a231	tests+lint green
