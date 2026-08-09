@@ -2,6 +2,8 @@ const DAY = 86_400_000;
 export const MAX_EVENT_DURATION_DAYS = 31;
 export const MINUTES_PER_DAY = 24 * 60;
 export const ALLOWED_SLOT_DURATIONS = [15, 20, 30, 45, 60, 90, 120] as const;
+export const TRACK_CONFLICT_POLICIES = ["hard", "allow"] as const;
+export type TrackConflictPolicy = (typeof TRACK_CONFLICT_POLICIES)[number];
 
 function parseCivilDay(value: string): number | null {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -25,6 +27,10 @@ export function isValidIanaTimeZone(timezone: string): boolean {
 	}
 }
 
+export function parseTrackConflictPolicy(value: unknown): TrackConflictPolicy | null {
+	return value === "hard" || value === "allow" ? value : null;
+}
+
 export function validateEventSettings(args: {
 	startDay: string;
 	endDay: string;
@@ -32,6 +38,7 @@ export function validateEventSettings(args: {
 	dayStartMinutes?: number;
 	dayEndMinutes?: number;
 	slotDurationMinutes?: number;
+	trackConflictPolicy?: unknown;
 }): { ok: true } | { ok: false; error: string } {
 	const start = parseCivilDay(args.startDay);
 	const end = parseCivilDay(args.endDay);
@@ -45,5 +52,8 @@ export function validateEventSettings(args: {
 	if (!Number.isInteger(startMinutes) || startMinutes < 0 || startMinutes >= MINUTES_PER_DAY) return { ok: false, error: "Day start must be a whole minute from 00:00 through 23:59." };
 	if (!Number.isInteger(endMinutes) || endMinutes <= 0 || endMinutes > MINUTES_PER_DAY || endMinutes <= startMinutes) return { ok: false, error: "Day end must be after day start and no later than 24:00." };
 	if (!Number.isInteger(slotDuration) || !ALLOWED_SLOT_DURATIONS.includes(slotDuration as typeof ALLOWED_SLOT_DURATIONS[number])) return { ok: false, error: "Slot duration must be 15, 20, 30, 45, 60, 90, or 120 minutes." };
+	if (args.trackConflictPolicy !== undefined && parseTrackConflictPolicy(args.trackConflictPolicy) === null) {
+		return { ok: false, error: "Track conflict policy must be hard or allow." };
+	}
 	return { ok: true };
 }
