@@ -8,6 +8,7 @@ import {
 	noticeClasses,
 	StatusPill,
 } from "@/components/ui";
+import { isTaskOverdue, taskDueLabel } from "@/lib/speakers/task-display";
 
 export type TaskView = {
 	id: string;
@@ -19,19 +20,23 @@ export type TaskView = {
 	textValue: string | null;
 	assetId: string | null;
 	required: boolean;
+	instructions?: string | null;
+	dueAt?: number | null;
 };
 
 type Props = {
 	tasks: TaskView[];
 	compact?: boolean;
 	readOnly?: boolean;
+	now: number;
+	timeZone?: string;
 };
 
 export function textTaskRules(key: string): { minLength: number | undefined; hint: string } {
 	return key === "bio" ? { minLength: 20, hint: " (20+ characters)" } : { minLength: undefined, hint: "" };
 }
 
-export function TaskChecklist({ tasks, compact = false, readOnly = false }: Props) {
+export function TaskChecklist({ tasks, compact = false, readOnly = false, now, timeZone }: Props) {
 	const router = useRouter();
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -94,17 +99,21 @@ export function TaskChecklist({ tasks, compact = false, readOnly = false }: Prop
 				{tasks.map((task) => {
 					const done = task.status === "completed";
 					const bioRules = textTaskRules(task.key);
+					const overdue = isTaskOverdue({ dueAt: task.dueAt, status: task.status, now });
+					const dueLabel = taskDueLabel({ dueAt: task.dueAt, status: task.status, now, timeZone });
 					return (
 						<li
 							key={task.id}
-							className={`${compact ? "border-t border-neutral-800 py-3 first:border-t-0" : "rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"} text-sm`}
+							className={`${compact ? "border-t border-neutral-800 py-3 first:border-t-0" : "rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"} text-sm ${overdue ? "border-red-900/80 bg-red-950/20" : ""}`}
 						>
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
 								<p className="font-medium text-neutral-100">{task.label}</p>
-								<StatusPill tone={done ? "positive" : task.required ? "warning" : "neutral"}>
-									{done ? "Done" : task.required ? "To do" : "Optional"}
+								<StatusPill tone={done ? "positive" : overdue ? "negative" : task.required ? "warning" : "neutral"}>
+									{done ? "Done" : overdue ? "Overdue" : task.required ? "To do" : "Optional"}
 								</StatusPill>
 							</div>
+							{dueLabel ? <p className={`mt-1 text-xs ${overdue ? "text-red-300" : "text-neutral-500"}`}>{dueLabel}</p> : null}
+							{task.instructions ? <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-neutral-400">{task.instructions}</p> : null}
 
 							{readOnly ? (
 								<p className="mt-3 text-xs text-neutral-500">Demo tasks are read-only{task.textValue ? ` · ${task.textValue}` : ""}{task.assetId ? " · file uploaded" : ""}</p>

@@ -265,14 +265,16 @@ async function spawnSpeakerTasks(
 				`INSERT OR IGNORE INTO speaker_tasks (
           id, event_id, submission_id, person_id, template_key,
           template_label, template_task_kind, template_required,
+          instructions, due_at,
           status, asset_id, text_value, completed_at, created_at, updated_at
-        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?
+        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?
           WHERE ${MATERIALIZATION_WRITE_FENCE_PREDICATE}` :
 				`INSERT OR IGNORE INTO speaker_tasks (
           id, event_id, submission_id, person_id, template_key,
           template_label, template_task_kind, template_required,
+          instructions, due_at,
           status, asset_id, text_value, completed_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?)`,
 			)
 			.bind(
 				id,
@@ -283,6 +285,8 @@ async function spawnSpeakerTasks(
 				template.label,
 				template.task_kind,
 				template.required,
+				template.instructions ?? null,
+				template.due_at ?? null,
 				now,
 				now,
 				...(taskFence ?? []),

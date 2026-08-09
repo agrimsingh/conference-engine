@@ -45,7 +45,15 @@ type SourcePlan = {
 
 type SourceRoom = { name: string; position: number };
 type SourceTrack = { name: string; slug: string; position: number };
-type SourceTask = { key: string; label: string; task_kind: "text" | "file"; required: number; position: number };
+type SourceTask = {
+	key: string;
+	label: string;
+	task_kind: "text" | "file";
+	required: number;
+	position: number;
+	instructions: string | null;
+	due_at: number | null;
+};
 type SourceMessage = { template_key: string; subject_template: string; text_template: string };
 
 /**
@@ -78,7 +86,7 @@ async function loadEventCloneBlueprint(db: D1Database, sourceEventId: string): P
 		db.prepare(`SELECT id, name, status FROM evaluation_plans WHERE event_id = ? ORDER BY created_at ASC`).bind(sourceEventId).all<SourcePlan>(),
 		db.prepare(`SELECT name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(sourceEventId).all<SourceRoom>(),
 		db.prepare(`SELECT name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(sourceEventId).all<SourceTrack>(),
-		db.prepare(`SELECT key, label, task_kind, required, position FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, key`).bind(sourceEventId).all<SourceTask>(),
+		db.prepare(`SELECT key, label, task_kind, required, position, instructions, due_at FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, key`).bind(sourceEventId).all<SourceTask>(),
 		db.prepare(`SELECT template_key, subject_template, text_template FROM event_message_templates WHERE event_id = ? ORDER BY template_key`).bind(sourceEventId).all<SourceMessage>(),
 	]);
 
@@ -307,8 +315,8 @@ export async function cloneEventConfiguration(
 		statements.push(
 			db.prepare(
 				`INSERT INTO task_templates (
-					id, event_id, key, label, task_kind, required, position, soft_deleted, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+					id, event_id, key, label, task_kind, required, position, instructions, due_at, soft_deleted, created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
 			).bind(
 				crypto.randomUUID(),
 				eventId,
@@ -317,6 +325,8 @@ export async function cloneEventConfiguration(
 				task.task_kind,
 				task.required,
 				task.position,
+				task.instructions,
+				task.due_at,
 				now,
 				now,
 			),
