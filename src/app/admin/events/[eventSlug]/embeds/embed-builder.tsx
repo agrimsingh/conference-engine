@@ -190,7 +190,7 @@ export function EmbedBuilder({
 				</label>
 				{selected ? (
 					<>
-						<iframe title={`${selected.name} preview`} src={selected.urls.shareUrl} className="h-80 w-full rounded border border-neutral-800 bg-neutral-950" sandbox="allow-same-origin allow-popups" />
+						<iframe title={`${selected.name} preview`} src={selected.urls.shareUrl} className="h-80 w-full rounded border border-neutral-800 bg-neutral-950" sandbox="allow-scripts allow-same-origin allow-popups" />
 						<Output label="Script tag / custom element" value={selected.urls.scriptSnippet} tall />
 						<Output label="Iframe snippet" value={selected.urls.iframeSnippet} tall />
 						<Output label="Share URL" value={selected.urls.shareUrl} />

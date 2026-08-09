@@ -233,7 +233,7 @@ export function buildEmbedUrls(origin: string, eventSlug: string, embedSlug: str
 		htmlUrl: `${apiPath}/html`,
 		xmlUrl: `${apiPath}/xml`,
 		loaderUrl,
-		iframeSnippet: `<iframe src="${shareUrl}" title="Event widget" loading="lazy" width="100%" height="640" style="border:0" sandbox="allow-same-origin allow-popups"></iframe>`,
+		iframeSnippet: `<iframe src="${shareUrl}" title="Event widget" loading="lazy" width="100%" height="640" style="border:0" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>`,
 		scriptSnippet: `<conference-engine-embed src="${shareUrl}"></conference-engine-embed><script type="module" src="${loaderUrl}"></script>`,
 	};
 }

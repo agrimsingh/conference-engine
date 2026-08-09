@@ -1,13 +1,12 @@
 type Context = { params: Promise<{ eventSlug: string; embedSlug: string }> };
 
-export async function GET(request: Request, context: Context) {
+export async function GET(_request: Request, context: Context) {
 	const { eventSlug, embedSlug } = await context.params;
-	const origin = new URL(request.url).origin;
-	const target = `${origin}/embed/${encodeURIComponent(eventSlug)}/widgets/${encodeURIComponent(embedSlug)}`;
+	const targetPath = `/embed/${encodeURIComponent(eventSlug)}/widgets/${encodeURIComponent(embedSlug)}`;
 	const script = `(() => {
   if (customElements.get("conference-engine-embed")) return;
-  const defaultSource = ${JSON.stringify(target)};
-  const allowedOrigin = ${JSON.stringify(origin)};
+  const allowedOrigin = new URL(import.meta.url).origin;
+  const defaultSource = new URL(${JSON.stringify(targetPath)}, allowedOrigin).href;
   class ConferenceEngineEmbed extends HTMLElement {
     connectedCallback() {
       if (this.firstElementChild) return;
@@ -25,7 +24,7 @@ export async function GET(request: Request, context: Context) {
       iframe.width = "100%";
       iframe.height = this.getAttribute("height") || "640";
       iframe.style.border = "0";
-      iframe.setAttribute("sandbox", "allow-same-origin allow-popups");
+      iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups");
       this.append(iframe);
     }
   }
@@ -37,6 +36,7 @@ export async function GET(request: Request, context: Context) {
 			"Content-Type": "text/javascript; charset=utf-8",
 			"Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
 			"X-Content-Type-Options": "nosniff",
+			"Access-Control-Allow-Origin": "*",
 		},
 	});
 }

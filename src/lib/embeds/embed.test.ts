@@ -31,7 +31,8 @@ describe("embed configuration", () => {
 		expect(urls.icalUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/ical");
 		expect(urls.htmlUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/html");
 		expect(urls.xmlUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/xml");
-		expect(urls.iframeSnippet).toContain('sandbox="allow-same-origin allow-popups"');
+		expect(urls.iframeSnippet).toContain('sandbox="allow-scripts allow-same-origin allow-popups"');
+		expect(urls.iframeSnippet).not.toMatch(/allow-forms|allow-top-navigation|allow-storage-access|allow-downloads/);
 		expect(urls.iframeSnippet).not.toContain("<script");
 		expect(urls.loaderUrl).toBe("https://events.example/api/e/ai-summit/embeds/main-agenda/loader.js");
 		expect(urls.scriptSnippet).toContain("<conference-engine-embed");
