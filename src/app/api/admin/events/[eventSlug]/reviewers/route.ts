@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 } from "@/lib/db/queries";
+import { getEvaluationPlanForEvent } from "@/lib/evaluation/plan";
 import {
 	createReviewer,
 	listPlanReviewers,
@@ -24,6 +25,7 @@ type Body = {
 	email?: unknown;
 	action?: unknown;
 	reviewerId?: unknown;
+	planId?: unknown;
 };
 
 function serializeReviewer(row: {
@@ -42,7 +44,7 @@ function serializeReviewer(row: {
 	};
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
 	const access = await authorizeEventAdminApi(db, eventSlug);
@@ -51,7 +53,8 @@ export async function GET(_request: Request, context: RouteContext) {
 	}
 	const event = access.event;
 
-	const plan = await getActiveEvaluationPlan(db, event.id);
+	const planId = new URL(request.url).searchParams.get("plan");
+	const plan = planId ? await getEvaluationPlanForEvent(db, { eventId: event.id, planId }) : await getActiveEvaluationPlan(db, event.id);
 	if (!plan) {
 		return NextResponse.json(
 			{ ok: false, error: "No active evaluation plan; activate one first" },
@@ -78,18 +81,12 @@ export async function POST(request: Request, context: RouteContext) {
 	if (!authorization.ok) return authorization.response;
 	const event = authorization.access.event;
 
-	const plan = await getActiveEvaluationPlan(db, event.id);
-	if (!plan) {
-		return NextResponse.json(
-			{ ok: false, error: "No active evaluation plan; activate one first" },
-			{ status: 409 },
-		);
-	}
-
 	const parsed = await readBoundedJson(request, 16 * 1024);
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
 	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
 	const body = parsed.value as Body;
+	const plan = typeof body.planId === "string" ? await getEvaluationPlanForEvent(db, { eventId: event.id, planId: body.planId }) : await getActiveEvaluationPlan(db, event.id);
+	if (!plan) return NextResponse.json({ ok: false, error: "Review round not found" }, { status: 404 });
 
 	const name = typeof body.name === "string" ? body.name.trim() : "";
 	if (!name) {
@@ -129,12 +126,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 	const db = await getDb();
 	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
 	if (!authorization.ok) return authorization.response;
-	const plan = await getActiveEvaluationPlan(db, authorization.access.event.id);
-	if (!plan) return NextResponse.json({ ok: false, error: "No active evaluation plan; activate one first" }, { status: 409 });
 	const parsed = await readBoundedJson(request, 16 * 1024);
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
 	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
 	const body = parsed.value as Body;
+	const plan = typeof body.planId === "string" ? await getEvaluationPlanForEvent(db, { eventId: authorization.access.event.id, planId: body.planId }) : await getActiveEvaluationPlan(db, authorization.access.event.id);
+	if (!plan) return NextResponse.json({ ok: false, error: "Review round not found" }, { status: 404 });
 	if (typeof body.reviewerId !== "string" || !body.reviewerId.trim() || (body.action !== "regenerate" && body.action !== "revoke")) {
 		return NextResponse.json({ ok: false, error: "Expected reviewerId and action regenerate or revoke" }, { status: 400 });
 	}

@@ -6,6 +6,7 @@ vi.mock("@/lib/db/cloudflare", () => ({ getDb: async () => env.DB }));
 import { POST } from "@/app/api/e/[eventSlug]/itinerary/ics/route";
 import { createEventWithDefaults } from "@/lib/events/create-event";
 import type { AccountRow } from "@/lib/db/types";
+import { approveSessionContent } from "./approve-content";
 
 const now = 1_786_000_000_000;
 let sequence = 0;
@@ -45,6 +46,7 @@ async function addSession(args: {
 		env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES (?, ?, ?, 'Main', ?, ?, ?, ?, ?)")
 			.bind(`${args.id}-slot`, args.eventId, args.id, Date.parse(args.startsAt), Date.parse(args.startsAt) + 1_800_000, `${args.id}@test.invalid`, now, now),
 	]);
+	if (args.status === "published") await approveSessionContent(args.eventId, args.id);
 }
 
 function request(eventSlug: string, sessionIds: string[]) {

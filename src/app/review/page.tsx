@@ -21,6 +21,7 @@ import { resolveReviewIdentity } from "@/lib/evaluation/score";
 import { listCriteria } from "@/lib/evaluation/plan";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
+import { reviewerIdentityFields } from "@/lib/evaluation/blind";
 
 type Props = {
 	searchParams: Promise<{ token?: string; event?: string }>;
@@ -116,6 +117,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const recusalBySubmission = new Map(
 		reviewerAssignments.map((assignment) => [assignment.submission_id, assignment.recused_at]),
 	);
+	const blindReviewer = identity.mode === "reviewer" && plan.blind_review === 1;
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
 		let parsedAnswers: Record<string, unknown> = {};
@@ -134,11 +136,12 @@ export default async function ReviewPage({ searchParams }: Props) {
 			// ignore
 		}
 		const recusedAt = identity.mode === "reviewer" ? (recusalBySubmission.get(row.id) ?? null) : null;
+		const safe = reviewerIdentityFields({ submitterName: row.submitter_name, submitterEmail: row.submitter_email, answers: parsedAnswers }, blindReviewer);
 		return {
 			id: row.id,
 			status: row.status,
-			submitterName: row.submitter_name,
-			submitterEmail: row.submitter_email,
+			submitterName: safe.submitterName,
+			submitterEmail: safe.submitterEmail,
 			title,
 			category: displayCategory(row.category),
 			format: typeof parsedAnswers.format === "string" ? parsedAnswers.format : null,
@@ -149,7 +152,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 						: "Assigned to you"
 					: "Committee review",
 			recusedAt,
-			answers: buildSubmissionAnswerDisplays(parsedAnswers, {
+			answers: buildSubmissionAnswerDisplays(safe.answers, {
 				submissionId: row.id,
 				downloadHref: (fieldKey) => {
 					const params = new URLSearchParams();
@@ -164,18 +167,19 @@ export default async function ReviewPage({ searchParams }: Props) {
 				submitterName: row.submitter_name ?? "there",
 				title,
 			}),
-			scores: (scoresBySubmission.get(row.id) ?? []).map((s) => ({
+			scores: (scoresBySubmission.get(row.id) ?? []).filter((s) => identity.mode === "committee" || s.reviewer_id === identity.reviewer.id).map((s) => ({
 				id: s.id,
 				score: s.score,
 				comment: s.comment,
 				scoredBy: s.scored_by,
 			})),
-			criterionScores: (criterionScores.filter((score) => score.submission_id === row.id)).map((score) => ({
+			criterionScores: (criterionScores.filter((score) => score.submission_id === row.id && (identity.mode === "committee" || score.reviewer_id === identity.reviewer.id))).map((score) => ({
 				id: score.id,
 				criterionId: score.criterion_id,
 				score: score.score,
 				comment: score.comment,
 				reviewerId: score.reviewer_id,
+				valueText: score.value_text,
 			})),
 		};
 	});
@@ -213,6 +217,8 @@ export default async function ReviewPage({ searchParams }: Props) {
 					weight: criterion.weight,
 					scaleMin: criterion.scale_min,
 					scaleMax: criterion.scale_max,
+					type: criterion.criterion_type,
+					options: criterion.options_json ? JSON.parse(criterion.options_json) as string[] : [],
 				}))}
 				submissions={rows}
 			/>

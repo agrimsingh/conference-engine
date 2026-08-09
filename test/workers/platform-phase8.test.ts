@@ -19,6 +19,7 @@ import {
 	publicScheduleJsonContainsPii,
 } from "@/lib/schedule/public-json";
 import type { AccountRow } from "@/lib/db/types";
+import { approveSessionContent } from "./approve-content";
 
 const mocks = vi.hoisted(() => ({
 	authorizeWritableEventAdminApi: vi.fn(),
@@ -85,6 +86,7 @@ describe("phase 8 platform", () => {
 				"INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('platform-slot-hidden', ?, 'platform-scheduled', 'Main', ?, ?, 'hidden@test.invalid', ?, ?)",
 			).bind(created.eventId, Date.parse("2026-11-01T11:00:00Z"), Date.parse("2026-11-01T11:30:00Z"), now, now),
 		]);
+		await approveSessionContent(created.eventId, "platform-published");
 
 		const payload = await buildPublicScheduleJson(env.DB, created.slug);
 		expect(payload).not.toBeNull();

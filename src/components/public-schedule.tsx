@@ -236,7 +236,7 @@ export async function PublicSchedule({
 	const roomFilter = roomParam?.trim() || "all";
 
 	const publicSlots = slots.filter((slot) =>
-		isPublicScheduleStatus(slot.submission_status),
+		isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1,
 	);
 
 	const enriched: EnrichedSlot[] = [];
@@ -269,7 +269,7 @@ export async function PublicSchedule({
 		}
 	}
 	for (const slot of publicSlots) {
-		const answers = parseAnswers(slot.answers_json);
+		const answers = { ...parseAnswers(slot.answers_json), ...parseAnswers(slot.approved_answers_json ?? "{}") };
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
 		const abstract =
 			typeof answers.abstract === "string"

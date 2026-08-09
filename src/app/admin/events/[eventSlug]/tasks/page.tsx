@@ -1,157 +1,43 @@
-import Link from "next/link";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { EmptyState, StatusPill } from "@/components/ui";
 import { assertCanManageEvent } from "@/lib/auth/admin";
+import { listDeliverableBundles } from "@/lib/content/deliverables";
 import { getDb } from "@/lib/db/cloudflare";
-import {
-	getPersonById,
-	getSubmissionById,
-	listPendingCoSpeakersForEvent,
-	listTasksForEvent,
-} from "@/lib/db/queries";
+import { getPersonById, getSubmissionById, listTasksForEvent } from "@/lib/db/queries";
 import { titleFromAnswers } from "@/lib/domain";
-
-type Props = {
-	params: Promise<{ eventSlug: string }>;
-};
-
-export default async function AdminTasksPage({ params }: Props) {
-	const { eventSlug } = await params;
-
-	const db = await getDb();
-	const { event } = await assertCanManageEvent(db, eventSlug);
-
-	const tasks = await listTasksForEvent(db, event.id);
-	const labels = new Map<string, string>();
-
-	for (const task of tasks) {
-		if (!labels.has(task.person_id)) {
-			const person = await getPersonById(db, task.person_id);
-			labels.set(task.person_id, person?.email ?? task.person_id);
-		}
-		if (!labels.has(task.submission_id)) {
-			const submission = await getSubmissionById(db, task.submission_id);
-			if (submission) {
-				const answers = parseAnswers(submission.answers_json);
-				labels.set(
-					task.submission_id,
-					typeof answers.title === "string" ? answers.title : submission.id,
-				);
-			}
-		}
-	}
-
-	const requiredTasks = tasks.filter((task) => task.template_required !== 0);
-	const completed = requiredTasks.filter((task) => task.status === "completed").length;
-	const pendingCoSpeakers = await listPendingCoSpeakersForEvent(db, event.id);
-
-	return (
-		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
-			<AdminEventNav eventSlug={event.slug} />
-			<main className="mx-auto max-w-4xl px-4 py-10">
-				<PageHeader
-					eyebrow="Organizer · Tasks"
-					title={event.name}
-					description={
-						tasks.length === 0
-							? "Speaker onboarding checklist across accepted talks."
-							: `${completed}/${requiredTasks.length} required tasks complete.`
-					}
-				/>
-
-				{pendingCoSpeakers.length > 0 ? (
-					<div className="mb-6 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm">
-						<div className="flex flex-wrap items-baseline justify-between gap-2">
-							<p className="font-medium text-neutral-100">
-								Co-speakers awaiting confirmation
-							</p>
-							<Link
-								className="text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-200"
-								href={`/admin/events/${event.slug}/submissions`}
-							>
-								Manage on submissions
-							</Link>
-						</div>
-						<ul className="mt-2 divide-y divide-neutral-800">
-							{pendingCoSpeakers.map((row) => (
-								<li
-									key={row.id}
-									className="flex flex-wrap items-center justify-between gap-2 py-2"
-								>
-									<span>
-										<span className="font-medium text-neutral-200">
-											{row.name || row.email}
-										</span>
-										<span className="text-neutral-500">
-											{" "}
-											· {titleFromAnswers(parseAnswers(row.answers_json))}
-										</span>
-										{row.added_after_acceptance === 1 ? (
-											<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-400">
-												added late
-											</span>
-										) : null}
-									</span>
-									<StatusPill tone="warning">
-										{row.invited_at ? "invite sent" : "not invited"}
-									</StatusPill>
-								</li>
-							))}
-						</ul>
-					</div>
-				) : null}
-
-				{tasks.length === 0 ? (
-					<EmptyState
-						title="No speaker tasks yet"
-						description="Accept a submission to generate bio, headshot, slides, and docs tasks."
-					/>
-				) : (
-					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
-						{tasks.map((task) => (
-							<li key={task.id} className="px-4 py-3 text-sm">
-								<div className="flex flex-wrap items-baseline justify-between gap-2">
-									<p className="font-medium text-neutral-100">
-										{labels.get(task.submission_id) ?? task.submission_id} ·{" "}
-									{task.template_label || task.template_key}
-									</p>
-									<StatusPill
-									tone={task.status === "completed" ? "positive" : task.template_required === 0 ? "neutral" : "warning"}
-									>
-										{task.status === "completed" ? task.status : task.template_required === 0 ? "optional" : task.status}
-									</StatusPill>
-								</div>
-								<p className="mt-1 text-neutral-400">
-									{labels.get(task.person_id) ?? task.person_id}
-									{` · ${task.template_task_kind ?? "file"}`}
-									{task.asset_id ? ` · file uploaded` : ""}
-									{task.text_value
-										? ` · ${task.text_value.slice(0, 80)}${task.text_value.length > 80 ? "…" : ""}`
-										: ""}
-								</p>
-								{task.asset_id ? (
-									<Link className="mt-2 inline-block text-xs font-medium text-neutral-200 underline underline-offset-2 hover:text-white" href={`/api/admin/events/${event.slug}/tasks/${task.id}/asset`}>
-										Download uploaded file
-									</Link>
-								) : null}
-							</li>
-						))}
-					</ul>
-				)}
-			</main>
-		</div>
-	);
-}
+import { DeliverablesDashboard, type DeliverableDashboardRow } from "./deliverables-dashboard";
+import { ActionTasksDashboard } from "./action-tasks-dashboard";
+import { listEventSpeakerRoster } from "@/lib/speakers/roster";
+import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
 
 function parseAnswers(raw: string): Record<string, unknown> {
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-			return parsed as Record<string, unknown>;
+	try { const value: unknown = JSON.parse(raw); return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; } catch { return {}; }
+}
+
+export default async function AdminTasksPage({ params }: { params: Promise<{ eventSlug: string }> }) {
+	const { eventSlug } = await params;
+	const db = await getDb();
+	const { event } = await assertCanManageEvent(db, eventSlug);
+	const [tasks, bundles, speakers, actions] = await Promise.all([listTasksForEvent(db, event.id), listDeliverableBundles(db, { eventId: event.id }), listEventSpeakerRoster(db, event.id), listSpeakerActionAssignments(db, { eventId: event.id })]);
+	const personLabels = new Map<string, string>();
+	const sessionLabels = new Map<string, string>();
+	for (const task of tasks) {
+		if (!personLabels.has(task.person_id)) {
+			const person = await getPersonById(db, task.person_id);
+			personLabels.set(task.person_id, person?.name?.trim() || person?.email || task.person_id);
 		}
-	} catch {
-		// ignore
+		if (!sessionLabels.has(task.submission_id)) {
+			const submission = await getSubmissionById(db, task.submission_id);
+			sessionLabels.set(task.submission_id, submission ? titleFromAnswers(parseAnswers(submission.answers_json)) : task.submission_id);
+		}
 	}
-	return {};
+	const rows: DeliverableDashboardRow[] = tasks.filter((task) => (task.template_task_kind ?? "file") === "file").map((task) => ({
+		id: task.id, personId: task.person_id, speaker: personLabels.get(task.person_id) ?? task.person_id,
+		session: sessionLabels.get(task.submission_id) ?? task.submission_id,
+		label: task.template_label || task.template_key, status: task.status, dueAt: task.due_at ?? null,
+		instructions: task.instructions ?? null,
+		versions: (bundles.get(task.id)?.versions ?? []).map((version) => ({ id: version.id, versionNumber: version.version_number, filename: version.filename, sizeBytes: version.size_bytes, createdAt: version.created_at })),
+		comments: (bundles.get(task.id)?.comments ?? []).map((comment) => ({ id: comment.id, authorName: comment.author_name, authorKind: comment.author_kind, body: comment.body, createdAt: comment.created_at })),
+	}));
+	return <div className="min-h-dvh bg-neutral-950 text-neutral-200"><AdminEventNav eventSlug={event.slug} /><main className="mx-auto max-w-7xl space-y-8 px-4 py-10"><PageHeader eyebrow="Organizer · Speaker tasks" title={event.name} description="Assign general onboarding actions and manage file-request deliverables in separate workflows." /><ActionTasksDashboard eventSlug={event.slug} speakers={speakers} rows={actions} /><DeliverablesDashboard eventSlug={event.slug} rows={rows} /></main></div>;
 }

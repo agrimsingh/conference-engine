@@ -387,3 +387,84 @@ SET
 	updated_at = 1790000000000
 WHERE event_id IN (SELECT id FROM demo_event)
 	AND id IN (SELECT id FROM fixtures);
+
+-- Public demo sessions traverse the same immutable content-approval gate as
+-- live events. Stable IDs keep reseeding idempotent while the refresh makes
+-- approved snapshots follow intentional demo-copy updates.
+INSERT OR IGNORE INTO content_revisions (
+	id, event_id, entity_type, entity_id, revision_number, snapshot_json,
+	editor_account_id, editor_name, created_at
+)
+SELECT
+	'demo-content-' || s.id,
+	s.event_id,
+	'session',
+	s.id,
+	1,
+	json_object(
+		'title', COALESCE(json_extract(s.answers_json, '$.title'), ''),
+		'abstract', COALESCE(json_extract(s.answers_json, '$.abstract'), ''),
+		'contentStatus', 'approved'
+	),
+	NULL,
+	'Demo seed',
+	1790000000000
+FROM submissions s
+INNER JOIN events e ON e.id = s.event_id
+WHERE e.id = 'demo-cfp-to-stage-2026'
+	AND e.slug = 'demo-cfp-to-stage'
+	AND e.mode = 'demo'
+	AND s.status = 'published';
+
+UPDATE content_revisions
+SET snapshot_json = (
+	SELECT json_object(
+		'title', COALESCE(json_extract(s.answers_json, '$.title'), ''),
+		'abstract', COALESCE(json_extract(s.answers_json, '$.abstract'), ''),
+		'contentStatus', 'approved'
+	)
+	FROM submissions s
+	WHERE 'demo-content-' || s.id = content_revisions.id
+)
+WHERE id IN (
+	SELECT 'demo-content-' || s.id
+	FROM submissions s
+	INNER JOIN events e ON e.id = s.event_id
+	WHERE e.id = 'demo-cfp-to-stage-2026'
+		AND e.slug = 'demo-cfp-to-stage'
+		AND e.mode = 'demo'
+		AND s.status = 'published'
+);
+
+INSERT INTO content_heads (
+	event_id, entity_type, entity_id, current_revision_id,
+	approved_revision_id, updated_at
+)
+SELECT
+	s.event_id,
+	'session',
+	s.id,
+	'demo-content-' || s.id,
+	'demo-content-' || s.id,
+	1790000000000
+FROM submissions s
+INNER JOIN events e ON e.id = s.event_id
+WHERE e.id = 'demo-cfp-to-stage-2026'
+	AND e.slug = 'demo-cfp-to-stage'
+	AND e.mode = 'demo'
+	AND s.status = 'published'
+ON CONFLICT(event_id, entity_type, entity_id) DO UPDATE SET
+	current_revision_id = excluded.current_revision_id,
+	approved_revision_id = excluded.approved_revision_id,
+	updated_at = excluded.updated_at;
+
+UPDATE submissions
+SET content_status = 'approved'
+WHERE event_id = 'demo-cfp-to-stage-2026'
+	AND status = 'published'
+	AND EXISTS (
+		SELECT 1 FROM events e
+		WHERE e.id = submissions.event_id
+			AND e.slug = 'demo-cfp-to-stage'
+			AND e.mode = 'demo'
+	);

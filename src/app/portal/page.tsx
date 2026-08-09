@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui";
 import { getDb } from "@/lib/db/cloudflare";
+import { listDeliverableBundles } from "@/lib/content/deliverables";
 import {
 	listEventsByIds,
 	getAgendaSlotBySubmission,
@@ -16,6 +17,8 @@ import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
 import { TaskChecklist } from "./task-checklist";
 import { ProfileEditor } from "./profile-editor";
+import { ActionTaskList } from "./action-task-list";
+import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
 
 type Props = {
 	searchParams: Promise<{ email?: string; error?: string }>;
@@ -48,8 +51,11 @@ export default async function PortalPage({ searchParams }: Props) {
 	const db = await getDb();
 	const submissions = await listSubmissionsForPerson(db, session.personId);
 	const tasks = await listTasksForPerson(db, session.personId);
+	const deliverables = await listDeliverableBundles(db, { personId: session.personId });
+	const actionTasks = await listSpeakerActionAssignments(db, { personId: session.personId });
 
-	const eventRows = await listEventsByIds(db, submissions.map((submission) => submission.event_id));
+	const profileEvents = await db.prepare("SELECT event_id FROM event_speaker_profiles WHERE person_id = ?").bind(session.personId).all<{ event_id: string }>();
+	const eventRows = await listEventsByIds(db, [...submissions.map((submission) => submission.event_id), ...profileEvents.results.map((row) => row.event_id)]);
 	const events = new Map(eventRows.map((event) => [event.id, event]));
 	const [speakersBySubmission, profiles, slots] = await Promise.all([
 		listSpeakersForSubmissions(db, submissions.map((submission) => submission.id)),
@@ -73,11 +79,13 @@ export default async function PortalPage({ searchParams }: Props) {
 
 	return (
 		<main className="mx-auto max-w-2xl px-4 py-10">
-			<PageHeader
+		<PageHeader
 				eyebrow="Speaker portal"
 				title={session.email}
 				description={portalDescription}
-			/>
+		/>
+			{actionTasks.length ? <section className="mb-10"><h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">Your action tasks</h2><ActionTaskList tasks={actionTasks} readOnlyEventIds={eventRows.filter((event) => event.mode === "demo").map((event) => event.id)} /></section> : null}
+			{eventRows.filter((event) => !firstSubmissionIdByEvent.has(event.id)).map((event) => { const profile = profilesByEvent.get(event.id); return <section key={event.id} className="mb-10 rounded-lg border border-neutral-800 bg-neutral-900 p-4"><p className="font-medium text-neutral-100">{event.name}</p><p className="mb-3 mt-1 text-xs text-neutral-500">Speaker profile</p>{event.mode !== "demo" ? <ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} jobTitle={profile?.job_title ?? ""} company={profile?.company ?? ""} social={parseSpeakerSocial(profile?.social_json)} hasHeadshot={Boolean(profile?.headshot_asset_id)} /> : null}</section>; })}
 
 			<section className="mb-10 space-y-3">
 						<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
@@ -125,7 +133,8 @@ export default async function PortalPage({ searchParams }: Props) {
 														bio={profile?.bio ?? ""}
 														jobTitle={profile?.job_title ?? ""}
 														company={profile?.company ?? ""}
-														social={parseSpeakerSocial(profile?.social_json)}
+												social={parseSpeakerSocial(profile?.social_json)}
+												hasHeadshot={Boolean(profile?.headshot_asset_id)}
 													/>
 												</div>
 											);
@@ -155,8 +164,10 @@ export default async function PortalPage({ searchParams }: Props) {
 																assetId: task.asset_id,
 																required: task.template_required !== 0,
 																instructions: task.instructions ?? null,
-																dueAt: task.due_at ?? null,
-															};
+														dueAt: task.due_at ?? null,
+														versions: (deliverables.get(task.id)?.versions ?? []).map((version) => ({ id: version.id, versionNumber: version.version_number, filename: version.filename, sizeBytes: version.size_bytes, createdAt: version.created_at })),
+														comments: (deliverables.get(task.id)?.comments ?? []).map((comment) => ({ id: comment.id, authorName: comment.author_name, authorKind: comment.author_kind, body: comment.body, createdAt: comment.created_at })),
+													};
 																																					})}
 															readOnly={events.get(row.event_id)?.mode === "demo"}
 														/>

@@ -413,7 +413,7 @@ export type PublicSession = {
 export async function loadPublicSession(db: D1Database, eventSlug: string, submissionId: string): Promise<PublicSession | null> {
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) return null;
-	const row = await db.prepare(`SELECT s.*, a.id AS agenda_slot_id, a.room_name AS agenda_room_name, a.starts_at AS agenda_starts_at, a.ends_at AS agenda_ends_at, a.track_id AS agenda_track_id FROM submissions s INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id WHERE s.id = ? AND s.event_id = ? AND s.status = 'published'`).bind(submissionId, event.id).first<(SubmissionRow & { agenda_slot_id: string; agenda_room_name: string; agenda_starts_at: number; agenda_ends_at: number; agenda_track_id: string | null })>();
+	const row = await db.prepare(`SELECT s.*, json_patch(s.answers_json, cr.snapshot_json) AS answers_json, a.id AS agenda_slot_id, a.room_name AS agenda_room_name, a.starts_at AS agenda_starts_at, a.ends_at AS agenda_ends_at, a.track_id AS agenda_track_id FROM submissions s INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id INNER JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id AND h.approved_revision_id IS NOT NULL INNER JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id WHERE s.id = ? AND s.event_id = ? AND s.status = 'published'`).bind(submissionId, event.id).first<(SubmissionRow & { agenda_slot_id: string; agenda_room_name: string; agenda_starts_at: number; agenda_ends_at: number; agenda_track_id: string | null })>();
 	if (!row) return null;
 	const [speakers, tracks] = await Promise.all([
 		listSpeakersForSubmission(db, submissionId),

@@ -48,6 +48,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 		listEvaluationScoresForPlan(db, plan.id),
 		listCriterionScoresForPlan(db, plan.id),
 	]);
+	const criteriaByPlan = new Map(await Promise.all(plans.map(async (item) => [item.id, await listCriteria(db, item.id)] as const)));
 	const assignmentsBySubmission = new Map<string, string[]>();
 	for (const assignment of assignments) {
 		assignmentsBySubmission.set(assignment.submission_id, [...(assignmentsBySubmission.get(assignment.submission_id) ?? []), assignment.reviewer_id]);
@@ -70,10 +71,11 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader eyebrow="Organizer · Review" title={event.name} description="Build the rubric, issue named review links, balance workload, and decide proposals from one scoped workspace." />
 				<ReviewWorkspace
+					key={plan.id}
 					eventSlug={event.slug}
 					eventName={event.name}
-					plans={plans.map((item) => ({ id: item.id, name: item.name, status: item.status }))}
-					plan={{ id: plan.id, name: plan.name, status: plan.status }}
+					plans={plans.map((item) => ({ id: item.id, name: item.name, status: item.status, openAt: item.open_at, closeAt: item.close_at, blindReview: item.blind_review === 1, assignmentCap: item.assignment_cap, scorecardSummary: (criteriaByPlan.get(item.id) ?? []).map((criterion) => `${criterion.label} (${criterion.criterion_type === "numeric" ? `${criterion.scale_min}–${criterion.scale_max}, weight ${criterion.weight}` : criterion.criterion_type === "dropdown" ? "dropdown" : "free text"})`) }))}
+					plan={{ id: plan.id, name: plan.name, status: plan.status, openAt: plan.open_at, closeAt: plan.close_at, blindReview: plan.blind_review === 1, assignmentCap: plan.assignment_cap }}
 					criteria={criteria.map((criterion) => ({
 						id: criterion.id,
 						label: criterion.label,
@@ -81,6 +83,8 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 						weight: criterion.weight,
 						scaleMin: criterion.scale_min,
 						scaleMax: criterion.scale_max,
+						type: criterion.criterion_type,
+						options: criterion.options_json ? JSON.parse(criterion.options_json) as string[] : [],
 					}))}
 					reviewers={reviewers.map((reviewer) => ({
 						id: reviewer.id,

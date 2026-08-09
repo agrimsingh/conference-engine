@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPublicEmbedPayload, createEmbed, getPublicEmbedBySlug } from "@/lib/embeds/embed";
 import { createEventWithDefaults } from "@/lib/events/create-event";
 import type { AccountRow } from "@/lib/db/types";
+import { approveSessionContent } from "./approve-content";
 
 let sequence = 0;
 const now = 1_781_300_000_000;
@@ -29,6 +30,7 @@ describe("public embeds", () => {
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-slot-visible', ?, 'embed-published', 'Main', ?, ?, 'visible@test.invalid', ?, ?)").bind(eventA.eventId, now, now + 1800000, now, now),
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-slot-hidden', ?, 'embed-hidden', 'Main', ?, ?, 'hidden@test.invalid', ?, ?)").bind(eventA.eventId, now + 3600000, now + 5400000, now, now),
 		]);
+		await approveSessionContent(eventA.eventId, "embed-published");
 		const payload = await buildPublicEmbedPayload(env.DB, eventA.slug, "agenda");
 		expect(payload?.sessions.map((session) => session.title)).toEqual(["Visible talk"]);
 		expect(JSON.stringify(payload)).not.toContain("Hidden talk");
@@ -54,6 +56,8 @@ describe("public embeds", () => {
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-format-stage-slot', ?, 'embed-format-stage', 'Main', ?, ?, 'stage-format@test.invalid', ?, ?)").bind(event.eventId, now, now + 1_800_000, now, now),
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-format-workshop-slot', ?, 'embed-format-workshop', 'Main', ?, ?, 'workshop-format@test.invalid', ?, ?)").bind(event.eventId, now + 3_600_000, now + 5_400_000, now, now),
 		]);
+		await approveSessionContent(event.eventId, "embed-format-stage");
+		await approveSessionContent(event.eventId, "embed-format-workshop");
 
 		const payload = await buildPublicEmbedPayload(env.DB, event.slug, "stage-agenda");
 

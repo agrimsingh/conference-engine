@@ -38,6 +38,7 @@ export default async function AdminSpeakersPage({ params, searchParams }: Props)
 					initialSpeakers={speakers}
 					initialStatus={initialStatus}
 					initialQuery={query.q ?? ""}
+					eventName={event.name}
 				/>
 			</main>
 		</div>

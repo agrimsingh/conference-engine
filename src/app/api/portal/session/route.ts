@@ -25,16 +25,18 @@ export async function POST(request: Request) {
 	const person = await getPersonByEmail(db, email);
 	if (!person) return accepted();
 	const submissions = await listSubmissionsForPerson(db, person.id);
-	const events = await listEventsByIds(db, submissions.map((submission) => submission.event_id));
+	const rosterEvents = await db.prepare("SELECT event_id FROM event_speaker_profiles WHERE person_id = ?").bind(person.id).all<{ event_id: string }>();
+	const events = await listEventsByIds(db, [...submissions.map((submission) => submission.event_id), ...rosterEvents.results.map((row) => row.event_id)]);
 	const writableEvents = new Map(events
 		.filter((event) => event.mode !== "demo")
 		.map((event) => [event.id, event]));
 	// A person can own proposals in more than one event. Choose the first
 	// proposal whose actual event is writable; do not treat the person alone as
 	// sufficient eligibility or let a demo-only record create a challenge.
-	const primary = submissions.find((submission) => writableEvents.has(submission.event_id));
-	if (!primary) return accepted();
-	const event = writableEvents.get(primary.event_id);
+	const primaryEventId = submissions.find((submission) => writableEvents.has(submission.event_id))?.event_id
+		?? rosterEvents.results.find((row) => writableEvents.has(row.event_id))?.event_id;
+	if (!primaryEventId) return accepted();
+	const event = writableEvents.get(primaryEventId);
 	if (!event) return accepted();
 
 	const secret = await getAuthSecret();

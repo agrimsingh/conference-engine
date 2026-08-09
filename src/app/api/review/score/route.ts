@@ -32,7 +32,8 @@ export async function POST(request: Request) {
 
 	const criterionScores = Array.isArray(body.criterionScores) ? body.criterionScores.map((value) => {
 		if (!isJsonObject(value)) return { criterionId: "", score: Number.NaN, comment: undefined };
-		return { criterionId: typeof value.criterionId === "string" ? value.criterionId : "", score: typeof value.score === "number" ? value.score : Number(value.score), comment: typeof value.comment === "string" ? value.comment : undefined };
+		const submitted = value.value ?? value.score;
+		return { criterionId: typeof value.criterionId === "string" ? value.criterionId : "", value: typeof submitted === "string" || typeof submitted === "number" ? submitted : undefined, comment: typeof value.comment === "string" ? value.comment : undefined };
 	}) : undefined;
 	if (!submissionId || (!Number.isFinite(score) && !criterionScores)) {
 		return NextResponse.json(
@@ -40,8 +41,8 @@ export async function POST(request: Request) {
 			{ status: 400 },
 		);
 	}
-	if (criterionScores?.some((value) => !value.criterionId || !Number.isFinite(value.score))) {
-		return NextResponse.json({ ok: false, error: "criterionScores must contain criterionId and numeric score" }, { status: 400 });
+	if (criterionScores?.some((value) => !value.criterionId || value.value === undefined)) {
+		return NextResponse.json({ ok: false, error: "criterionScores must contain criterionId and value" }, { status: 400 });
 	}
 
 	const db = await getDb();

@@ -76,6 +76,8 @@ export async function POST(request: Request, context: RouteContext) {
 	const name = typeof parsed.value.name === "string" ? parsed.value.name : "";
 	const jobTitle = typeof parsed.value.jobTitle === "string" ? parsed.value.jobTitle : null;
 	const company = typeof parsed.value.company === "string" ? parsed.value.company : null;
+	const bio = typeof parsed.value.bio === "string" ? parsed.value.bio : null;
+	const logisticsText = typeof parsed.value.logisticsText === "string" ? parsed.value.logisticsText : null;
 	const workflowStatus = parsed.value.workflowStatus;
 	if (workflowStatus !== undefined && !isSpeakerWorkflowStatus(workflowStatus)) {
 		return NextResponse.json({ ok: false, error: "Invalid workflow status" }, { status: 400 });
@@ -89,6 +91,8 @@ export async function POST(request: Request, context: RouteContext) {
 			name,
 			jobTitle,
 			company,
+			bio,
+			logisticsText,
 			socials,
 			workflowStatus: workflowStatus as SpeakerWorkflowStatus | undefined,
 		},

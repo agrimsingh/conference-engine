@@ -18,8 +18,10 @@ export async function PATCH(request: Request, context: Context) {
 	const body = parsed.value;
 	for (const key of ["label", "description"]) if (body[key] !== undefined && typeof body[key] !== "string" && !(key === "description" && body[key] === null)) return NextResponse.json({ ok: false, error: `${key} must be a string` }, { status: 400 });
 	for (const key of ["weight", "scaleMin", "scaleMax", "position"]) if (body[key] !== undefined && typeof body[key] !== "number") return NextResponse.json({ ok: false, error: `${key} must be a number` }, { status: 400 });
+	if (body.criterionType !== undefined && body.criterionType !== "numeric" && body.criterionType !== "dropdown" && body.criterionType !== "text") return NextResponse.json({ ok: false, error: "criterionType must be numeric, dropdown, or text" }, { status: 400 });
+	if (body.options !== undefined && (!Array.isArray(body.options) || body.options.some((option) => typeof option !== "string"))) return NextResponse.json({ ok: false, error: "options must be an array of strings" }, { status: 400 });
 	try {
-		const criterion = await updateCriterion(db, { planId, criterionId, label: body.label as string | undefined, description: body.description as string | null | undefined, weight: body.weight as number | undefined, scaleMin: body.scaleMin as number | undefined, scaleMax: body.scaleMax as number | undefined, position: body.position as number | undefined });
+		const criterion = await updateCriterion(db, { planId, criterionId, label: body.label as string | undefined, description: body.description as string | null | undefined, weight: body.weight as number | undefined, scaleMin: body.scaleMin as number | undefined, scaleMax: body.scaleMax as number | undefined, position: body.position as number | undefined, criterionType: body.criterionType as "numeric" | "dropdown" | "text" | undefined, options: body.options as string[] | undefined });
 		return NextResponse.json({ ok: true, criterion });
 	} catch (error) {
 		if (error instanceof EvaluationPlanValidationError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });

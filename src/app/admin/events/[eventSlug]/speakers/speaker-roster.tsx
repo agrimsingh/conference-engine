@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
@@ -11,12 +12,14 @@ import {
 	type SpeakerSocials,
 	type SpeakerWorkflowStatus,
 } from "@/lib/speakers/roster";
+import { renderSpeakerAnnouncementPreview } from "@/lib/speakers/operations";
 
 type Props = {
 	eventSlug: string;
 	initialSpeakers: RosterSpeaker[];
 	initialStatus: string;
 	initialQuery: string;
+	eventName: string;
 };
 
 type Draft = {
@@ -25,6 +28,8 @@ type Draft = {
 	email: string;
 	jobTitle: string;
 	company: string;
+	bio: string;
+	logisticsText: string;
 	workflowStatus: SpeakerWorkflowStatus;
 	socials: SpeakerSocials;
 };
@@ -35,6 +40,8 @@ const emptyDraft = (): Draft => ({
 	email: "",
 	jobTitle: "",
 	company: "",
+	bio: "",
+	logisticsText: "",
 	workflowStatus: "invited",
 	socials: {},
 });
@@ -55,18 +62,19 @@ function workflowTone(status: SpeakerWorkflowStatus): "neutral" | "positive" | "
 	}
 }
 
-export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initialQuery }: Props) {
+export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialStatus, initialQuery }: Props) {
 	const router = useRouter();
 	const [speakers, setSpeakers] = useState(initialSpeakers);
 	const [status, setStatus] = useState(initialStatus);
 	const [q, setQ] = useState(initialQuery);
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
-	const [csv, setCsv] = useState("email,name,job_title,company,workflow_status,twitter,linkedin,github,website\n");
+	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website\n");
 	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
 	const [emailSubject, setEmailSubject] = useState("Update from {{event_name}}");
 	const [emailBody, setEmailBody] = useState("Hi {{submitter_name}},\n\n");
 	const [pending, setPending] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [selectedRecipients, setSelectedRecipients] = useState<string[]>(initialSpeakers.map((speaker) => speaker.personId));
 
 	const visible = useMemo(() => {
 		const needle = q.trim().toLowerCase();
@@ -123,6 +131,8 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 					email: draft.email,
 					jobTitle: draft.jobTitle,
 					company: draft.company,
+					bio: draft.bio,
+					logisticsText: draft.logisticsText,
 					workflowStatus: draft.workflowStatus,
 					socials: draft.socials,
 				}),
@@ -173,7 +183,7 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 		setNotice(null);
 		try {
 			const payload: Record<string, unknown> = {
-				personIds: visible.map((speaker) => speaker.personId),
+				personIds: visible.filter((speaker) => selectedRecipients.includes(speaker.personId)).map((speaker) => speaker.personId),
 				templateKey: emailTemplateKey,
 			};
 			if (emailTemplateKey === "speaker_announcement") {
@@ -211,11 +221,19 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 			email: speaker.email,
 			jobTitle: speaker.jobTitle ?? "",
 			company: speaker.company ?? "",
+			bio: speaker.bio ?? "",
+			logisticsText: speaker.logisticsText ?? "",
 			workflowStatus: speaker.workflowStatus,
 			socials: { ...speaker.socials },
 		});
 		setNotice(null);
 	}
+
+	async function invite(personId: string) { setPending(true); setNotice(null); try { const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(personId)}/invite`, { method: "POST" }); const value = await response.json() as { ok?: boolean; error?: string }; setNotice(response.ok && value.ok ? "Portal invitation sent and logged in Communications." : value.error ?? "Invite failed"); } catch { setNotice("Network error"); } finally { setPending(false); } }
+
+	const selectedVisible = visible.filter((speaker) => selectedRecipients.includes(speaker.personId));
+	const previewSpeaker = selectedVisible[0];
+	const preview = previewSpeaker ? renderSpeakerAnnouncementPreview(emailSubject, emailBody, previewSpeaker, eventName, `${typeof window === "undefined" ? "" : window.location.origin}/portal`) : null;
 
 	return (
 		<div className="space-y-8">
@@ -262,11 +280,11 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 					</label>
 					<button
 						type="button"
-						disabled={pending || visible.length === 0 || (emailTemplateKey === "speaker_announcement" && (!emailSubject.trim() || !emailBody.trim()))}
+						disabled={pending || selectedVisible.length === 0 || (emailTemplateKey === "speaker_announcement" && (!emailSubject.trim() || !emailBody.trim()))}
 						onClick={() => void bulkEmail()}
 						className={buttonClasses("secondary", "sm")}
 					>
-						Email filtered ({visible.length})
+						Email selected ({selectedVisible.length})
 					</button>
 					<Link
 						href={`/admin/events/${eventSlug}/tasks`}
@@ -297,6 +315,7 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 						<p className="text-xs text-neutral-500">
 							Tokens: {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{portal_url}}"}.
 						</p>
+						{previewSpeaker && preview ? <div className="rounded border border-neutral-700 bg-neutral-950 p-3 text-xs"><p className="font-medium text-neutral-200">Preview for {previewSpeaker.name}</p><p className="mt-2 text-neutral-300">{preview.subject}</p><p className="mt-2 whitespace-pre-wrap text-neutral-400">{preview.text}</p></div> : null}
 					</div>
 				) : (
 					<p className="mt-3 text-xs text-neutral-500">
@@ -312,6 +331,7 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 					<ul className="divide-y divide-neutral-800">
 						{visible.map((speaker) => (
 							<li key={speaker.personId} className="px-4 py-3 text-sm">
+								<label className="mb-2 inline-flex items-center text-xs text-neutral-400"><input type="checkbox" className="mr-2" checked={selectedRecipients.includes(speaker.personId)} onChange={(event) => setSelectedRecipients((current) => event.target.checked ? [...new Set([...current, speaker.personId])] : current.filter((id) => id !== speaker.personId))} />Email recipient</label>
 								<div className="flex flex-wrap items-start justify-between gap-3">
 									<div>
 										<p className="font-medium text-neutral-100">
@@ -353,6 +373,9 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 												))}
 											</p>
 										) : null}
+										{speaker.bio ? <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs text-neutral-400">{speaker.bio}</p> : null}
+										{speaker.logisticsText ? <p className="mt-2 text-xs text-neutral-500">Travel / logistics: {speaker.logisticsText}</p> : null}
+										{speaker.headshot ? <div className="mt-2 flex items-center gap-3"><Image unoptimized width={56} height={56} src={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`} alt={`${speaker.name} headshot`} className="h-14 w-14 rounded-lg object-cover" /><a className="text-xs underline" href={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`}>{speaker.headshot.filename ?? "View headshot"} · uploaded {new Date(speaker.headshot.uploadedAt).toLocaleString()}</a></div> : null}
 									</div>
 									<div className="flex items-center gap-2">
 										<StatusPill tone={workflowTone(speaker.workflowStatus)}>
@@ -366,6 +389,7 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 										>
 											Edit
 										</button>
+										<button type="button" disabled={pending} onClick={() => void invite(speaker.personId)} className={buttonClasses("secondary", "sm")}>Send portal invite</button>
 									</div>
 								</div>
 							</li>
@@ -394,6 +418,8 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 					<label className="text-sm text-neutral-300">Email<input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
 					<label className="text-sm text-neutral-300">Job title<input value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
 					<label className="text-sm text-neutral-300">Company<input value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+					<label className="text-sm text-neutral-300 md:col-span-2">Bio<textarea rows={5} maxLength={10000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+					<label className="text-sm text-neutral-300 md:col-span-2">Travel and logistics<textarea rows={3} maxLength={4000} value={draft.logisticsText} onChange={(event) => setDraft({ ...draft, logisticsText: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
 					<label className="text-sm text-neutral-300">
 						Workflow status
 						<select
@@ -433,7 +459,7 @@ export function SpeakerRoster({ eventSlug, initialSpeakers, initialStatus, initi
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<h2 className="font-medium text-neutral-100">Import CSV</h2>
 				<p className="mt-1 text-sm text-neutral-400">
-					Columns: email, name, job_title, company, workflow_status, twitter, linkedin, github, website.
+					Columns: email, name, job_title, company, bio, logistics, workflow_status, twitter, linkedin, github, website.
 				</p>
 				<textarea
 					aria-label="Speaker CSV"

@@ -17,7 +17,8 @@ import { backfillEvaluationTokenDigests, digestReviewToken } from "@/lib/evaluat
 
 export type CriterionScoreInput = {
 	criterionId: string;
-	score: number;
+	score?: number;
+	value?: number | string;
 	comment?: string;
 };
 
@@ -28,6 +29,7 @@ export type EvaluationCriterionScoreRow = {
 	submission_id: string;
 	reviewer_id: string | null;
 	score: number;
+	value_text: string | null;
 	comment: string | null;
 	created_at: number;
 	updated_at: number;
@@ -85,11 +87,13 @@ export async function upsertEvaluationScore(
 	const identity = args.committeePlanId
 		? await resolveTrustedCommitteeIdentity(db, args.committeePlanId)
 		: await resolveReviewIdentity(db, args.token);
-	if (!identity || identity.plan.status !== "active") {
+	if (!identity) {
 		return { ok: false, error: "Invalid or inactive review token", status: 401 };
 	}
 
 	const { plan } = identity;
+	const roundAvailability = reviewRoundAvailability(plan, Date.now());
+	if (!roundAvailability.ok) return roundAvailability;
 	try {
 		await requireWritableEventById(db, plan.event_id);
 	} catch (error) {
@@ -109,14 +113,17 @@ export async function upsertEvaluationScore(
 			plan.id,
 			identity.reviewer.id,
 		);
+		const activeAssignments = assignments.filter((assignment) => assignment.recused_at === null);
 		const allowed = filterBoardSubmissions([submission], {
 			mode: "reviewer",
-			assignments,
+			assignments: activeAssignments,
 		});
 		if (allowed.length === 0) {
 			return {
 				ok: false,
-				error: "Submission is not assigned to this reviewer",
+				error: assignments.some((assignment) => assignment.submission_id === submission.id && assignment.recused_at !== null)
+					? "You recused this assignment and cannot score it"
+					: "Submission is not assigned to this reviewer",
 				status: 403,
 			};
 		}
@@ -163,9 +170,9 @@ export async function upsertEvaluationScore(
 			.first<EvaluationScoreRow>();
 	}
 
-	const aggregateScore = validatedCriterionScores.rows.length
+	const aggregateScore = validatedCriterionScores.numericRows.length
 		? weightedAggregateScore(criteria, validatedCriterionScores.rows)
-		: args.score as number;
+		: args.score ?? 1;
 	let scoreRow: EvaluationScoreRow;
 	const statements: D1PreparedStatement[] = [];
 
@@ -216,6 +223,8 @@ export async function upsertEvaluationScore(
 	}
 
 	for (const criterionScore of validatedCriterionScores.rows) {
+		const numericScore = typeof criterionScore.value === "number" ? criterionScore.value : criterionScore.score ?? 0;
+		const valueText = typeof criterionScore.value === "string" ? criterionScore.value : null;
 		const existingCriterion = reviewerId
 			? await db.prepare(`SELECT * FROM evaluation_criterion_scores WHERE criterion_id = ? AND submission_id = ? AND reviewer_id = ?`)
 				.bind(criterionScore.criterionId, args.submissionId, reviewerId).first<EvaluationCriterionScoreRow>()
@@ -223,11 +232,11 @@ export async function upsertEvaluationScore(
 				.bind(criterionScore.criterionId, args.submissionId).first<EvaluationCriterionScoreRow>();
 		const criterionComment = criterionScore.comment?.trim() || null;
 		if (existingCriterion) {
-			statements.push(db.prepare(`UPDATE evaluation_criterion_scores SET score = ?, comment = ?, updated_at = ? WHERE id = ?`)
-				.bind(criterionScore.score, criterionComment, now, existingCriterion.id));
+			statements.push(db.prepare(`UPDATE evaluation_criterion_scores SET score = ?, value_text = ?, comment = ?, updated_at = ? WHERE id = ?`)
+				.bind(numericScore, valueText, criterionComment, now, existingCriterion.id));
 		} else {
-			statements.push(db.prepare(`INSERT INTO evaluation_criterion_scores (id, plan_id, criterion_id, submission_id, reviewer_id, score, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-				.bind(crypto.randomUUID(), plan.id, criterionScore.criterionId, args.submissionId, reviewerId, criterionScore.score, criterionComment, now, now));
+			statements.push(db.prepare(`INSERT INTO evaluation_criterion_scores (id, plan_id, criterion_id, submission_id, reviewer_id, score, value_text, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+				.bind(crypto.randomUUID(), plan.id, criterionScore.criterionId, args.submissionId, reviewerId, numericScore, valueText, criterionComment, now, now));
 		}
 	}
 	await db.batch(statements);
@@ -254,45 +263,68 @@ export async function upsertEvaluationScore(
 	return { ok: true, score: scoreRow };
 }
 
-function validateCriterionScores(
+export function validateCriterionScores(
 	criteria: EvaluationCriterionRow[],
 	values: CriterionScoreInput[] | undefined,
-): { rows: CriterionScoreInput[] } | { ok: false; error: string; status: number } {
-	if (!values) return { rows: [] };
+): { rows: CriterionScoreInput[]; numericRows: CriterionScoreInput[] } | { ok: false; error: string; status: number } {
+	if (!values) return { rows: [], numericRows: [] };
 	if (!criteria.length) return { ok: false, error: "This plan has no active criteria", status: 409 };
 	if (!Array.isArray(values) || values.length !== criteria.length) {
 		return { ok: false, error: "Score every active criterion exactly once", status: 400 };
 	}
 	const byId = new Map(criteria.map((criterion) => [criterion.id, criterion]));
 	const seen = new Set<string>();
+	const normalized: CriterionScoreInput[] = [];
+	const numericRows: CriterionScoreInput[] = [];
 	for (const value of values) {
-		if (!value || typeof value.criterionId !== "string" || !Number.isInteger(value.score)) {
-			return { ok: false, error: "Each criterion score needs an id and whole-number score", status: 400 };
-		}
+		if (!value || typeof value.criterionId !== "string") return { ok: false, error: "Each criterion value needs an id", status: 400 };
 		const criterion = byId.get(value.criterionId);
 		if (!criterion || seen.has(value.criterionId)) return { ok: false, error: "Criterion scores do not match this plan", status: 400 };
-		if (value.score < criterion.scale_min || value.score > criterion.scale_max) {
-			return { ok: false, error: `${criterion.label} must be between ${criterion.scale_min} and ${criterion.scale_max}`, status: 400 };
+		const submitted = value.value ?? value.score;
+		if (criterion.criterion_type === "numeric") {
+			if (typeof submitted !== "number" || !Number.isInteger(submitted) || submitted < criterion.scale_min || submitted > criterion.scale_max) return { ok: false, error: `${criterion.label} must be a whole number between ${criterion.scale_min} and ${criterion.scale_max}`, status: 400 };
+			numericRows.push({ ...value, value: submitted });
+			normalized.push({ ...value, value: submitted });
+		} else if (criterion.criterion_type === "dropdown") {
+			const options = parseOptions(criterion.options_json);
+			if (typeof submitted !== "string" || !options.includes(submitted)) return { ok: false, error: `${criterion.label} must be one of its configured options`, status: 400 };
+			normalized.push({ ...value, value: submitted });
+		} else {
+			if (typeof submitted !== "string" || !submitted.trim() || submitted.length > 10_000) return { ok: false, error: `${criterion.label} is required and must be 10,000 characters or less`, status: 400 };
+			normalized.push({ ...value, value: submitted.trim() });
 		}
 		if (value.comment !== undefined && (typeof value.comment !== "string" || value.comment.length > 2_000)) {
 			return { ok: false, error: "Criterion comments must be 2,000 characters or less", status: 400 };
 		}
 		seen.add(value.criterionId);
 	}
-	return { rows: values };
+	return { rows: normalized, numericRows };
 }
 
-function weightedAggregateScore(criteria: EvaluationCriterionRow[], values: CriterionScoreInput[]): number {
+export function weightedAggregateScore(criteria: EvaluationCriterionRow[], values: CriterionScoreInput[]): number {
 	const byId = new Map(criteria.map((criterion) => [criterion.id, criterion]));
 	let weighted = 0;
 	let weights = 0;
 	for (const value of values) {
 		const criterion = byId.get(value.criterionId)!;
-		const normalized = 1 + ((value.score - criterion.scale_min) / (criterion.scale_max - criterion.scale_min)) * 4;
-		weighted += normalized * criterion.weight;
+		if (criterion.criterion_type !== "numeric") continue;
+		const numeric = typeof value.value === "number" ? value.value : value.score;
+		if (numeric === undefined) continue;
+		weighted += numeric * criterion.weight;
 		weights += criterion.weight;
 	}
-	return Math.max(1, Math.min(5, Math.round(weighted / weights)));
+	return weights ? weighted / weights : 1;
+}
+
+export function reviewRoundAvailability(plan: Pick<EvaluationPlanRow, "status" | "open_at" | "close_at">, now: number): { ok: true } | { ok: false; error: string; status: number } {
+	if (plan.status !== "active") return { ok: false, error: "This review round is closed", status: 409 };
+	if (plan.open_at !== null && now < plan.open_at) return { ok: false, error: "This review round has not opened yet", status: 409 };
+	if (plan.close_at !== null && now > plan.close_at) return { ok: false, error: "This review round is closed", status: 409 };
+	return { ok: true };
+}
+
+function parseOptions(raw: string | null): string[] {
+	try { const value: unknown = raw ? JSON.parse(raw) : []; return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : []; } catch { return []; }
 }
 
 export async function listCriterionScoresForPlan(

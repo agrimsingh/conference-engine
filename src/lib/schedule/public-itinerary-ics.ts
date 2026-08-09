@@ -57,9 +57,11 @@ export async function buildPublicItineraryIcs(
 
 	const placeholders = sessionIds.map(() => "?").join(", ");
 	const rows = await db.prepare(
-		`SELECT s.id, s.answers_json, a.room_name, a.starts_at, a.ends_at, a.ics_uid
+		`SELECT s.id, cr.snapshot_json AS answers_json, a.room_name, a.starts_at, a.ends_at, a.ics_uid
 		 FROM submissions s
 		 INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
+		 INNER JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id AND h.approved_revision_id IS NOT NULL
+		 INNER JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id
 		 WHERE s.event_id = ? AND s.status = 'published' AND s.id IN (${placeholders})`,
 	).bind(event.id, ...sessionIds).all<ItineraryRow>();
 

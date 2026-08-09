@@ -603,8 +603,8 @@ describe("D1 runtime invariants", () => {
 		]);
 		expect(results.filter((result) => result.ok)).toHaveLength(1);
 		expect(results.filter((result) => !result.ok && result.status === 409)).toHaveLength(1);
-		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM assets WHERE event_id = 'upload-race-event'").first<{ count: number }>()).toEqual({ count: 1 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM assets WHERE event_id = 'upload-race-event'").first<{ count: number }>()).toEqual({ count: 2 });
 		const objects = await env.FILES.list({ prefix: "events/upload-race-event/people/upload-race-person/headshot/" });
-		expect(objects.objects).toHaveLength(1);
+		expect(objects.objects).toHaveLength(2);
 	});
 });

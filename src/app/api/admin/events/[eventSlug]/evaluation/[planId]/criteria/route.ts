@@ -29,8 +29,10 @@ export async function POST(request: Request, context: Context) {
 	if (body.description !== undefined && typeof body.description !== "string") return NextResponse.json({ ok: false, error: "description must be a string" }, { status: 400 });
 	if (body.scaleMin !== undefined && typeof body.scaleMin !== "number") return NextResponse.json({ ok: false, error: "scaleMin must be a number" }, { status: 400 });
 	if (body.scaleMax !== undefined && typeof body.scaleMax !== "number") return NextResponse.json({ ok: false, error: "scaleMax must be a number" }, { status: 400 });
+	if (body.criterionType !== undefined && body.criterionType !== "numeric" && body.criterionType !== "dropdown" && body.criterionType !== "text") return NextResponse.json({ ok: false, error: "criterionType must be numeric, dropdown, or text" }, { status: 400 });
+	if (body.options !== undefined && (!Array.isArray(body.options) || body.options.some((option) => typeof option !== "string"))) return NextResponse.json({ ok: false, error: "options must be an array of strings" }, { status: 400 });
 	try {
-		const criterion = await createCriterion(db, { planId, label: body.label as string, description: body.description as string | undefined, weight: body.weight as number, scaleMin: body.scaleMin as number | undefined, scaleMax: body.scaleMax as number | undefined });
+		const criterion = await createCriterion(db, { planId, label: body.label as string, description: body.description as string | undefined, weight: body.weight as number, scaleMin: body.scaleMin as number | undefined, scaleMax: body.scaleMax as number | undefined, criterionType: body.criterionType as "numeric" | "dropdown" | "text" | undefined, options: body.options as string[] | undefined });
 		return NextResponse.json({ ok: true, criterion }, { status: 201 });
 	} catch (error) {
 		if (error instanceof EvaluationPlanValidationError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });

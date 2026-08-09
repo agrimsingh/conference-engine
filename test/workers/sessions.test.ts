@@ -4,6 +4,7 @@ import { createEventWithDefaults } from "@/lib/events/create-event";
 import { cloneSession, commitSessionImport, createSession, loadPublicSession, previewSessionImport } from "@/lib/sessions/session";
 import type { AccountRow } from "@/lib/db/types";
 import { materializeAcceptedSpeaker } from "@/lib/speakers/materialize";
+import { approveSessionContent } from "./approve-content";
 
 const now = 1_781_000_000_000;
 let sequence = 0;
@@ -292,6 +293,7 @@ describe("organizer session creation, lineage, and publication", () => {
 			env.DB.prepare("UPDATE submissions SET status = 'scheduled' WHERE id = ?").bind(session.id),
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('sessions-public-slot', ?, ?, 'Main', ?, ?, 'sessions-public-slot@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T10:00:00Z"), Date.parse("2026-11-01T10:30:00Z"), now, now),
 		]);
+		await approveSessionContent(created.eventId, session.id);
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toBeNull();
 		expect((await bulk(room, created.eventId, "publish", [session.id])).status).toBe(200);
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({
@@ -316,6 +318,7 @@ describe("organizer session creation, lineage, and publication", () => {
 			env.DB.prepare("UPDATE submissions SET status = 'scheduled' WHERE id = ?").bind(session.id),
 			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('sessions-race-slot', ?, ?, 'Main', ?, ?, 'sessions-race-slot@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T11:00:00Z"), Date.parse("2026-11-01T11:30:00Z"), now, now),
 		]);
+		await approveSessionContent(created.eventId, session.id);
 		const room = env.EVENT_ROOM.getByName(created.eventId);
 		const [publish, unplace] = await Promise.all([
 			bulk(room, created.eventId, "publish", [session.id]),

@@ -7,6 +7,7 @@ import {
 	filterRosterSpeakers,
 	isSpeakerWorkflowStatus,
 	listEventSpeakerRoster,
+	validateRosterRecipientSelection,
 	resolveRosterBulkEmailTemplateKey,
 } from "@/lib/speakers/roster";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
@@ -37,6 +38,7 @@ export async function POST(request: Request, context: RouteContext) {
 	}
 
 	let personIds: string[] = [];
+	let explicitSelection = false;
 	if (Array.isArray(parsed.value.personIds)) {
 		if (
 			parsed.value.personIds.length === 0
@@ -49,6 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
 			);
 		}
 		personIds = [...new Set(parsed.value.personIds.map((value) => String(value).trim()))];
+		explicitSelection = true;
 	} else {
 		const statusRaw = typeof parsed.value.status === "string" ? parsed.value.status : "all";
 		const q = typeof parsed.value.q === "string" ? parsed.value.q : undefined;
@@ -64,6 +67,11 @@ export async function POST(request: Request, context: RouteContext) {
 
 	if (personIds.length === 0) {
 		return NextResponse.json({ ok: false, error: "No speakers match the current filter" }, { status: 400 });
+	}
+	if (explicitSelection) {
+		if (!await validateRosterRecipientSelection(db, event.id, personIds)) {
+			return NextResponse.json({ ok: false, error: "Every recipient must belong to this event's speaker roster" }, { status: 400 });
+		}
 	}
 
 	const subject = typeof parsed.value.subject === "string" ? parsed.value.subject : undefined;

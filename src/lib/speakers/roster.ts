@@ -53,6 +53,9 @@ export type RosterSpeaker = {
 	name: string;
 	jobTitle: string | null;
 	company: string | null;
+	bio: string | null;
+	logisticsText: string | null;
+	headshot: { assetId: string; filename: string | null; uploadedAt: number } | null;
 	socials: SpeakerSocials;
 	workflowStatus: SpeakerWorkflowStatus;
 	submissionStatuses: string[];
@@ -77,6 +80,11 @@ type LinkedSpeakerRow = {
 	submission_id: string;
 	job_title: string | null;
 	company: string | null;
+	bio: string | null;
+	logistics_text: string | null;
+	headshot_asset_id: string | null;
+	headshot_filename: string | null;
+	headshot_created_at: number | null;
 	social_json: string | null;
 	workflow_status: SpeakerWorkflowStatus | null;
 	profile_id: string | null;
@@ -88,6 +96,11 @@ type ProfileOnlyRow = {
 	name: string | null;
 	job_title: string | null;
 	company: string | null;
+	bio: string | null;
+	logistics_text: string | null;
+	headshot_asset_id: string | null;
+	headshot_filename: string | null;
+	headshot_created_at: number | null;
 	social_json: string | null;
 	workflow_status: SpeakerWorkflowStatus;
 	profile_id: string;
@@ -178,6 +191,16 @@ export function filterRosterSpeakers(
 	});
 }
 
+/** Explicit bulk selections are all-or-nothing and must belong to this event roster. */
+export function rosterContainsEveryRecipient(speakers: RosterSpeaker[], personIds: string[]): boolean {
+	const rosterIds = new Set(speakers.map((speaker) => speaker.personId));
+	return personIds.every((personId) => rosterIds.has(personId));
+}
+
+export async function validateRosterRecipientSelection(db: D1Database, eventId: string, personIds: string[]): Promise<boolean> {
+	return rosterContainsEveryRecipient(await listEventSpeakerRoster(db, eventId), personIds);
+}
+
 let dueAtColumnCache: boolean | null = null;
 
 export async function speakerTasksHaveDueAt(db: D1Database): Promise<boolean> {
@@ -209,6 +232,11 @@ export async function listEventSpeakerRoster(
 					s.id AS submission_id,
 					COALESCE(sp.job_title, esp.job_title) AS job_title,
 					COALESCE(sp.company, esp.company) AS company,
+					sp.bio AS bio,
+					sp.logistics_text AS logistics_text,
+					sp.headshot_asset_id AS headshot_asset_id,
+					ha.filename AS headshot_filename,
+					ha.created_at AS headshot_created_at,
 					COALESCE(sp.social_json, esp.social_json) AS social_json,
 					esp.workflow_status AS workflow_status,
 					esp.id AS profile_id
@@ -219,6 +247,7 @@ export async function listEventSpeakerRoster(
 				   ON esp.event_id = s.event_id AND esp.person_id = p.id
 				 LEFT JOIN speaker_profiles sp
 				   ON sp.event_id = s.event_id AND sp.person_id = p.id
+				 LEFT JOIN assets ha ON ha.id = sp.headshot_asset_id AND ha.event_id = s.event_id
 				 WHERE s.event_id = ?
 				   AND ss.person_id IS NOT NULL
 				   AND ss.status IN ('confirmed', 'pending')
@@ -237,6 +266,11 @@ export async function listEventSpeakerRoster(
 					COALESCE(NULLIF(TRIM(sp.display_name), ''), p.name) AS name,
 					COALESCE(sp.job_title, esp.job_title) AS job_title,
 					COALESCE(sp.company, esp.company) AS company,
+					sp.bio AS bio,
+					sp.logistics_text AS logistics_text,
+					sp.headshot_asset_id AS headshot_asset_id,
+					ha.filename AS headshot_filename,
+					ha.created_at AS headshot_created_at,
 					COALESCE(sp.social_json, esp.social_json) AS social_json,
 					esp.workflow_status AS workflow_status,
 					esp.id AS profile_id
@@ -244,6 +278,7 @@ export async function listEventSpeakerRoster(
 				 JOIN people p ON p.id = esp.person_id
 				 LEFT JOIN speaker_profiles sp
 				   ON sp.event_id = esp.event_id AND sp.person_id = esp.person_id
+				 LEFT JOIN assets ha ON ha.id = sp.headshot_asset_id AND ha.event_id = esp.event_id
 				 WHERE esp.event_id = ?`,
 			)
 			.bind(eventId)
@@ -266,6 +301,11 @@ export async function listEventSpeakerRoster(
 		name: string | null;
 		job_title: string | null;
 		company: string | null;
+		bio: string | null;
+		logistics_text: string | null;
+		headshot_asset_id: string | null;
+		headshot_filename: string | null;
+		headshot_created_at: number | null;
 		social_json: string | null;
 		workflow_status: SpeakerWorkflowStatus | null;
 		profile_id: string | null;
@@ -277,6 +317,9 @@ export async function listEventSpeakerRoster(
 				existing.profileId = row.profile_id;
 				existing.jobTitle = row.job_title;
 				existing.company = row.company;
+				existing.bio = row.bio;
+				existing.logisticsText = row.logistics_text;
+				existing.headshot = row.headshot_asset_id ? { assetId: row.headshot_asset_id, filename: row.headshot_filename, uploadedAt: row.headshot_created_at ?? 0 } : null;
 				existing.socials = parseSpeakerSocials(row.social_json);
 				existing.workflowStatus = row.workflow_status ?? existing.workflowStatus;
 			}
@@ -289,6 +332,9 @@ export async function listEventSpeakerRoster(
 			name: row.name?.trim() || row.email,
 			jobTitle: row.job_title,
 			company: row.company,
+			bio: row.bio,
+			logisticsText: row.logistics_text,
+			headshot: row.headshot_asset_id ? { assetId: row.headshot_asset_id, filename: row.headshot_filename, uploadedAt: row.headshot_created_at ?? 0 } : null,
 			socials: parseSpeakerSocials(row.social_json),
 			workflowStatus: row.workflow_status ?? row.fallbackStatus,
 			submissionStatuses: [],
@@ -366,6 +412,8 @@ export type UpsertRosterSpeakerInput = {
 	name: string;
 	jobTitle?: string | null;
 	company?: string | null;
+	bio?: string | null;
+	logisticsText?: string | null;
 	socials?: SpeakerSocials;
 	workflowStatus?: SpeakerWorkflowStatus;
 };
@@ -424,8 +472,12 @@ export async function upsertEventSpeakerProfile(
 	if (!name || name.length > 160) return { ok: false, error: "Name must be between 1 and 160 characters", status: 400 };
 	const jobTitle = args.input.jobTitle?.trim() || null;
 	const company = args.input.company?.trim() || null;
+	const bio = args.input.bio?.trim() || null;
+	const logisticsText = args.input.logisticsText?.trim() || null;
 	if (jobTitle && jobTitle.length > 160) return { ok: false, error: "Job title is too long", status: 400 };
 	if (company && company.length > 160) return { ok: false, error: "Company is too long", status: 400 };
+	if (bio && bio.length > 10_000) return { ok: false, error: "Bio is too long", status: 400 };
+	if (logisticsText && logisticsText.length > 4000) return { ok: false, error: "Travel and logistics is too long", status: 400 };
 	const workflowStatus = args.input.workflowStatus ?? "invited";
 	if (!isSpeakerWorkflowStatus(workflowStatus)) {
 		return { ok: false, error: "Invalid workflow status", status: 400 };
@@ -457,13 +509,15 @@ export async function upsertEventSpeakerProfile(
 		.prepare(
 			`INSERT INTO speaker_profiles (
 				id, event_id, person_id, display_name, bio, job_title, company, social_json,
-				headshot_asset_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?)
+				headshot_asset_id, logistics_text, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
 			ON CONFLICT(event_id, person_id) DO UPDATE SET
 				display_name = excluded.display_name,
+				bio = excluded.bio,
 				job_title = excluded.job_title,
 				company = excluded.company,
 				social_json = excluded.social_json,
+				logistics_text = excluded.logistics_text,
 				updated_at = excluded.updated_at`,
 		)
 		.bind(
@@ -471,9 +525,11 @@ export async function upsertEventSpeakerProfile(
 			args.eventId,
 			personId,
 			name,
+			bio,
 			jobTitle,
 			company,
 			socialJson,
+			logisticsText,
 			now,
 			now,
 		)
@@ -658,13 +714,15 @@ export async function importSpeakerRosterCsv(
 		const name = (record.name ?? "").trim();
 		const jobTitle = (record.job_title ?? record["job title"] ?? "").trim();
 		const company = (record.company ?? "").trim();
+		const bio = (record.bio ?? "").trim();
+		const logisticsText = (record.logistics ?? record.travel ?? "").trim();
 		const workflowRaw = (record.workflow_status ?? record.status ?? "invited").trim().toLowerCase();
 		const socials: SpeakerSocials = {};
 		for (const key of SOCIAL_KEYS) {
 			const value = (record[key] ?? "").trim();
 			if (value) socials[key] = value;
 		}
-		if (hasFormulaPrefix(name) || hasFormulaPrefix(email) || hasFormulaPrefix(jobTitle) || hasFormulaPrefix(company)) {
+		if (hasFormulaPrefix(name) || hasFormulaPrefix(email) || hasFormulaPrefix(jobTitle) || hasFormulaPrefix(company) || hasFormulaPrefix(bio) || hasFormulaPrefix(logisticsText)) {
 			issues.push({ row: rowNumber, error: "Formula-like values are not allowed" });
 			continue;
 		}
@@ -691,6 +749,8 @@ export async function importSpeakerRosterCsv(
 				name,
 				jobTitle: jobTitle || null,
 				company: company || null,
+				bio: bio || null,
+				logisticsText: logisticsText || null,
 				socials,
 				workflowStatus: workflowRaw,
 			},

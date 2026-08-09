@@ -6,6 +6,7 @@ import {
 	matchesRosterSearch,
 	parseSpeakerSocials,
 	resolveRosterBulkEmailTemplateKey,
+	rosterContainsEveryRecipient,
 	serializeSpeakerSocials,
 	type RosterSpeaker,
 } from "./roster";
@@ -14,6 +15,9 @@ function speaker(partial: Partial<RosterSpeaker> & Pick<RosterSpeaker, "personId
 	return {
 		jobTitle: null,
 		company: null,
+		bio: null,
+		logisticsText: null,
+		headshot: null,
 		socials: {},
 		submissionStatuses: [],
 		submissionIds: [],
@@ -95,5 +99,11 @@ describe("speaker roster domain", () => {
 		expect(resolveRosterBulkEmailTemplateKey("acceptance")).toBeNull();
 		expect(resolveRosterBulkEmailTemplateKey("organizer_magic_link")).toBeNull();
 		expect(resolveRosterBulkEmailTemplateKey(12)).toBeNull();
+	});
+
+	it("requires every explicit email recipient to be in the visible event roster", () => {
+		const rows = [speaker({ personId: "priya", email: "priya@example.test", name: "Priya", workflowStatus: "confirmed" })];
+		expect(rosterContainsEveryRecipient(rows, ["priya"])).toBe(true);
+		expect(rosterContainsEveryRecipient(rows, ["priya", "foreign"])).toBe(false);
 	});
 });

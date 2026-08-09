@@ -10,6 +10,7 @@ import { createEventWithDefaults } from "@/lib/events/create-event";
 import { loadPublicSession } from "@/lib/sessions/session";
 import { acceptSubmission } from "@/lib/speakers/accept";
 import type { AccountRow } from "@/lib/db/types";
+import { approveSessionContent } from "./approve-content";
 
 const now = 1_781_200_000_000;
 
@@ -108,6 +109,7 @@ describe("release lifecycle", () => {
 		expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(submissionId).first()).toEqual({ status: "scheduled" });
 		expect(await loadPublicSession(env.DB, created.slug, submissionId)).toBeNull();
 
+		await approveSessionContent(created.eventId, submissionId);
 		expect((await bulkPublish(room, created.eventId, [submissionId])).status).toBe(200);
 		expect(await env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(submissionId).first()).toEqual({ status: "published" });
 		expect(await loadPublicSession(env.DB, created.slug, submissionId)).toMatchObject({

@@ -80,7 +80,7 @@ export async function buildPublicScheduleJson(
 	]);
 
 	const publicSlots = slots.filter((slot) =>
-		isPublicScheduleStatus(slot.submission_status),
+		isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1,
 	);
 	const speakersBySubmission = await listSpeakersForSubmissions(
 		db,
@@ -116,7 +116,7 @@ export async function buildPublicScheduleJson(
 
 	const items: PublicScheduleSlotJson[] = [];
 	for (const slot of publicSlots) {
-		const answers = parseAnswers(slot.answers_json);
+		const answers = { ...parseAnswers(slot.answers_json), ...parseAnswers(slot.approved_answers_json ?? "{}") };
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
 		const track = publicScheduleTrack(slot.track_id, tracks);
 		items.push({

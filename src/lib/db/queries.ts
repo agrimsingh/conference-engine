@@ -895,6 +895,11 @@ export async function resolvePublicHeadshotAsset(
              AND s.event_id = sp.event_id
              AND ss.status = 'confirmed'
              AND s.status = 'published'
+			 AND EXISTS (
+			   SELECT 1 FROM content_heads ch
+			   WHERE ch.event_id = s.event_id AND ch.entity_type = 'session'
+			     AND ch.entity_id = s.id AND ch.approved_revision_id IS NOT NULL
+			 )
          )`,
 		)
 		.bind(eventId, personId)
@@ -951,6 +956,11 @@ function publicSpeakerSelectSql(columns: SpeakerProfileColumnFlags): string {
        LEFT JOIN speaker_profiles sp ON sp.event_id = s.event_id AND sp.person_id = ss.person_id
        WHERE s.event_id = ?
          AND s.status = 'published'
+		 AND EXISTS (
+		   SELECT 1 FROM content_heads ch
+		   WHERE ch.event_id = s.event_id AND ch.entity_type = 'session'
+		     AND ch.entity_id = s.id AND ch.approved_revision_id IS NOT NULL
+		 )
          AND ss.status = 'confirmed'
          AND ss.person_id IS NOT NULL`;
 }
@@ -989,13 +999,15 @@ export async function listPublishedSessionsForPublicSpeaker(
 		.prepare(
 			`SELECT
          s.id AS submission_id,
-         s.answers_json AS title_json,
+		 cr.snapshot_json AS title_json,
          a.starts_at AS starts_at,
          a.ends_at AS ends_at,
          a.room_name AS room_name
        FROM submission_speakers ss
        INNER JOIN submissions s ON s.id = ss.submission_id
        INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
+	   INNER JOIN content_heads ch ON ch.event_id = s.event_id AND ch.entity_type = 'session' AND ch.entity_id = s.id AND ch.approved_revision_id IS NOT NULL
+	   INNER JOIN content_revisions cr ON cr.id = ch.approved_revision_id AND cr.event_id = s.event_id
        WHERE s.event_id = ?
          AND ss.person_id = ?
          AND ss.status = 'confirmed'
@@ -1162,6 +1174,8 @@ export async function listAgendaSlotsWithSubmissions(
          a.*,
          s.status AS submission_status,
          s.answers_json AS answers_json,
+		 cr.snapshot_json AS approved_answers_json,
+		 CASE WHEN h.approved_revision_id IS NOT NULL THEN 1 ELSE 0 END AS content_approved,
          s.category AS category,
          s.submitter_name AS submitter_name,
          s.submitter_email AS submitter_email,
@@ -1170,6 +1184,8 @@ export async function listAgendaSlotsWithSubmissions(
          s.supporting_url AS supporting_url
        FROM agenda_slots a
        INNER JOIN submissions s ON s.id = a.submission_id
+	   LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
+	   LEFT JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id
        WHERE a.event_id = ?
        ORDER BY a.starts_at ASC, a.room_name ASC`,
 		)

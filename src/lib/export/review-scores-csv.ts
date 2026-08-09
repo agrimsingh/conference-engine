@@ -6,6 +6,8 @@ import {
 } from "@/lib/db/queries";
 import { titleFromAnswers } from "@/lib/domain";
 import { listEvaluationPlans } from "@/lib/evaluation/plan";
+import { listCriteria } from "@/lib/evaluation/plan";
+import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { csvEscape } from "@/lib/export/submissions-csv";
 
@@ -15,6 +17,7 @@ export type ReviewScoreExportRow = {
 	status: string;
 	average: string;
 	scores_by_reviewer: Record<string, string>;
+	criterion_values_by_reviewer?: Record<string, string>;
 };
 
 export type ReviewScoresExport = {
@@ -22,6 +25,7 @@ export type ReviewScoresExport = {
 	planId: string;
 	planName: string;
 	reviewerNames: { id: string; name: string }[];
+	criteria?: { id: string; label: string }[];
 	rows: ReviewScoreExportRow[];
 };
 
@@ -41,6 +45,8 @@ export function buildReviewScoreExportRows(args: {
 	submissions: { id: string; status: string; answers_json: string }[];
 	reviewers: { id: string; name: string }[];
 	aggregates: { submission_id: string; reviewer_id: string | null; score: number }[];
+	criteria?: { id: string; type: "numeric" | "dropdown" | "text" }[];
+	criterionScores?: { submission_id: string; reviewer_id: string | null; criterion_id: string; score: number; value_text: string | null }[];
 }): ReviewScoreExportRow[] {
 	const scoreByPair = new Map<string, number>();
 	for (const aggregate of args.aggregates) {
@@ -50,14 +56,19 @@ export function buildReviewScoreExportRows(args: {
 
 	return args.submissions.map((submission) => {
 		const scores_by_reviewer: Record<string, string> = {};
+		const criterion_values_by_reviewer: Record<string, string> = {};
 		const values: number[] = [];
 		for (const reviewer of args.reviewers) {
 			const score = scoreByPair.get(`${submission.id}:${reviewer.id}`);
 			scores_by_reviewer[reviewer.id] = score === undefined ? "" : String(score);
 			if (score !== undefined) values.push(score);
 		}
+		for (const reviewer of args.reviewers) for (const criterion of args.criteria ?? []) {
+			const value = args.criterionScores?.find((row) => row.submission_id === submission.id && row.reviewer_id === reviewer.id && row.criterion_id === criterion.id);
+			criterion_values_by_reviewer[`${reviewer.id}:${criterion.id}`] = value ? (criterion.type === "numeric" ? String(value.score) : value.value_text ?? "") : "";
+		}
 		const average = values.length
-			? (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)
+			? String(values.reduce((sum, value) => sum + value, 0) / values.length)
 			: "";
 		return {
 			submission_id: submission.id,
@@ -65,13 +76,15 @@ export function buildReviewScoreExportRows(args: {
 			status: submission.status,
 			average,
 			scores_by_reviewer,
+			...(args.criteria?.length ? { criterion_values_by_reviewer } : {}),
 		};
 	});
 }
 
 export function reviewScoresToCsv(exportData: ReviewScoresExport): string {
 	const reviewerHeaders = exportData.reviewerNames.map((reviewer) => reviewer.name);
-	const headers = ["submission_id", "title", "status", "average", ...reviewerHeaders];
+	const criterionHeaders = exportData.reviewerNames.flatMap((reviewer) => (exportData.criteria ?? []).map((criterion) => `${reviewer.name} · ${criterion.label}`));
+	const headers = ["submission_id", "title", "status", "average", ...reviewerHeaders, ...criterionHeaders];
 	const lines = [
 		headers.map(csvEscape).join(","),
 		...exportData.rows.map((row) =>
@@ -81,6 +94,7 @@ export function reviewScoresToCsv(exportData: ReviewScoresExport): string {
 				row.status,
 				row.average,
 				...exportData.reviewerNames.map((reviewer) => row.scores_by_reviewer[reviewer.id] ?? ""),
+				...exportData.reviewerNames.flatMap((reviewer) => (exportData.criteria ?? []).map((criterion) => row.criterion_values_by_reviewer?.[`${reviewer.id}:${criterion.id}`] ?? "")),
 			]
 				.map(csvEscape)
 				.join(","),
@@ -106,10 +120,12 @@ export async function loadReviewScoresExportForSlug(
 		null;
 	if (!plan) return { ok: false, error: "no_plan" };
 
-	const [reviewers, submissions, scores] = await Promise.all([
+	const [reviewers, submissions, scores, criteria, criterionScores] = await Promise.all([
 		listPlanReviewers(db, plan.id),
 		listReviewableSubmissions(db, event.id),
 		listEvaluationScoresForPlan(db, plan.id),
+		listCriteria(db, plan.id),
+		listCriterionScoresForPlan(db, plan.id),
 	]);
 	const liveReviewers = reviewers
 		.filter((reviewer) => reviewer.revoked_at === null)
@@ -123,6 +139,8 @@ export async function loadReviewScoresExportForSlug(
 			reviewer_id: score.reviewer_id,
 			score: score.score,
 		})),
+		criteria: criteria.map((criterion) => ({ id: criterion.id, type: criterion.criterion_type })),
+		criterionScores,
 	});
 
 	return {
@@ -132,6 +150,7 @@ export async function loadReviewScoresExportForSlug(
 			planId: plan.id,
 			planName: plan.name,
 			reviewerNames: liveReviewers,
+			criteria: criteria.map((criterion) => ({ id: criterion.id, label: criterion.label })),
 			rows,
 		},
 	};

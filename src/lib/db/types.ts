@@ -78,6 +78,7 @@ export type SubmissionRow = {
 	form_id: string;
 	event_id: string;
 	status: string;
+	content_status?: "draft" | "in_review" | "approved";
 	answers_json: string;
 	/** Schedule track label; NULL → Uncategorized */
 	category: string | null;
@@ -167,6 +168,42 @@ export type AssetRow = {
 	created_at: number;
 };
 
+export type DeliverableVersionRow = {
+	id: string;
+	event_id: string;
+	task_id: string;
+	asset_id: string;
+	version_number: number;
+	uploaded_by_person_id: string | null;
+	size_bytes: number;
+	created_at: number;
+};
+
+export type DeliverableCommentRow = {
+	id: string;
+	event_id: string;
+	task_id: string;
+	author_kind: "speaker" | "organizer";
+	author_person_id: string | null;
+	author_account_id: string | null;
+	author_name: string;
+	body: string;
+	created_at: number;
+};
+
+export type ContentRevisionRow = {
+	id: string;
+	event_id: string;
+	entity_type: "session" | "speaker";
+	entity_id: string;
+	revision_number: number;
+	snapshot_json: string;
+	editor_account_id: string | null;
+	editor_name: string;
+	restored_from_revision_id: string | null;
+	created_at: number;
+};
+
 export type SpeakerProfileRow = {
 	id: string;
 	event_id: string;
@@ -177,6 +214,7 @@ export type SpeakerProfileRow = {
 	company: string | null;
 	social_json: string | null;
 	headshot_asset_id: string | null;
+	logistics_text?: string | null;
 	created_at: number;
 	updated_at: number;
 };
@@ -205,6 +243,10 @@ export type EvaluationPlanRow = {
 	reviewer_token: string;
 	created_at: number;
 	updated_at: number;
+	open_at: number | null;
+	close_at: number | null;
+	blind_review: number;
+	assignment_cap: number | null;
 };
 
 export type EvaluationScoreRow = {
@@ -295,11 +337,15 @@ export type EvaluationCriterionRow = {
 	soft_deleted: number;
 	created_at: number;
 	updated_at: number;
+	criterion_type: "numeric" | "dropdown" | "text";
+	options_json: string | null;
 };
 
 export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
 	submission_status: string;
 	answers_json: string;
+	approved_answers_json?: string | null;
+	content_approved?: number;
 	category: string | null;
 	submitter_name: string | null;
 	submitter_email: string | null;

@@ -14,8 +14,8 @@ import {
 import { activationReviewPath } from "./activation-result";
 import { parseBulkDecisionResult } from "./bulk-decision-result";
 
-type Plan = { id: string; name: string; status: string };
-type Criterion = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number };
+type Plan = { id: string; name: string; status: string; openAt: number | null; closeAt: number | null; blindReview: boolean; assignmentCap: number | null; scorecardSummary?: string[] };
+type Criterion = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number; type: "numeric" | "dropdown" | "text"; options: string[] };
 type Reviewer = { id: string; name: string; email: string | null; revokedAt: number | null; assigned: number; scored: number };
 type Submission = { id: string; title: string; submitter: string; status: string; assignedReviewerIds: string[]; scored: boolean; criterionScoreCount: number };
 type AggregateScore = { submissionId: string; reviewerId: string | null; scoredBy: string; score: number };
@@ -54,10 +54,16 @@ export function ReviewWorkspace({
 	const [committeeReviewPath, setCommitteeReviewPath] = useState<string | null>(null);
 	const [planName, setPlanName] = useState("");
 	const [editedPlanName, setEditedPlanName] = useState(plan?.name ?? "");
+	const [openDate, setOpenDate] = useState(dateInputValue(plan?.openAt ?? null));
+	const [closeDate, setCloseDate] = useState(dateInputValue(plan?.closeAt ?? null));
+	const [blindReview, setBlindReview] = useState(plan?.blindReview ?? false);
+	const [assignmentCap, setAssignmentCap] = useState(plan?.assignmentCap === null || plan?.assignmentCap === undefined ? "" : String(plan.assignmentCap));
 	const [reviewerName, setReviewerName] = useState("");
 	const [reviewerEmail, setReviewerEmail] = useState("");
 	const [criterionLabel, setCriterionLabel] = useState("");
 	const [criterionWeight, setCriterionWeight] = useState("1");
+	const [criterionType, setCriterionType] = useState<Criterion["type"]>("numeric");
+	const [criterionOptions, setCriterionOptions] = useState("Accept\nMaybe\nReject");
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [reviewersForBulk, setReviewersForBulk] = useState<Set<string>>(new Set());
 	const [query, setQuery] = useState("");
@@ -84,7 +90,7 @@ export function ReviewWorkspace({
 		() => buildScoreComparisonMatrix({
 			submissions: submissions.map((submission) => ({ id: submission.id, title: submission.title })),
 			reviewers: liveReviewers.map((reviewer) => ({ id: reviewer.id, name: reviewer.name })),
-			criteria: criteria.map((criterion) => ({ id: criterion.id, label: criterion.label, weight: criterion.weight })),
+			criteria: criteria.filter((criterion) => criterion.type === "numeric").map((criterion) => ({ id: criterion.id, label: criterion.label, weight: criterion.weight })),
 			aggregates,
 			criterionScores,
 		}),
@@ -214,7 +220,7 @@ export function ReviewWorkspace({
 
 			<section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
 				<div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-					<h2 className="font-medium text-neutral-100">Evaluation plans</h2>
+					<h2 className="font-medium text-neutral-100">Review rounds</h2>
 					<div className="mt-3 space-y-2">
 						{plans.map((item) => (
 							<Link
@@ -222,21 +228,30 @@ export function ReviewWorkspace({
 								href={`/admin/events/${eventSlug}/review?plan=${item.id}`}
 								className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm ${item.id === plan?.id ? "border-emerald-500/40 bg-emerald-500/10" : "border-neutral-800 hover:border-neutral-600"}`}
 							>
-								<span className="text-neutral-200">{item.name}</span>
-								<StatusPill tone={item.status === "active" ? "positive" : "neutral"}>{item.status}</StatusPill>
+								<span className="text-neutral-200">{item.name}<span className="mt-1 block text-xs text-neutral-500">{item.scorecardSummary?.join(" · ") || "No scorecard criteria"}</span></span>
+								<span className="text-right"><StatusPill tone={item.status === "active" ? "positive" : "neutral"}>{item.status}</StatusPill><span className="mt-1 block text-xs text-neutral-500">{roundDateRange(item)}{item.blindReview ? " · blind" : ""}</span></span>
 							</Link>
 						))}
 					</div>
 					{plan ? (
+						<>
 						<div className="mt-3 flex flex-wrap gap-2">
 							<input value={editedPlanName} onChange={(event) => setEditedPlanName(event.target.value)} className={INPUT_CLASSES} aria-label="Selected plan name" />
 							<Button size="sm" variant="secondary" disabled={pending || !editedPlanName.trim()} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { name: editedPlanName })}>Rename</Button>
 							{plan.status === "draft" ? <Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "DELETE")}>Delete draft</Button> : null}
 						</div>
+						<div className="mt-3 grid gap-2 sm:grid-cols-2">
+							<label className="text-xs text-neutral-400">Opens<input type="date" value={openDate} onChange={(event) => setOpenDate(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<label className="text-xs text-neutral-400">Closes<input type="date" value={closeDate} onChange={(event) => setCloseDate(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<label className="flex items-center gap-2 text-sm text-neutral-300"><input type="checkbox" checked={blindReview} onChange={(event) => setBlindReview(event.target.checked)} /> Blind review — hide author and co-author identity</label>
+							<label className="text-xs text-neutral-400">Per-reviewer assignment cap<input value={assignmentCap} onChange={(event) => setAssignmentCap(event.target.value)} inputMode="numeric" placeholder="No cap" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+							<Button size="sm" variant="secondary" disabled={pending || !openDate || !closeDate} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { openAt: dateTimestamp(openDate, false), closeAt: dateTimestamp(closeDate, true), blindReview, assignmentCap: assignmentCap ? Number(assignmentCap) : null })}>Save round settings</Button>
+						</div>
+						</>
 					) : null}
 					<div className="mt-4 flex flex-wrap gap-2">
 						<input value={planName} onChange={(event) => setPlanName(event.target.value)} className={INPUT_CLASSES} placeholder="New plan name" aria-label="New evaluation plan name" />
-						<Button disabled={pending || !planName.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation`, "POST", { name: planName })) setPlanName(""); }}>Create draft</Button>
+						<Button disabled={pending || !planName.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation`, "POST", { name: planName })) setPlanName(""); }}>Create draft round</Button>
 						{plan && !active ? (
 							<Button
 								variant="secondary"
@@ -248,7 +263,7 @@ export function ReviewWorkspace({
 									else if (result) setMessage("The plan is already active. Its earlier committee link cannot be recovered here; use named reviewer links below.");
 								}}
 							>
-								Activate selected plan
+								Activate selected round
 							</Button>
 						) : null}
 						{plan && active ? <Button variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { status: "closed" })}>Close active plan</Button> : null}
@@ -262,7 +277,7 @@ export function ReviewWorkspace({
 						<Summary label="Accepted" value={summary.accepted} />
 						<Summary label="Rejected" value={summary.rejected} />
 					</dl>
-					<p className="mt-3 text-xs text-neutral-500">Criterion scores are kept separately from the rounded aggregate, so weighted rubric changes remain visible in review records.</p>
+					<p className="mt-3 text-xs text-neutral-500">Criterion scores are kept separately and weighted aggregates retain their full precision.</p>
 				</div>
 			</section>
 
@@ -278,8 +293,10 @@ export function ReviewWorkspace({
 							</div>
 							<div className="flex flex-wrap gap-2">
 								<input value={criterionLabel} onChange={(event) => setCriterionLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Criterion label" aria-label="Criterion label" />
+								<select value={criterionType} onChange={(event) => setCriterionType(event.target.value as Criterion["type"])} className={INPUT_CLASSES} aria-label="Criterion type"><option value="numeric">Numeric rating</option><option value="dropdown">Dropdown</option><option value="text">Free text</option></select>
 								<input value={criterionWeight} onChange={(event) => setCriterionWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label="Criterion weight" />
-								<Button disabled={pending || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight) })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button>
+								{criterionType === "dropdown" ? <textarea value={criterionOptions} onChange={(event) => setCriterionOptions(event.target.value)} className={INPUT_CLASSES} rows={3} aria-label="Dropdown options, one per line" /> : null}
+								<Button disabled={pending || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight), criterionType, options: criterionType === "dropdown" ? criterionOptions.split("\n") : undefined })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button>
 							</div>
 						</div>
 						<ul className="mt-4 divide-y divide-neutral-800">
@@ -303,7 +320,7 @@ export function ReviewWorkspace({
 								<p className="mt-1 text-xs text-neutral-500">Optional email sends the personal review link on create/regenerate. The plaintext link is still shown once for clipboard copy.</p>
 								{active ? <p className="mt-1 text-xs text-neutral-500">The committee link is not recoverable after activation. Regenerate a named reviewer link below when a reviewer needs a deliberate replacement.</p> : null}
 							</div>
-							{active ? (
+							{plan.status !== "closed" ? (
 								<div className="flex flex-wrap gap-2">
 									<input value={reviewerName} onChange={(event) => setReviewerName(event.target.value)} className={INPUT_CLASSES} placeholder="Reviewer name" aria-label="Reviewer name" />
 									<input value={reviewerEmail} onChange={(event) => setReviewerEmail(event.target.value)} className={INPUT_CLASSES} placeholder="Email (optional)" aria-label="Reviewer email" type="email" />
@@ -311,6 +328,7 @@ export function ReviewWorkspace({
 										disabled={pending || !reviewerName.trim()}
 										onClick={async () => {
 											const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "POST", {
+												planId: plan.id,
 												name: reviewerName,
 												email: reviewerEmail.trim() || null,
 											});
@@ -343,7 +361,8 @@ export function ReviewWorkspace({
 												disabled={pending}
 												onClick={async () => {
 													const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", {
-														reviewerId: reviewer.id,
+													reviewerId: reviewer.id,
+													planId: plan.id,
 														action: "regenerate",
 														email: reviewer.email,
 													});
@@ -352,7 +371,7 @@ export function ReviewWorkspace({
 											>
 												Regenerate
 											</Button>
-											<Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { reviewerId: reviewer.id, action: "revoke" })}>Revoke</Button>
+										<Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { planId: plan.id, reviewerId: reviewer.id, action: "revoke" })}>Revoke</Button>
 										</div>
 									) : null}
 								</li>
@@ -391,7 +410,7 @@ export function ReviewWorkspace({
 											{reviewer.name}
 										</button>
 									))}
-									<Button size="sm" disabled={pending || selected.size === 0 || reviewersForBulk.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/assignments`, "POST", { submissionIds: [...selected], reviewerIds: [...reviewersForBulk] })}>Apply assignments</Button>
+									<Button size="sm" disabled={pending || selected.size === 0 || reviewersForBulk.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/assignments`, "POST", { planId: plan.id, submissionIds: [...selected], reviewerIds: [...reviewersForBulk] })}>Apply assignments</Button>
 									<Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => openBulkDecision("accept")}>Accept selected</Button>
 									<Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => openBulkDecision("reject")}>Reject selected</Button>
 								</div>
@@ -535,12 +554,12 @@ export function ReviewWorkspace({
 														: undefined;
 													return (
 														<td key={reviewer.id} className="px-2 py-2 tabular-nums text-neutral-300" title={title}>
-															{cell?.aggregate ?? "—"}
+											{cell?.aggregate === null || cell?.aggregate === undefined ? "—" : String(cell.aggregate)}
 														</td>
 													);
 												})}
 												<td className="px-2 py-2 tabular-nums text-neutral-200">
-													{submission.average === null ? "—" : submission.average.toFixed(1)}
+											{submission.average === null ? "—" : String(submission.average)}
 												</td>
 											</tr>
 										))}
@@ -591,6 +610,7 @@ function CriterionItem({
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
 					<input value={label} onChange={(event) => setLabel(event.target.value)} className={`${INPUT_CLASSES} min-w-44 flex-1`} aria-label={`${criterion.label} label`} disabled={disabled} />
+					<span className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-400">{criterion.type === "numeric" ? "Numeric rating" : criterion.type === "dropdown" ? "Dropdown" : "Free text"}</span>
 					<input value={weight} onChange={(event) => setWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label={`${criterion.label} weight`} disabled={disabled} />
 					<input value={scaleMin} onChange={(event) => setScaleMin(event.target.value)} className={`${INPUT_CLASSES} w-16`} inputMode="numeric" aria-label={`${criterion.label} scale min`} disabled={disabled} />
 					<span className="text-xs text-neutral-500">to</span>
@@ -602,6 +622,22 @@ function CriterionItem({
 				</div>
 			</div>
 			<input value={description} onChange={(event) => setDescription(event.target.value)} className={INPUT_CLASSES} placeholder="Optional description" aria-label={`${criterion.label} description`} disabled={disabled} />
+			{criterion.type === "dropdown" ? <p className="text-xs text-neutral-500">Options: {criterion.options.join(" · ")}</p> : null}
 		</li>
 	);
+}
+
+function dateInputValue(timestamp: number | null): string {
+	return timestamp === null ? "" : new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function dateTimestamp(value: string, endOfDay: boolean): number | null {
+	if (!value) return null;
+	return Date.parse(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+}
+
+function roundDateRange(plan: Pick<Plan, "openAt" | "closeAt">): string {
+	if (plan.openAt === null && plan.closeAt === null) return "Dates not set";
+	const format = (value: number | null) => value === null ? "open" : new Date(value).toISOString().slice(0, 10);
+	return `${format(plan.openAt)} → ${format(plan.closeAt)}`;
 }

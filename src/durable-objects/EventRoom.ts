@@ -170,7 +170,7 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 	}
 
 	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction): Promise<{ ok: true; status: string; slot?: Record<string, unknown> } | { ok: false; error: string; status: number }> {
-		const submission = await this.env.DB.prepare("SELECT id, event_id, status FROM submissions WHERE id = ?").bind(submissionId).first<{ id: string; event_id: string; status: string }>();
+		const submission = await this.env.DB.prepare("SELECT id, event_id, status, content_status FROM submissions WHERE id = ?").bind(submissionId).first<{ id: string; event_id: string; status: string; content_status: string }>();
 		if (!submission || submission.event_id !== eventId) return { ok: false, error: "Submission not found", status: 404 };
 		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(eventId).first<{ mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
@@ -193,6 +193,10 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			return { ok: true, status: "accepted", slot: { ...slot, ics_uid: lifecycle?.ics_uid ?? slot.ics_uid, calendar_sequence: calendarSequence } };
 		}
 		const target = action === "publish" ? "published" : "scheduled";
+		if (action === "publish") {
+			const head = await this.env.DB.prepare("SELECT approved_revision_id FROM content_heads WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?").bind(eventId, submission.id).first<{ approved_revision_id: string | null }>();
+			if (submission.content_status !== "approved" || !head?.approved_revision_id) return { ok: false, error: "Approve session content before publishing", status: 409 };
+		}
 		if (!isSubmissionStatus(submission.status) || (action === "publish" && submission.status !== "scheduled") || (action === "unpublish" && submission.status !== "published")) {
 			return { ok: false, error: `Cannot ${action} this submission`, status: 409 };
 		}
@@ -212,10 +216,10 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
 		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
 		const placeholders = ids.map(() => "?").join(", ");
-		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, a.id AS slot_id FROM submissions s LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<{ id: string; status: string; slot_id: string | null }>();
+		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, h.approved_revision_id, a.id AS slot_id FROM submissions s LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<{ id: string; status: string; content_status: string; approved_revision_id: string | null; slot_id: string | null }>();
 		if (rows.results.length !== ids.length) return { ok: false, error: "One or more sessions are outside this event or no longer exist", status: 404 };
 		if (input.action === "publish") {
-			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id)) return { ok: false, error: "Only scheduled sessions with an agenda slot can be published", status: 409 };
+			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id || row.content_status !== "approved" || !row.approved_revision_id)) return { ok: false, error: "Only approved scheduled sessions with an agenda slot can be published", status: 409 };
 		} else if (rows.results.some((row) => row.status !== "published")) {
 			return { ok: false, error: "Only published sessions can be unpublished", status: 409 };
 		}

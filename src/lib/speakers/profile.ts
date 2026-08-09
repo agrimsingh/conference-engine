@@ -32,11 +32,11 @@ export async function updateSpeakerProfile(
 		throw error;
 	}
 	const connected = await db.prepare(
-		`SELECT 1 FROM submissions s
-		 LEFT JOIN submission_speakers ss ON ss.submission_id = s.id
-		 WHERE s.event_id = ? AND (s.submitter_person_id = ? OR ss.person_id = ?)
-		 LIMIT 1`,
-	).bind(args.eventId, args.personId, args.personId).first<{ 1: number }>();
+		`SELECT 1 FROM event_speaker_profiles WHERE event_id = ? AND person_id = ?
+		 UNION ALL
+		 SELECT 1 FROM submissions s LEFT JOIN submission_speakers ss ON ss.submission_id = s.id
+		 WHERE s.event_id = ? AND (s.submitter_person_id = ? OR ss.person_id = ?) LIMIT 1`,
+	).bind(args.eventId, args.personId, args.eventId, args.personId, args.personId).first<{ 1: number }>();
 	if (!connected) return { ok: false, error: "Forbidden", status: 403 };
 	const displayName = args.displayName.trim();
 	const bio = args.bio.trim();

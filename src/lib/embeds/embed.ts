@@ -170,11 +170,11 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 	const event = await getEventBySlug(db, eventSlug); if (!event) return null;
 	const embed = await getPublicEmbedBySlug(db, event.id, embedSlug); if (!embed) return null;
 	const [slots, tracks, speakerRows] = await Promise.all([listAgendaSlotsWithSubmissions(db, event.id), listAgendaTracks(db, event.id, { includeRetired: true }), listPublicSpeakersForEvent(db, event.id)]);
-	const published = slots.filter((slot) => isPublicScheduleStatus(slot.submission_status));
+	const published = slots.filter((slot) => isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1);
 	const speakerMap = await listSpeakersForSubmissions(db, published.map((slot) => slot.submission_id));
 	const speakerDirectory = new Map(speakerRows.map((speaker) => [speaker.person_id, speaker]));
 	const sessions = published.map((slot) => {
-		const answers = parseAnswers(slot.answers_json);
+		const answers = { ...parseAnswers(slot.answers_json), ...parseAnswers(slot.approved_answers_json ?? "{}") };
 		const track = publicScheduleTrack(slot.track_id, tracks);
 		const format = publicSessionFormat(answers, slot.category);
 		return {

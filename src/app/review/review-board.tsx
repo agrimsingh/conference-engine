@@ -8,8 +8,8 @@ import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, su
 import type { DecisionAction, RenderedMessage } from "@/lib/domain";
 import type { SubmissionAnswerDisplay } from "@/lib/cfp/submission-answers";
 
-type CriterionView = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number };
-type CriterionScoreView = { id: string; criterionId: string; score: number; comment: string | null; reviewerId: string | null };
+type CriterionView = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number; type: "numeric" | "dropdown" | "text"; options: string[] };
+type CriterionScoreView = { id: string; criterionId: string; score: number; valueText: string | null; comment: string | null; reviewerId: string | null };
 type ScoreView = { id: string; score: number; comment: string | null; scoredBy: string };
 type SubmissionView = {
 	id: string; status: string; submitterName: string | null; submitterEmail: string | null; title: string; category: string; format: string | null;
@@ -25,6 +25,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 	const [status, setStatus] = useState("all");
 	const [picked, setPicked] = useState<Record<string, Record<string, number>>>({});
 	const [comments, setComments] = useState<Record<string, Record<string, string>>>({});
+	const [textValues, setTextValues] = useState<Record<string, Record<string, string>>>({});
 	const [focusIndex, setFocusIndex] = useState(0);
 	const [criterionIndex, setCriterionIndex] = useState(0);
 	const visible = useMemo(() => submissions.filter((row) => {
@@ -113,7 +114,9 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 		const existing = new Map(authoredScores(row, reviewerId).map((score) => [score.criterionId, score]));
 		const criterionScores = criteria.map((criterion) => ({
 			criterionId: criterion.id,
-			score: picked[row.id]?.[criterion.id] ?? existing.get(criterion.id)?.score ?? midpoint(criterion),
+			value: criterion.type === "numeric"
+				? picked[row.id]?.[criterion.id] ?? existing.get(criterion.id)?.score ?? midpoint(criterion)
+				: textValues[row.id]?.[criterion.id] ?? existing.get(criterion.id)?.valueText ?? "",
 			comment: comments[row.id]?.[criterion.id] ?? existing.get(criterion.id)?.comment ?? "",
 		}));
 		try {
@@ -184,8 +187,9 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 									</button>
 								) : null}
 							</div>
-							{row.recusedAt != null ? null : criteria.map((criterion, criterionOffset) => {
-								const selected = picked[row.id]?.[criterion.id] ?? own.get(criterion.id)?.score ?? midpoint(criterion);
+			{row.recusedAt != null ? null : criteria.map((criterion, criterionOffset) => {
+				const selected = picked[row.id]?.[criterion.id] ?? own.get(criterion.id)?.score ?? midpoint(criterion);
+				const textValue = textValues[row.id]?.[criterion.id] ?? own.get(criterion.id)?.valueText ?? "";
 								const scoreComment = comments[row.id]?.[criterion.id] ?? own.get(criterion.id)?.comment ?? "";
 								const criterionFocused = focusedRow && criterionOffset === safeCriterionIndex;
 								return (
@@ -194,9 +198,17 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 										className={`border-t border-neutral-800 pt-3 ${criterionFocused ? "rounded-md bg-emerald-500/5" : ""}`}
 									>
 										<legend className="font-medium text-neutral-200">{criterion.label} <span className="font-normal text-neutral-500">· weight {criterion.weight}</span></legend>
-										{criterion.description ? <p className="mt-0.5 text-xs text-neutral-500">{criterion.description}</p> : null}
-										<div className="mt-2 flex flex-wrap items-end gap-2">
-											<div className="inline-flex rounded-lg border border-neutral-800 bg-neutral-950/60 p-0.5" role="group" aria-label={`${criterion.label} score for ${row.title}`}>
+					{criterion.description ? <p className="mt-0.5 text-xs text-neutral-500">{criterion.description}</p> : null}
+					<div className="mt-2 flex flex-wrap items-end gap-2">
+						{criterion.type === "dropdown" ? (
+							<select value={textValue} onChange={(event) => setTextValues((previous) => ({ ...previous, [row.id]: { ...previous[row.id], [criterion.id]: event.target.value } }))} className={INPUT_CLASSES} disabled={busy} aria-label={`${criterion.label} for ${row.title}`}>
+								<option value="">Select…</option>
+								{criterion.options.map((option) => <option key={option} value={option}>{option}</option>)}
+							</select>
+						) : criterion.type === "text" ? (
+							<textarea value={textValue} onChange={(event) => setTextValues((previous) => ({ ...previous, [row.id]: { ...previous[row.id], [criterion.id]: event.target.value } }))} className={`min-h-24 w-full ${INPUT_CLASSES}`} disabled={busy} aria-label={`${criterion.label} for ${row.title}`} />
+						) : (
+						<div className="inline-flex rounded-lg border border-neutral-800 bg-neutral-950/60 p-0.5" role="group" aria-label={`${criterion.label} score for ${row.title}`}>
 												{range(criterion.scaleMin, criterion.scaleMax).map((value) => (
 													<button
 														key={value}
@@ -213,6 +225,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 													</button>
 												))}
 											</div>
+											)}
 											<label className="min-w-[12rem] flex-1 text-xs text-neutral-400">
 												Criterion comment
 												<input
@@ -230,7 +243,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 								<button type="button" disabled={busy} onClick={() => void scoreSubmission(row)} className={buttonClasses("secondary")}>{busy ? "Saving…" : "Save rubric review"}</button>
 							) : null}
 						</div>
-						{canDecide ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
+							{canDecide ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
 					</li>
 				);
 			})}

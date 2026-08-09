@@ -46,6 +46,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 			: typeof parsed.value.company === "string"
 				? parsed.value.company
 				: existing.company;
+	const bio = parsed.value.bio === null ? null : typeof parsed.value.bio === "string" ? parsed.value.bio : existing.bio;
+	const logisticsText = parsed.value.logisticsText === null ? null : typeof parsed.value.logisticsText === "string" ? parsed.value.logisticsText : existing.logisticsText;
 	const workflowStatus =
 		parsed.value.workflowStatus === undefined
 			? existing.workflowStatus
@@ -66,6 +68,8 @@ export async function PATCH(request: Request, context: RouteContext) {
 			name,
 			jobTitle,
 			company,
+			bio,
+			logisticsText,
 			socials,
 			workflowStatus: workflowStatus as SpeakerWorkflowStatus,
 		},

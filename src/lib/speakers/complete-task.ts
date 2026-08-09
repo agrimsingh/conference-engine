@@ -125,9 +125,11 @@ export async function completeFileTask(
 
 	const assetId = crypto.randomUUID();
 	const supersededAssetId = task.asset_id;
-	const superseded = supersededAssetId
-		? await db.prepare("SELECT id, r2_key FROM assets WHERE id = ? AND event_id = ?").bind(supersededAssetId, task.event_id).first<{ id: string; r2_key: string }>()
-		: null;
+	const latestVersion = await db.prepare(
+		"SELECT COALESCE(MAX(version_number), 0) AS version_number FROM deliverable_versions WHERE task_id = ?",
+	).bind(task.id).first<{ version_number: number }>();
+	const versionNumber = (latestVersion?.version_number ?? 0) + 1;
+	const versionId = crypto.randomUUID();
 	const safeName = sanitizeFilename(args.file.name || `${key}.bin`);
 	const r2Key = `events/${task.event_id}/people/${task.person_id}/${key}/${assetId}-${safeName}`;
 	const body = await args.file.arrayBuffer();
@@ -155,6 +157,14 @@ export async function completeFileTask(
 			.bind(assetId, task.event_id, r2Key, contentType, safeName, task.person_id, now, task.id, supersededAssetId)
 		,
 		db.prepare(
+			`INSERT INTO deliverable_versions (
+			 id, event_id, task_id, asset_id, version_number,
+			 uploaded_by_person_id, size_bytes, created_at
+			) SELECT ?, ?, ?, ?, ?, ?, ?, ?
+			  WHERE EXISTS (SELECT 1 FROM assets WHERE id = ? AND event_id = ?)`,
+		).bind(versionId, task.event_id, task.id, assetId, versionNumber,
+			task.person_id, args.file.size, now, assetId, task.event_id),
+		db.prepare(
 			`UPDATE speaker_tasks
        SET status = 'completed', asset_id = ?, completed_at = ?, updated_at = ?
 			WHERE id = ? AND asset_id IS ?`,
@@ -175,7 +185,7 @@ export async function completeFileTask(
 	}
 	try {
 		const results = await db.batch(statements);
-		if ((results[1]?.meta.changes ?? 0) === 0) {
+		if ((results[2]?.meta.changes ?? 0) === 0) {
 			// Someone completed/replaced the task after our initial read. This
 			// attempt never inserted its asset row, so remove only its R2 object.
 			try { await files.delete(r2Key); } catch { /* best-effort compensation */ }
@@ -196,26 +206,6 @@ export async function completeFileTask(
 
 	const updated = await getSpeakerTaskById(db, task.id);
 	if (!updated) return { ok: false, error: "Task missing after update", status: 500 };
-
-	// Only remove the prior R2 object after the new metadata/task pointer has
-	// committed. Keep metadata if deletion fails so a later repair can find it.
-	if (superseded && superseded.id !== assetId) {
-		const stillReferenced = await db.prepare(
-			`SELECT 1
-       FROM speaker_tasks WHERE asset_id = ?
-       UNION ALL
-       SELECT 1 FROM speaker_profiles WHERE headshot_asset_id = ?
-       LIMIT 1`,
-		).bind(superseded.id, superseded.id).first<{ 1: number }>();
-		if (!stillReferenced) {
-			try {
-				await files.delete(superseded.r2_key);
-				await db.prepare("DELETE FROM assets WHERE id = ?").bind(superseded.id).run();
-			} catch {
-				// The new upload remains committed; retain old metadata for repair.
-			}
-		}
-	}
 
 	return {
 		ok: true,

@@ -59,6 +59,7 @@ export async function setSubmissionReviewers(
 	},
 ): Promise<ReviewAssignmentRow[]> {
 	const reviewerIds = await validatePlanReviewerIds(db, args.planId, args.reviewerIds);
+	await assertAssignmentCaps(db, args.planId, [args.submissionId], reviewerIds);
 	const rows = await buildAssignmentRows(db, args.planId, [args.submissionId], reviewerIds);
 	await db.batch(assignmentStatements(db, args.planId, [args.submissionId], rows));
 
@@ -78,11 +79,24 @@ export async function setBulkSubmissionReviewers(
 		.bind(args.planId, ...submissionIds).all<{ id: string }>();
 	if (owned.results.length !== submissionIds.length) throw new AssignmentValidationError("One or more submissions do not belong to this event", 404);
 	const validReviewerIds = await validatePlanReviewerIds(db, args.planId, reviewerIds);
+	await assertAssignmentCaps(db, args.planId, submissionIds, validReviewerIds);
 	const rows = await buildAssignmentRows(db, args.planId, submissionIds, validReviewerIds);
 	// D1 executes a batch as one transaction: no submission is cleared or
 	// reassigned unless every delete and insert succeeds.
 	await db.batch(assignmentStatements(db, args.planId, submissionIds, rows));
 	return { submissionIds, reviewerIds };
+}
+
+async function assertAssignmentCaps(db: D1Database, planId: string, replacingSubmissionIds: string[], reviewerIds: string[]): Promise<void> {
+	const plan = await db.prepare(`SELECT assignment_cap FROM evaluation_plans WHERE id = ?`).bind(planId).first<{ assignment_cap: number | null }>();
+	if (!plan) throw new AssignmentValidationError("Review round not found", 404);
+	if (plan.assignment_cap === null) return;
+	const placeholders = replacingSubmissionIds.map(() => "?").join(", ");
+	for (const reviewerId of reviewerIds) {
+		const current = await db.prepare(`SELECT COUNT(*) AS count FROM review_assignments WHERE plan_id = ? AND reviewer_id = ? AND recused_at IS NULL AND submission_id NOT IN (${placeholders})`)
+			.bind(planId, reviewerId, ...replacingSubmissionIds).first<{ count: number }>();
+		if ((current?.count ?? 0) + replacingSubmissionIds.length > plan.assignment_cap) throw new AssignmentValidationError(`Assignment cap of ${plan.assignment_cap} exceeded for reviewer ${reviewerId}`, 409);
+	}
 }
 
 async function validatePlanReviewerIds(db: D1Database, planId: string, reviewerIds: string[]): Promise<string[]> {

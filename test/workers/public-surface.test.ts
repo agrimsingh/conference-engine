@@ -18,6 +18,7 @@ import {
 import { createSession, loadPublicSession } from "@/lib/sessions/session";
 import { buildPublicSessionIcs } from "@/lib/sessions/public-ics";
 import type { AccountRow } from "@/lib/db/types";
+import { approveSessionContent } from "./approve-content";
 
 const now = 1_781_100_000_000;
 let sequence = 0;
@@ -114,6 +115,7 @@ describe("phase 7 public surface", () => {
 		).toBe(404);
 
 		const room = env.EVENT_ROOM.getByName(created.eventId);
+		await approveSessionContent(created.eventId, session.id);
 		expect((await bulk(room, created.eventId, [session.id])).status).toBe(200);
 
 		const asset = await resolvePublicHeadshotAsset(env.DB, created.eventId, personId);
