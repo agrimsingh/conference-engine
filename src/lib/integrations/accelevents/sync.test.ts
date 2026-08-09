@@ -13,6 +13,7 @@ describe("Accelevents sync plan", () => {
 					bio: "Computing pioneer",
 					jobTitle: "Engineer",
 					company: "Analytical Engines",
+					imageUrl: null,
 				},
 			],
 			sessions: [
@@ -66,6 +67,28 @@ describe("Accelevents sync plan", () => {
 			startTime: "2025/01/01 00:00",
 			endTime: "2025/01/01 01:00",
 			hideSessionFromAttendees: true,
+		});
+	});
+
+	it("includes a stable public headshot URL in the speaker payload", () => {
+		const plan = buildAcceleventsSyncPlan({
+			sessionTypeFormat: "IN_PERSON",
+			speakers: [{
+				localId: "person-grace",
+				name: "Grace Hopper",
+				email: "grace@example.test",
+				bio: "Compiler pioneer",
+				jobTitle: "Rear Admiral",
+				company: "US Navy",
+				imageUrl: "https://conference.example/api/e/dev-summit/people/person-grace/headshot",
+			}],
+			sessions: [],
+			mappings: [],
+			timezone: "UTC",
+		});
+
+		expect(plan.actions[0]?.payload).toMatchObject({
+			imageUrl: "https://conference.example/api/e/dev-summit/people/person-grace/headshot",
 		});
 	});
 });

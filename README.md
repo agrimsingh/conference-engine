@@ -112,7 +112,7 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
 | `AIRTABLE_*` | Optional Airtable mirror mode: one-way D1→Airtable push (manual or nightly opt-in). Never reverse sync. |
-| Accelevents | Configured per event under **Integrations** (one-way push; D1 stays source of record). |
+| Accelevents | Configured per event under **Integrations** (one-way push; D1 stays source of record). Public speaker headshots are included, and organizers can opt in to the existing daily Worker sync while retaining manual preview and push. |
 
 ```bash
 npx wrangler secret put AUTH_SECRET

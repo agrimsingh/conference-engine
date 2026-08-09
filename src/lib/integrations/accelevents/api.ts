@@ -44,6 +44,7 @@ type AcceleventsSessionAssignmentPayload = AcceleventsSessionPayload & {
 		readonly bio: string;
 		readonly company: string;
 		readonly title: string;
+		readonly imageUrl?: string;
 	}[];
 	readonly speakersAsTag: readonly {
 		readonly speakerId: number | string;
@@ -111,6 +112,22 @@ function sessionRecord(value: unknown): Readonly<Record<string, unknown>> {
 	return record;
 }
 
+function existingSpeakerImageUrl(
+	currentSession: Readonly<Record<string, unknown>>,
+	listKey: "speakerList" | "speakersAsTag",
+	externalId: string,
+): string | undefined {
+	const list = currentSession[listKey];
+	if (!Array.isArray(list)) return undefined;
+	for (const entry of list) {
+		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+		if (String(Reflect.get(entry, "speakerId")) !== externalId) continue;
+		const imageUrl = Reflect.get(entry, "imageUrl");
+		if (typeof imageUrl === "string" && imageUrl.trim()) return imageUrl.trim();
+	}
+	return undefined;
+}
+
 function assignmentPayload(
 	currentSession: Readonly<Record<string, unknown>>,
 	session: AcceleventsSessionPayload,
@@ -119,22 +136,29 @@ function assignmentPayload(
 	return {
 		...currentSession,
 		...session,
-		speakerList: speakers.map((speaker) => ({
-			speakerId: providerId(speaker.externalId),
-			firstName: speaker.firstName,
-			lastName: speaker.lastName,
-			email: speaker.email,
-			bio: speaker.bio,
-			company: speaker.company,
-			title: speaker.title,
-		})),
+		speakerList: speakers.map((speaker) => {
+			const imageUrl = speaker.imageUrl
+				?? existingSpeakerImageUrl(currentSession, "speakerList", speaker.externalId);
+			return {
+				speakerId: providerId(speaker.externalId),
+				firstName: speaker.firstName,
+				lastName: speaker.lastName,
+				email: speaker.email,
+				bio: speaker.bio,
+				company: speaker.company,
+				title: speaker.title,
+				...(imageUrl ? { imageUrl } : {}),
+			};
+		}),
 		speakersAsTag: speakers.map((speaker) => ({
 			speakerId: providerId(speaker.externalId),
 			name: `${speaker.firstName} ${speaker.lastName}`.trim(),
 			email: speaker.email,
 			firstName: speaker.firstName,
 			lastName: speaker.lastName,
-			imageUrl: "",
+			imageUrl: speaker.imageUrl
+				?? existingSpeakerImageUrl(currentSession, "speakersAsTag", speaker.externalId)
+				?? "",
 		})),
 	};
 }

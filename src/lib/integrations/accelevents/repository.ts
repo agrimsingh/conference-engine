@@ -22,6 +22,7 @@ type AcceleventsIntegrationRow = {
 	api_key_iv: string;
 	last_sync_at: number | null;
 	last_sync_error: string | null;
+	auto_sync_enabled: number;
 	created_at: number;
 	updated_at: number;
 };
@@ -33,6 +34,7 @@ export type AcceleventsIntegrationStatus = {
 	readonly sessionTypeFormat: AcceleventsSessionTypeFormat | null;
 	readonly lastSyncAt: number | null;
 	readonly lastSyncError: string | null;
+	readonly autoSyncEnabled: boolean;
 };
 
 export type AcceleventsIntegrationConfig = {
@@ -59,6 +61,7 @@ function toStatus(row: AcceleventsIntegrationRow | null): AcceleventsIntegration
 				sessionTypeFormat: row.session_type_format,
 				lastSyncAt: row.last_sync_at,
 				lastSyncError: row.last_sync_error,
+				autoSyncEnabled: row.auto_sync_enabled === 1,
 			}
 		: {
 				configured: false,
@@ -67,6 +70,7 @@ function toStatus(row: AcceleventsIntegrationRow | null): AcceleventsIntegration
 				sessionTypeFormat: null,
 				lastSyncAt: null,
 				lastSyncError: null,
+				autoSyncEnabled: false,
 			};
 }
 
@@ -96,6 +100,7 @@ export async function saveAcceleventsIntegration(
 		readonly sessionTypeFormat: AcceleventsSessionTypeFormat;
 		readonly apiKey?: string;
 		readonly secret: string;
+		readonly autoSyncEnabled?: boolean;
 	},
 ): Promise<AcceleventsIntegrationStatus> {
 	const existing = await getIntegrationRow(db, args.eventId);
@@ -106,19 +111,21 @@ export async function saveAcceleventsIntegration(
 			: null;
 	if (!encrypted) throw new AcceleventsSecretError("An Accelevents API key is required for a new connection");
 	const now = Date.now();
+	const autoSyncEnabled = args.autoSyncEnabled ?? (existing?.auto_sync_enabled === 1);
 	const statements = [db
 		.prepare(
 			`INSERT INTO accelevents_integrations
-			(event_id, event_url, external_event_id, session_type_format, encrypted_api_key, api_key_iv, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			(event_id, event_url, external_event_id, session_type_format, encrypted_api_key, api_key_iv, auto_sync_enabled, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(event_id) DO UPDATE SET
 				event_url = excluded.event_url,
 				external_event_id = excluded.external_event_id,
 				session_type_format = excluded.session_type_format,
 				encrypted_api_key = excluded.encrypted_api_key,
 				api_key_iv = excluded.api_key_iv,
+				auto_sync_enabled = excluded.auto_sync_enabled,
 				last_sync_error = NULL,
-			updated_at = excluded.updated_at`,
+				updated_at = excluded.updated_at`,
 		)
 		.bind(
 			args.eventId,
@@ -127,10 +134,11 @@ export async function saveAcceleventsIntegration(
 			args.sessionTypeFormat,
 			encrypted.ciphertext,
 			encrypted.iv,
+			autoSyncEnabled ? 1 : 0,
 			now,
 			now,
-		)
-		];
+		),
+	];
 	if (existing && (existing.event_url !== args.eventUrl || existing.external_event_id !== args.externalEventId)) {
 		statements.push(db.prepare("DELETE FROM accelevents_sync_mappings WHERE event_id = ?").bind(args.eventId));
 	}

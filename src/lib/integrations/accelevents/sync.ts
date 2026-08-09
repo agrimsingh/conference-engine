@@ -12,6 +12,7 @@ import {
 	type AcceleventsSessionTypeFormat,
 	type AcceleventsSyncMapping,
 } from "./repository";
+import { validatedAppOrigin } from "@/lib/security/origin";
 
 export type AcceleventsSpeakerPayload = {
 	readonly firstName: string;
@@ -20,6 +21,7 @@ export type AcceleventsSpeakerPayload = {
 	readonly bio: string;
 	readonly company: string;
 	readonly title: string;
+	readonly imageUrl?: string;
 };
 
 export type AcceleventsSessionPayload = {
@@ -39,6 +41,7 @@ type SyncSpeaker = {
 	readonly bio: string | null;
 	readonly jobTitle: string | null;
 	readonly company: string | null;
+	readonly imageUrl: string | null;
 };
 
 type SyncSession = {
@@ -109,6 +112,7 @@ type SourceSpeakerRow = {
 	bio: string | null;
 	job_title: string | null;
 	company: string | null;
+	has_public_headshot: number;
 };
 
 type SourceSessionRow = {
@@ -132,6 +136,7 @@ function speakerPayload(speaker: SyncSpeaker): AcceleventsSpeakerPayload {
 		bio: trim(speaker.bio),
 		company: trim(speaker.company),
 		title: trim(speaker.jobTitle),
+		...(speaker.imageUrl ? { imageUrl: speaker.imageUrl } : {}),
 	};
 }
 
@@ -245,13 +250,36 @@ function readSessionContent(value: string): { readonly title: string; readonly a
 
 async function loadSyncSources(
 	db: D1Database,
-	eventId: string,
+	scope: {
+		readonly eventId: string;
+		readonly eventSlug?: string;
+		readonly appOrigin?: string;
+	},
 ): Promise<{ readonly speakers: readonly SyncSpeaker[]; readonly sessions: readonly SyncSession[] }> {
+	const publicOrigin = validatedAppOrigin(scope.appOrigin);
 	const [speakerRows, sessionRows] = await Promise.all([
 		db.prepare(
 			`SELECT ss.submission_id, ss.person_id, COALESCE(p.name, ss.name) AS name, ss.email,
 				sp.bio, COALESCE(sp.job_title, esp.job_title) AS job_title,
-				COALESCE(sp.company, esp.company) AS company
+				COALESCE(sp.company, esp.company) AS company,
+				CASE WHEN sp.headshot_asset_id IS NOT NULL
+					AND EXISTS (
+						SELECT 1 FROM assets ha
+						WHERE ha.id = sp.headshot_asset_id AND ha.event_id = s.event_id
+					)
+					AND EXISTS (
+						SELECT 1
+						FROM submission_speakers public_ss
+						JOIN submissions public_s ON public_s.id = public_ss.submission_id
+						JOIN content_heads ch ON ch.event_id = public_s.event_id
+							AND ch.entity_type = 'session' AND ch.entity_id = public_s.id
+						WHERE public_ss.person_id = ss.person_id
+							AND public_s.event_id = s.event_id
+							AND public_ss.status = 'confirmed'
+							AND public_s.status = 'published'
+							AND ch.approved_revision_id IS NOT NULL
+					)
+				THEN 1 ELSE 0 END AS has_public_headshot
 			 FROM submission_speakers ss
 			 JOIN submissions s ON s.id = ss.submission_id
 			 LEFT JOIN people p ON p.id = ss.person_id
@@ -261,14 +289,14 @@ async function loadSyncSources(
 				AND s.status IN ('accepted', 'scheduled', 'published')
 				AND ss.status IN ('pending', 'confirmed')
 			 ORDER BY lower(ss.email) ASC, ss.position ASC`,
-		).bind(eventId).all<SourceSpeakerRow>(),
+		).bind(scope.eventId).all<SourceSpeakerRow>(),
 		db.prepare(
 			`SELECT s.id, s.status, s.answers_json, a.starts_at, a.ends_at
 			 FROM submissions s
 			 LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
 			 WHERE s.event_id = ? AND s.status IN ('accepted', 'scheduled', 'published')
 			 ORDER BY s.created_at ASC`,
-		).bind(eventId).all<SourceSessionRow>(),
+		).bind(scope.eventId).all<SourceSessionRow>(),
 	]);
 
 	const speakersById = new Map<string, SyncSpeaker>();
@@ -281,6 +309,9 @@ async function loadSyncSources(
 			speakerIdsBySubmission.set(row.submission_id, submissionSpeakerIds);
 		}
 		if (!speakersById.has(localId)) {
+			const imageUrl = publicOrigin && scope.eventSlug && row.person_id && row.has_public_headshot === 1
+				? `${publicOrigin}/api/e/${encodeURIComponent(scope.eventSlug)}/people/${encodeURIComponent(row.person_id)}/headshot`
+				: null;
 			speakersById.set(localId, {
 				localId,
 				name: row.name ?? "",
@@ -288,6 +319,7 @@ async function loadSyncSources(
 				bio: row.bio,
 				jobTitle: row.job_title,
 				company: row.company,
+				imageUrl,
 			});
 		}
 	}
@@ -313,22 +345,30 @@ function actionFailure(action: AcceleventsSyncAction, error: unknown): Acceleven
 	return { kind: action.kind, localId: action.localId, message: message.slice(0, 500) };
 }
 
+export type AcceleventsSyncArgs = {
+	readonly eventId: string;
+	readonly eventSlug?: string;
+	readonly appOrigin?: string;
+	readonly timezone: string;
+	readonly secret: string;
+	readonly dryRun: boolean;
+	readonly api?: AcceleventsApi;
+};
+
 export async function syncAcceleventsEvent(
 	db: D1Database,
-	args: {
-		readonly eventId: string;
-		readonly timezone: string;
-		readonly secret: string;
-		readonly dryRun: boolean;
-		readonly api?: AcceleventsApi;
-	},
+	args: AcceleventsSyncArgs,
 ): Promise<AcceleventsSyncResult> {
 	const [status, mappings, sources] = await Promise.all([
 		db.prepare(
 			"SELECT session_type_format, external_event_id FROM accelevents_integrations WHERE event_id = ?",
 		).bind(args.eventId).first<{ session_type_format: AcceleventsSessionTypeFormat; external_event_id: number }>(),
 		listAcceleventsSyncMappings(db, args.eventId),
-		loadSyncSources(db, args.eventId),
+		loadSyncSources(db, {
+			eventId: args.eventId,
+			eventSlug: args.eventSlug,
+			appOrigin: args.appOrigin,
+		}),
 	]);
 	if (!status) return { ok: false, dryRun: args.dryRun, configured: false, actions: [], failures: [] };
 	const plan = buildAcceleventsSyncPlan({

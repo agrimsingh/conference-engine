@@ -199,6 +199,58 @@ describe("Accelevents one-way D1 sync", () => {
 		expect(acceptedAssignments).toBe(2);
 	});
 
+	it("pushes a stable public headshot URL once the speaker is publicly visible", async () => {
+		const eventId = "accelevents-public-headshot";
+		const personId = `${eventId}-person`;
+		const submissionId = `${eventId}-accepted`;
+		const revisionId = `${eventId}-revision`;
+		await seedSyncEvent(eventId, "headshot@accelevents.test");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO assets (id, event_id, r2_key, content_type, filename, uploaded_by_person_id, created_at) VALUES (?, ?, ?, 'image/png', 'headshot.png', ?, ?)")
+				.bind(`${eventId}-asset`, eventId, `events/${eventId}/headshot.png`, personId, now),
+			env.DB.prepare("UPDATE speaker_profiles SET headshot_asset_id = ? WHERE event_id = ? AND person_id = ?")
+				.bind(`${eventId}-asset`, eventId, personId),
+			env.DB.prepare("UPDATE submissions SET status = 'published', content_status = 'approved' WHERE id = ?")
+				.bind(submissionId),
+			env.DB.prepare("INSERT INTO content_revisions (id, event_id, entity_type, entity_id, revision_number, snapshot_json, editor_name, created_at) VALUES (?, ?, 'session', ?, 1, '{}', 'Test', ?)")
+				.bind(revisionId, eventId, submissionId, now),
+			env.DB.prepare("INSERT INTO content_heads (event_id, entity_type, entity_id, current_revision_id, approved_revision_id, updated_at) VALUES (?, 'session', ?, ?, ?, ?)")
+				.bind(eventId, submissionId, revisionId, revisionId, now),
+		]);
+		await saveAcceleventsIntegration(env.DB, {
+			eventId,
+			eventUrl: "external-event-headshot",
+			externalEventId: 606,
+			sessionTypeFormat: "IN_PERSON",
+			apiKey: "worker-test-key",
+			secret: env.AUTH_SECRET,
+		});
+
+		let speakerImageUrl: string | undefined;
+		const api: AcceleventsApi = {
+			async createSpeaker(payload) { speakerImageUrl = payload.imageUrl; return "speaker-headshot-101"; },
+			async updateSpeaker() {},
+			async createSession(payload) { return `session-${payload.title}`; },
+			async updateSession() {},
+			async findSpeakerByEmail() { return null; },
+			async assignSpeakersToSession() {},
+		};
+
+		const result = await syncAcceleventsEvent(env.DB, {
+			eventId,
+			eventSlug: "dev-summit",
+			appOrigin: "https://conference.example",
+			timezone: "UTC",
+			secret: env.AUTH_SECRET,
+			dryRun: false,
+			api,
+		});
+		expect(result.ok).toBe(true);
+		expect(speakerImageUrl).toBe(
+			"https://conference.example/api/e/dev-summit/people/accelevents-public-headshot-person/headshot",
+		);
+	});
+
 	it("allows only one concurrent sync plan to claim each create before any provider POST", async () => {
 		const eventId = "accelevents-concurrent-create-claim";
 		await seedSyncEvent(eventId, "concurrent-claim@accelevents.test");

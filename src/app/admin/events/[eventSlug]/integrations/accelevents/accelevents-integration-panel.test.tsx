@@ -43,6 +43,7 @@ describe("Accelevents integration panel", () => {
 					sessionTypeFormat: "IN_PERSON",
 					lastSyncAt: null,
 					lastSyncError: null,
+					autoSyncEnabled: false,
 				}}
 			/>,
 		));
@@ -76,7 +77,7 @@ describe("Accelevents integration panel", () => {
 		await act(async () => root.render(
 			<AcceleventsIntegrationPanel
 				eventSlug="event-a"
-				initialIntegration={{ configured: true, eventUrl: "demo-event", externalEventId: 99, sessionTypeFormat: "IN_PERSON", lastSyncAt: null, lastSyncError: null }}
+				initialIntegration={{ configured: true, eventUrl: "demo-event", externalEventId: 99, sessionTypeFormat: "IN_PERSON", lastSyncAt: null, lastSyncError: null, autoSyncEnabled: false }}
 			/>,
 		));
 		const button = (label: string): HTMLButtonElement => {
@@ -92,5 +93,48 @@ describe("Accelevents integration panel", () => {
 			expect.objectContaining({ body: JSON.stringify({ dryRun: false, confirmed: true }), method: "POST" }),
 		);
 		expect(container.textContent).toContain("speaker person-ada: Accelevents denied speaker update");
+	});
+
+	it("lets the organizer opt in to the existing daily Worker sync", async () => {
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+			ok: true,
+			integration: {
+				configured: true,
+				eventUrl: "demo-event",
+				externalEventId: 99,
+				sessionTypeFormat: "IN_PERSON",
+				lastSyncAt: null,
+				lastSyncError: null,
+				autoSyncEnabled: true,
+			},
+		}), { status: 200 }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await act(async () => root.render(
+			<AcceleventsIntegrationPanel
+				eventSlug="event-a"
+				initialIntegration={{ configured: true, eventUrl: "demo-event", externalEventId: 99, sessionTypeFormat: "IN_PERSON", lastSyncAt: null, lastSyncError: null, autoSyncEnabled: false }}
+			/>,
+		));
+		const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+		const form = container.querySelector("form");
+		if (!checkbox || !form) throw new Error("Automatic sync control missing");
+		await act(async () => checkbox.click());
+		await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/admin/events/event-a/integrations/accelevents",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({
+					eventUrl: "demo-event",
+					externalEventId: 99,
+					apiKey: "",
+					sessionTypeFormat: "IN_PERSON",
+					autoSyncEnabled: true,
+				}),
+			}),
+		);
+		expect(container.textContent).toContain("runs daily");
 	});
 });

@@ -62,7 +62,13 @@ describe("Accelevents API client", () => {
 	it("links speakers by updating the session with the HAR-observed speaker projections", async () => {
 		const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
 			async (input, init) => init?.method === "GET" && String(input).includes("/session/")
-				? new Response(JSON.stringify({ sessionId: 437249, capacity: 250, tracks: [] }), { status: 200 })
+				? new Response(JSON.stringify({
+					sessionId: 437249,
+					capacity: 250,
+					tracks: [],
+					speakerList: [{ speakerId: 9182, imageUrl: "https://images.accelevents.test/existing.jpg" }],
+					speakersAsTag: [{ speakerId: 9182, imageUrl: "https://images.accelevents.test/existing.jpg" }],
+				}), { status: 200 })
 				: new Response("ok", { status: 200 }),
 		);
 		vi.stubGlobal("fetch", fetchMock);
@@ -97,12 +103,13 @@ describe("Accelevents API client", () => {
 				firstName: "HAR",
 				lastName: "Test Speaker",
 				email: "speaker@example.test",
+				imageUrl: "https://images.accelevents.test/existing.jpg",
 			}],
 			speakersAsTag: [{
 				speakerId: 9182,
 				name: "HAR Test Speaker",
 				email: "speaker@example.test",
-				imageUrl: "",
+				imageUrl: "https://images.accelevents.test/existing.jpg",
 			}],
 		});
 		expect(fetchMock.mock.calls[1]?.[0]).toBe(

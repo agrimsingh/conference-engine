@@ -55,8 +55,12 @@ export async function POST(request: Request, context: RouteContext) {
 	const eventUrl = readString(parsed.value.eventUrl);
 	const apiKey = readString(parsed.value.apiKey);
 	const externalEventId = parsed.value.externalEventId;
+	const autoSyncEnabled = parsed.value.autoSyncEnabled;
 	if (!eventUrl || !isSessionTypeFormat(parsed.value.sessionTypeFormat) || typeof externalEventId !== "number" || !Number.isInteger(externalEventId) || externalEventId <= 0) {
 		return NextResponse.json({ ok: false, error: "eventUrl, externalEventId, and sessionTypeFormat are required" }, { status: 400 });
+	}
+	if (autoSyncEnabled !== undefined && typeof autoSyncEnabled !== "boolean") {
+		return NextResponse.json({ ok: false, error: "autoSyncEnabled must be a boolean" }, { status: 400 });
 	}
 	if (!apiKey && !(await getAcceleventsIntegrationStatus(db, authorization.access.event.id)).configured) {
 		return NextResponse.json({ ok: false, error: "An API key is required to connect Accelevents" }, { status: 400 });
@@ -73,6 +77,7 @@ export async function POST(request: Request, context: RouteContext) {
 			sessionTypeFormat: parsed.value.sessionTypeFormat,
 			apiKey: apiKey ?? undefined,
 			secret: env.AUTH_SECRET,
+			autoSyncEnabled,
 		});
 		return NextResponse.json({ ok: true, integration });
 	} catch (error) {

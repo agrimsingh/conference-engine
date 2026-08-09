@@ -55,6 +55,7 @@ export function AcceleventsIntegrationPanel({ eventSlug, initialIntegration }: P
 	const [externalEventId, setExternalEventId] = useState(initialIntegration.externalEventId === null ? "" : String(initialIntegration.externalEventId));
 	const [apiKey, setApiKey] = useState("");
 	const [sessionTypeFormat, setSessionTypeFormat] = useState<AcceleventsSessionTypeFormat>(initialIntegration.sessionTypeFormat ?? "IN_PERSON");
+	const [autoSyncEnabled, setAutoSyncEnabled] = useState(initialIntegration.autoSyncEnabled);
 	const [message, setMessage] = useState<Message>(null);
 	const [sync, setSync] = useState<SyncResponse | null>(null);
 	const [saving, setSaving] = useState(false);
@@ -73,7 +74,7 @@ export function AcceleventsIntegrationPanel({ eventSlug, initialIntegration }: P
 			const { response, body } = await request("", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ eventUrl, externalEventId: Number(externalEventId), apiKey, sessionTypeFormat }),
+				body: JSON.stringify({ eventUrl, externalEventId: Number(externalEventId), apiKey, sessionTypeFormat, autoSyncEnabled }),
 			});
 			const next = body?.integration;
 			if (!response.ok || !isObject(next)) {
@@ -94,6 +95,7 @@ export function AcceleventsIntegrationPanel({ eventSlug, initialIntegration }: P
 				sessionTypeFormat: nextSessionType,
 				lastSyncAt: typeof next.lastSyncAt === "number" ? next.lastSyncAt : null,
 				lastSyncError: typeof next.lastSyncError === "string" ? next.lastSyncError : null,
+				autoSyncEnabled: next.autoSyncEnabled === true,
 			});
 			setEventUrl(nextEventUrl);
 			setExternalEventId(String(nextExternalEventId));
@@ -142,7 +144,8 @@ export function AcceleventsIntegrationPanel({ eventSlug, initialIntegration }: P
 				setMessage({ tone: "negative", text: typeof body?.error === "string" ? body.error : "Could not disconnect Accelevents." });
 				return;
 			}
-			setIntegration({ configured: false, eventUrl: null, externalEventId: null, sessionTypeFormat: null, lastSyncAt: null, lastSyncError: null });
+			setIntegration({ configured: false, eventUrl: null, externalEventId: null, sessionTypeFormat: null, lastSyncAt: null, lastSyncError: null, autoSyncEnabled: false });
+			setAutoSyncEnabled(false);
 			setSync(null);
 			setApiKey("");
 			setMessage({ tone: "positive", text: "Accelevents was disconnected and its local sync mappings were removed." });
@@ -163,6 +166,7 @@ export function AcceleventsIntegrationPanel({ eventSlug, initialIntegration }: P
 					<label className="block space-y-1.5 text-sm"><span className="font-medium text-neutral-200">Accelevents event ID</span><input required type="number" min="1" step="1" value={externalEventId} onChange={(event) => { setExternalEventId(event.target.value); setSync(null); }} placeholder="12345" className={`w-full ${INPUT_CLASSES}`} /><span className="block text-xs text-neutral-500">Required for bounded exact-email reconciliation after a lost speaker-create response.</span></label>
 					<label className="block space-y-1.5 text-sm"><span className="font-medium text-neutral-200">Event type</span><select value={sessionTypeFormat} onChange={(event) => { if (isSessionTypeFormat(event.target.value)) { setSessionTypeFormat(event.target.value); setSync(null); } }} className={`w-full ${INPUT_CLASSES}`}><option value="IN_PERSON">In person</option><option value="VIRTUAL">Virtual</option><option value="HYBRID">Hybrid</option></select></label>
 					<label className="block space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-neutral-200">Accelevents API key</span><input required={!integration.configured} type="password" autoComplete="new-password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); setSync(null); }} placeholder={integration.configured ? "Enter a replacement key to rotate it" : "Paste an API key"} className={`w-full ${INPUT_CLASSES}`} /><span className="block text-xs text-neutral-500">The key is encrypted with this deployment&apos;s AUTH_SECRET and is never returned to the browser.</span></label>
+					<label className="flex items-start gap-3 rounded-md border border-neutral-800 bg-neutral-950 p-3 text-sm sm:col-span-2"><input type="checkbox" checked={autoSyncEnabled} onChange={(event) => setAutoSyncEnabled(event.target.checked)} className="mt-0.5 accent-emerald-500" /><span><span className="block font-medium text-neutral-200">Automatic daily sync</span><span className="mt-0.5 block text-xs text-neutral-500">Opt in to the existing Worker schedule. It runs daily at 01:00 UTC; manual preview and push remain available.</span></span></label>
 					<div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button disabled={saving} className={buttonClasses(integration.configured ? "secondary" : "primary")}>{saving ? "Saving…" : integration.configured ? "Update connection" : "Connect Accelevents"}</button>{integration.configured ? <button type="button" disabled={saving} onClick={() => void disconnect()} className="text-sm font-medium text-red-300 hover:text-red-200 disabled:opacity-50">Disconnect</button> : null}</div>
 				</form>
 			</section>

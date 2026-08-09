@@ -9,6 +9,7 @@ describe("scheduled speaker reminders", () => {
 		expect(source).toMatch(/const now = Date\.now\(\)/);
 		expect(source).toMatch(/sendTaskReminders\(env, \{ now, dueMode: "due_or_overdue" \}\)/);
 		expect(source).toMatch(/sendDraftReminders\(env, \{ now \}\)/);
+		expect(source).toMatch(/syncOptInEventsToAccelevents\(env\)/);
 		expect(source).toMatch(/ctx\.waitUntil/);
 	});
 });

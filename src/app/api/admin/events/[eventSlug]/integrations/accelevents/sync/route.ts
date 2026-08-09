@@ -24,6 +24,8 @@ export async function POST(request: Request, context: RouteContext) {
 	if (!env.AUTH_SECRET) return NextResponse.json({ ok: false, error: "AUTH_SECRET is required to read Accelevents credentials" }, { status: 503 });
 	const result = await syncAcceleventsEvent(db, {
 		eventId: authorization.access.event.id,
+		eventSlug: authorization.access.event.slug,
+		appOrigin: env.APP_ORIGIN,
 		timezone: authorization.access.event.timezone,
 		secret: env.AUTH_SECRET,
 		dryRun: parsed.value.dryRun !== false,

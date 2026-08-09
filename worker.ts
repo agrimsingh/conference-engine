@@ -5,6 +5,7 @@ import { sendDraftReminders } from "./src/lib/email/draft-reminders";
 import { sendTaskReminders } from "./src/lib/email/reminders";
 import { handleEventRoomUpgrade } from "./src/lib/realtime/room-upgrade";
 import { pruneExpiredRateLimitBuckets } from "./src/lib/security/rate-limit";
+import { syncOptInEventsToAccelevents } from "./src/lib/integrations/accelevents/scheduled";
 
 export { EventRoom } from "./src/durable-objects/EventRoom";
 
@@ -28,6 +29,9 @@ export default {
 		);
 		ctx.waitUntil(
 			syncOptInEventsToAirtable(env),
+		);
+		ctx.waitUntil(
+			syncOptInEventsToAccelevents(env),
 		);
 	},
 };
