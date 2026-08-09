@@ -45,14 +45,17 @@ export async function createSpeakerActionTask(db: D1Database, args: {
 		FROM submission_speakers ss
 		INNER JOIN submissions s ON s.id = ss.submission_id
 		WHERE s.event_id = ?
-			AND s.status IN ('accepted', 'scheduled', 'published')
 			AND ss.status IN ('pending', 'confirmed')
+			AND (
+				s.status IN ('accepted', 'scheduled', 'published')
+				OR (ss.status = 'confirmed' AND s.status IN ('submitted', 'under_review', 'waitlisted'))
+			)
 			AND ss.person_id IS NOT NULL
-	) event_roster
-	WHERE person_id IN (${personIds.map(() => "?").join(",")})`)
-		.bind(args.eventId, args.eventId, ...personIds)
+	) event_roster`)
+		.bind(args.eventId, args.eventId)
 		.all<{ person_id: string }>();
-	if (roster.results.length !== personIds.length) throw new Error("Every assignee must belong to this event's speaker roster");
+	const rosterPersonIds = new Set(roster.results.map((row) => row.person_id));
+	if (!personIds.every((personId) => rosterPersonIds.has(personId))) throw new Error("Every assignee must belong to this event's speaker roster");
 	const now = args.now ?? Date.now();
 	const taskId = crypto.randomUUID();
 	await db.batch([

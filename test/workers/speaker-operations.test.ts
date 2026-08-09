@@ -15,9 +15,12 @@ describe("speaker operations", () => {
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('spk-marcus', 'marcus@spk.test', 'Marcus Okafor', ?)").bind(now),
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('spk-foreign', 'foreign@spk.test', 'Foreign Speaker', ?)").bind(now),
 			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('spk-session-only', 'session-only@spk.test', 'Session Only', ?)").bind(now),
+			env.DB.prepare("INSERT INTO people (id, email, name, created_at) VALUES ('spk-reviewer-visible', 'review-visible@spk.test', 'Review Visible', ?)").bind(now),
 			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('spk-form', 'spk-event', 'cfp', 'CFP', 'closed', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('spk-session', 'spk-form', 'spk-event', 'accepted', '{\"title\":\"Session-linked talk\"}', ?, ?)").bind(now, now),
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('spk-review-session', 'spk-form', 'spk-event', 'under_review', '{\"title\":\"Review-linked talk\"}', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, person_id, name, email, position, status) VALUES ('spk-session-speaker', 'spk-session', 'spk-session-only', 'Session Only', 'session-only@spk.test', 0, 'confirmed')"),
+			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, person_id, name, email, position, status) VALUES ('spk-review-speaker', 'spk-review-session', 'spk-reviewer-visible', 'Review Visible', 'review-visible@spk.test', 0, 'confirmed')"),
 			env.DB.prepare("INSERT INTO speaker_profiles (id, event_id, person_id, display_name, created_at, updated_at) VALUES ('spk-profile-priya', 'spk-event', 'spk-priya', 'Priya Raman', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO speaker_profiles (id, event_id, person_id, display_name, created_at, updated_at) VALUES ('spk-profile-marcus', 'spk-event', 'spk-marcus', 'Marcus Okafor', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO speaker_profiles (id, event_id, person_id, display_name, created_at, updated_at) VALUES ('spk-profile-foreign', 'spk-other', 'spk-foreign', 'Foreign Speaker', ?, ?)").bind(now, now),
@@ -34,12 +37,12 @@ describe("speaker operations", () => {
 		expect(priya).toMatchObject({ bio: "SBEK-ORG-EDIT-01", logisticsText: "Arrival May 11, aisle seat; dietary: Vegetarian", jobTitle: "Principal Engineer", company: "Latticework Systems" });
 	});
 
-	it("assigns one general task to two same-event speakers, dedupes, and rejects foreign speakers", async () => {
-		const created = await createSpeakerActionTask(env.DB, { eventId: "spk-event", title: "Confirm participation", dueAt: Date.UTC(2027, 3, 1), personIds: ["spk-priya", "spk-marcus", "spk-session-only", "spk-priya"], now });
-		expect(created.assigned).toBe(3);
+	it("assigns one general task to the canonical same-event roster, dedupes, and rejects foreign speakers", async () => {
+		const created = await createSpeakerActionTask(env.DB, { eventId: "spk-event", title: "Confirm participation", dueAt: Date.UTC(2027, 3, 1), personIds: ["spk-priya", "spk-marcus", "spk-session-only", "spk-reviewer-visible", "spk-priya"], now });
+		expect(created.assigned).toBe(4);
 		await expect(createSpeakerActionTask(env.DB, { eventId: "spk-event", title: "Bad assignment", dueAt: null, personIds: ["spk-priya", "spk-foreign"], now })).rejects.toThrow("Every assignee must belong");
 		const rows = await listSpeakerActionAssignments(env.DB, { eventId: "spk-event" });
-		expect(rows.filter((row) => row.taskId === created.taskId)).toHaveLength(3);
+		expect(rows.filter((row) => row.taskId === created.taskId)).toHaveLength(4);
 		await expect(env.DB.prepare("INSERT INTO speaker_action_task_assignments (id, event_id, task_id, person_id, status, created_at, updated_at) VALUES ('spk-cross-insert', 'spk-other', ?, 'spk-foreign', 'pending', ?, ?)").bind(created.taskId, now, now).run()).rejects.toThrow("speaker action assignment event mismatch");
 		const priya = rows.find((row) => row.taskId === created.taskId && row.personId === "spk-priya")!;
 		await expect(env.DB.prepare("UPDATE speaker_action_task_assignments SET event_id = 'spk-other' WHERE id = ?").bind(priya.id).run()).rejects.toThrow("speaker action assignment event mismatch");
