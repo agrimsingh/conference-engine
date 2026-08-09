@@ -150,42 +150,42 @@ const PIPELINE: {
 	{
 		stage: "CFP",
 		description:
-			"Conditional forms per format — a workshop asks different questions than a keynote — and answers route submissions into categories on their own.",
+			"The form adapts by talk type: a workshop proposal asks different questions than a keynote. Submissions arrive pre-sorted.",
 		href: "/demo?perspective=applicant",
 		linkLabel: "Explore applicant view",
 	},
 	{
 		stage: "Review",
 		description:
-			"Reviewers score only what they're assigned, 1–5 against the rubric. The board starts empty; nothing appears until you assign it.",
+			"Reviewers score only what they're assigned, 1–5 against the rubric. The board stays empty until you assign; the chair reads scores, not an email chain.",
 		href: "/demo?perspective=reviewer",
 		linkLabel: "Explore reviewer view",
 	},
 	{
 		stage: "Accept",
 		description:
-			"Open a submission to triage it — proposal text, all reviewer scores, and all comments on one page. Accept, waitlist, or reject fires a templated email.",
+			"Triage into accepted, waitlisted, or rejected without sending a single email. Bulk-notify when the programme is settled.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "Explore organizer view",
 	},
 	{
 		stage: "Speaker ops",
 		description:
-			"The portal takes a magic link and collects bio, headshot, and slides — no account needed. Outstanding work stays visible in the cockpit until it lands, so you are not piecing it together from email.",
+			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. Outstanding work stays on the cockpit until it lands.",
 		href: "/demo?perspective=speaker",
 		linkLabel: "Explore speaker view",
 	},
 	{
 		stage: "Schedule",
 		description:
-			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. The cockpit shows who still needs a slot.",
+			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. Placing a slot sends an .ics invite that shows a Gmail RSVP.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "See schedule readiness",
 	},
 	{
 		stage: "Publish",
 		description:
-			"Publishes a schedule that defaults to today or the nearest session day. Multiple views and a read-only JSON API — works standalone or embedded.",
+			"The schedule goes live at its own URL, defaults to today or the next session day, and renders in multiple layouts. A JSON API and embeds cover the conference site.",
 		href: `/e/${DEMO_EVENT}/schedule`,
 		linkLabel: "View published schedule",
 	},
@@ -519,9 +519,11 @@ export default function Home() {
 								The dashboard that chases people for you
 							</h2>
 							<p className="mt-3 max-w-lg text-pretty text-neutral-400">
-								Every missing bio, headshot, and slide deck stays on the board
-								until it lands — pushed live over WebSockets, no refresh.
-								Daily reminder emails go out on a cron, or on demand.
+								The cockpit (the live &ldquo;who is blocking the
+								programme?&rdquo; board) flags every outstanding speaker
+								task until it lands and shows a running chart of how
+								submissions paced over the call. Reminder emails go out
+								on a schedule or on demand.
 							</p>
 							<Link
 								href="/demo?perspective=organizer"
