@@ -8,7 +8,7 @@ import {
 	noticeClasses,
 	StatusPill,
 } from "@/components/ui";
-import { isTaskOverdue, taskDueLabel } from "@/lib/speakers/task-display";
+import { formatUtcTimestamp, isTaskOverdue, taskDueLabel } from "@/lib/speakers/task-display";
 
 export type TaskView = {
 	id: string;
@@ -198,8 +198,8 @@ export function TaskChecklist({ tasks, compact = false, readOnly = false, timeZo
 							{task.kind === "file" && (task.versions?.length ?? 0) > 0 ? (
 								<div className="mt-4 border-t border-neutral-800 pt-3">
 									<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">File versions ({task.versions!.length})</p>
-									<ul className="mt-2 space-y-1 text-xs text-neutral-400">{task.versions!.map((version, index) => <li key={version.id} className="flex flex-wrap items-center justify-between gap-2"><span>v{version.versionNumber} · {version.filename ?? "upload"} · {new Date(version.createdAt).toLocaleString()} {index === 0 ? "· Latest" : ""}</span><a className="underline underline-offset-2 hover:text-white" href={`/api/portal/tasks/${task.id}/versions/${version.id}`}>Download</a></li>)}</ul>
-									{task.comments?.length ? <ul className="mt-3 space-y-2">{task.comments.map((comment) => <li key={comment.id} className="rounded bg-neutral-950 px-3 py-2 text-xs"><p className="text-neutral-300">{comment.authorName} · {new Date(comment.createdAt).toLocaleString()}</p><p className="mt-1 whitespace-pre-wrap text-neutral-400">{comment.body}</p></li>)}</ul> : <p className="mt-3 text-xs text-neutral-500">No comments yet.</p>}
+									<ul className="mt-2 space-y-1 text-xs text-neutral-400">{task.versions!.map((version, index) => <li key={version.id} className="flex flex-wrap items-center justify-between gap-2"><span>v{version.versionNumber} · {version.filename ?? "upload"} · {formatUtcTimestamp(version.createdAt)} {index === 0 ? "· Latest" : ""}</span><a className="underline underline-offset-2 hover:text-white" href={`/api/portal/tasks/${task.id}/versions/${version.id}`}>Download</a></li>)}</ul>
+									{task.comments?.length ? <ul className="mt-3 space-y-2">{task.comments.map((comment) => <li key={comment.id} className="rounded bg-neutral-950 px-3 py-2 text-xs"><p className="text-neutral-300">{comment.authorName} · {formatUtcTimestamp(comment.createdAt)}</p><p className="mt-1 whitespace-pre-wrap text-neutral-400">{comment.body}</p></li>)}</ul> : <p className="mt-3 text-xs text-neutral-500">No comments yet.</p>}
 									{!readOnly ? <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void addComment(task.id, String(form.get("body") ?? "")); }}><input required maxLength={4000} name="body" aria-label={`Comment on ${task.label}`} placeholder="Add a comment" className={`min-w-0 flex-1 ${INPUT_CLASSES}`} /><button disabled={busyId === task.id} className={buttonClasses("secondary", "sm")}>Comment</button></form> : null}
 								</div>
 							) : null}

@@ -13,6 +13,7 @@ import {
 	type SpeakerWorkflowStatus,
 } from "@/lib/speakers/roster";
 import { renderSpeakerAnnouncementPreview } from "@/lib/speakers/operations";
+import { formatTaskDueAt } from "@/lib/speakers/task-display";
 
 type Props = {
 	eventSlug: string;
@@ -348,7 +349,7 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 											<p className="mt-1 text-xs text-neutral-500">
 												{speaker.pendingTaskCount} pending task{speaker.pendingTaskCount === 1 ? "" : "s"}
 												{speaker.earliestDueAt
-													? ` · next due ${new Date(speaker.earliestDueAt).toLocaleDateString()}`
+													? ` · next due ${formatTaskDueAt(speaker.earliestDueAt)}`
 													: ""}
 												{" · "}
 												<Link

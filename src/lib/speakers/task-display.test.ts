@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTaskOverdue, taskDueLabel } from "./task-display";
+import { formatTaskDueAt, formatUtcTimestamp, isTaskOverdue, taskDueLabel } from "./task-display";
 
 describe("task due display", () => {
 	const now = 1_700_000_000_000;
@@ -15,5 +15,12 @@ describe("task due display", () => {
 		expect(taskDueLabel({ dueAt: now - 60_000, status: "pending", now })).toMatch(/^Overdue · /);
 		expect(taskDueLabel({ dueAt: now + 60_000, status: "pending", now })).toMatch(/^Due /);
 		expect(taskDueLabel({ dueAt: null, status: "pending", now })).toBeNull();
+	});
+
+	it("renders date-only deadlines and timestamps deterministically", () => {
+		const dueAt = Date.parse("2027-04-02T23:59:59.999Z");
+		expect(formatTaskDueAt(dueAt, "Asia/Singapore")).toBe("Apr 2, 2027");
+		expect(formatTaskDueAt(dueAt, "America/Los_Angeles")).toBe("Apr 2, 2027");
+		expect(formatUtcTimestamp(Date.parse("2027-04-02T03:04:05Z"))).toBe("2027-04-02 03:04 UTC");
 	});
 });

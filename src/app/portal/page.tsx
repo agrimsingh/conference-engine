@@ -119,7 +119,7 @@ export default async function PortalPage({ searchParams }: Props) {
 										})() : null}
 										{(() => {
 											const speakers = speakersBySubmission.get(row.id) ?? [];
-											return speakers.length > 1 ? <div className="mt-3 border-t border-neutral-800 pt-3"><p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Co-speakers and invitation history</p><ul className="mt-2 space-y-1 text-xs text-neutral-400">{speakers.filter((speaker) => speaker.position > 0).map((speaker) => <li key={speaker.id}>{speaker.name || speaker.email} · {speaker.status}{speaker.invited_at ? ` · invited ${new Date(speaker.invited_at).toLocaleDateString()}` : " · invite not sent"}{speaker.confirmed_at ? ` · confirmed ${new Date(speaker.confirmed_at).toLocaleDateString()}` : ""}</li>)}</ul></div> : null;
+											return speakers.length > 1 ? <div className="mt-3 border-t border-neutral-800 pt-3"><p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Co-speakers and invitation history</p><ul className="mt-2 space-y-1 text-xs text-neutral-400">{speakers.filter((speaker) => speaker.position > 0).map((speaker) => <li key={speaker.id}>{speaker.name || speaker.email} · {speaker.status}{speaker.invited_at ? ` · invited ${new Date(speaker.invited_at).toISOString().slice(0, 10)}` : " · invite not sent"}{speaker.confirmed_at ? ` · confirmed ${new Date(speaker.confirmed_at).toISOString().slice(0, 10)}` : ""}</li>)}</ul></div> : null;
 										})()}
 										{(() => {
 											const event = events.get(row.event_id);
