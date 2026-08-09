@@ -1,12 +1,13 @@
-export type SpeakerSocialLinks = {
-	twitter?: string;
-	linkedin?: string;
-	github?: string;
-	website?: string;
-};
+export const SPEAKER_SOCIAL_KEYS = [
+	"twitter",
+	"linkedin",
+	"github",
+	"website",
+	"facebook",
+] as const;
 
-const SOCIAL_KEYS = ["twitter", "linkedin", "github", "website"] as const;
-type SocialKey = (typeof SOCIAL_KEYS)[number];
+export type SpeakerSocialKey = (typeof SPEAKER_SOCIAL_KEYS)[number];
+export type SpeakerSocialLinks = Partial<Record<SpeakerSocialKey, string>>;
 
 export function parseSpeakerSocial(raw: string | null | undefined): SpeakerSocialLinks {
 	if (!raw?.trim()) return {};
@@ -15,7 +16,7 @@ export function parseSpeakerSocial(raw: string | null | undefined): SpeakerSocia
 		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
 		const record = parsed as Record<string, unknown>;
 		const links: SpeakerSocialLinks = {};
-		for (const key of SOCIAL_KEYS) {
+		for (const key of SPEAKER_SOCIAL_KEYS) {
 			const value = record[key];
 			if (typeof value === "string" && value.trim()) links[key] = value.trim();
 		}
@@ -36,7 +37,7 @@ export function serializeSpeakerSocial(input: unknown): string | null {
 	}
 	const record = input as Record<string, unknown>;
 	const links: SpeakerSocialLinks = {};
-	for (const key of SOCIAL_KEYS) {
+	for (const key of SPEAKER_SOCIAL_KEYS) {
 		const value = record[key];
 		if (value == null || value === "") continue;
 		if (typeof value !== "string") throw new Error(`social.${key} must be a string`);
