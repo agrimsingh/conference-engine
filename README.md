@@ -41,6 +41,7 @@ Start with these routes:
 | Live outstanding-work dashboard | `/admin/events/aie-sandbox/dashboard` |
 | Speaker portal | `/portal` |
 | Public schedule | `/e/aie-sandbox/schedule` |
+| Public speakers | `/e/aie-sandbox/speakers` |
 | Iframe-friendly schedule | `/embed/aie-sandbox/schedule` |
 | Read-only product demo | `/demo` |
 
@@ -54,13 +55,13 @@ Create a real event from `/admin` after signing in, then use its setup, settings
 
 ## What is in the product
 
-Organisers can create events, manage an event-scoped team, configure the event day, rooms, tracks, speaker tasks, and forms, then open or close a CFP. The form builder stores fields in D1, including required rules, conditional visibility, speaker limits, draft/resume behaviour, submission limits, and category-to-track routing. Those choices are applied at submission time; no seed-SQL edit is needed to change a real CFP.
+Organisers can create events, manage an event-scoped team, configure the event day, rooms, tracks, speaker tasks, and forms, then open or close a CFP. The form builder stores fields in D1, including required rules, conditional visibility, section groupings, CFP file uploads, speaker limits, draft/resume behaviour, submission limits, and category-to-track routing. Those choices are applied at submission time; no seed-SQL edit is needed to change a real CFP.
 
-Reviewers receive tokenised links and see only their assigned submissions. Evaluation plans support named reviewers, reusable criteria, per-criterion scores and comments, and accept, waitlist, or reject decisions. The review board fails closed: a reviewer with no assignments receives an empty board rather than the full pool.
+Reviewers receive tokenised links; an optional stored email can deliver the invite, otherwise the organiser copies the link. They see only their assigned submissions. Evaluation plans support named reviewers, reusable criteria, per-criterion scores and comments, and accept, waitlist, or reject decisions. The review board fails closed: a reviewer with no assignments receives an empty board rather than the full pool.
 
 After acceptance, the portal lets speakers update a bio, complete required tasks, and upload headshots, slides, and supporting files. Co-speakers receive a separate confirmation link. Organisers can schedule sessions using rooms and tracks; a per-event Durable Object serialises schedule changes and rejects room or speaker conflicts before a conflicting agenda slot is written. Scheduling can generate an `.ics` invitation, and a daily Worker cron groups incomplete task reminders by person and event.
 
-The latest lifecycle work is present in the current code paths: category routing for CFPs, durable rubric scores and reviewer revocation, event-level message templates and delivery history, and a session workbench for manual or invited sessions, CSV preview/import, clone lineage, media URLs, and bulk publish/unpublish. Migrations `0017` through `0021` must be applied before deploying code that depends on those paths.
+The latest lifecycle work is present in the current code paths: category routing for CFPs, durable rubric scores and reviewer revocation, event-level message templates and delivery history, a session workbench for manual or invited sessions, CSV preview/import, clone lineage, media URLs, bulk publish/unpublish, optional reviewer invite email (`0022`), per-event Airtable sync opt-in (`0023`), form sections and CFP upload assets (`0024`), a public speaker directory, and unauthenticated schedule/headshot/ICS endpoints. Migrations `0017` through `0024` must be applied before deploying code that depends on those paths.
 
 ## Runtime and data boundaries
 
@@ -130,11 +131,11 @@ The preflight intentionally stops for duplicate owners or unexpected ownerless e
 
 Provision the bindings in `wrangler.jsonc` before deployment: D1 `DB`, R2 `FILES`, KV `SESSIONS`, Durable Object `EVENT_ROOM`, assets/image bindings, and the Worker self-reference. Verify the custom domain and the Resend sender domain before expecting authentication or reminders to arrive.
 
-Deploy in this order because a Worker can start using a new column before D1 has it, and a remote demo seed should not run until the guarded Worker is live:
+Deploy in this order. Remote D1 migrations must finish before the Worker deploy; a build that reads a column D1 does not have will fail at runtime. A remote demo seed should not run until the guarded Worker is live:
 
 1. **Back up D1 and R2.** Export the remote D1 database and take an R2 object backup before changing production state. This preserves a recoverable record before an additive migration or data repair.
 2. **Inspect legacy ownership.** Run `scripts/preflight-legacy-ownership.sql` against remote D1 and resolve any duplicate or ownerless records it reports before the migration changes ownership storage.
-3. **Apply the migrations.** Run `npx wrangler d1 migrations apply conference-engine --remote`, including `0017` through `0021` when the deployed code needs their lifecycle paths.
+3. **Apply the migrations.** Run `npx wrangler d1 migrations apply conference-engine --remote`, including `0017` through `0024` when the deployed code needs their lifecycle paths. Do not deploy the Worker until this step succeeds.
 4. **Run the post-0012 fail-closed preflight.** Execute `scripts/preflight-production.sql` after migration. It intentionally aborts when an event would have no authorised owner, so a failed check is a data-repair task rather than a deploy override.
 5. **Build and dry-run.** `npx opennextjs-cloudflare build` generates the artefact; `npx wrangler deploy --dry-run` checks the configured Worker and bindings without uploading it.
 6. **Deploy the guarded Worker.** Run `npm run deploy`, which rebuilds and deploys through OpenNext with production bypass disabled and the migration-backed ownership and demo-write guards in place.
@@ -151,7 +152,7 @@ For a fork, do this under a distinct Worker name and Cloudflare account. Do not 
 
 **Speaker or submitter.** Submit at `/e/[eventSlug]/submit/[formSlug]`. When drafts are enabled, a resume link is sent by email; saving rotates the bearer token and finalising is safe against duplicate concurrent submissions. After acceptance, use `/portal` to receive a magic link, update the event-scoped profile, and complete task uploads. Co-speakers confirm through `/co-speaker/[token]`.
 
-**Attendee or embed consumer.** Read only published sessions at `/e/[eventSlug]/schedule`, individual public session pages at `/e/[eventSlug]/sessions/[sessionId]`, or the app-chrome-free embed at `/embed/[eventSlug]/schedule`. The `/demo` route is another public read-only view of the seeded example, not an editable event.
+**Attendee or embed consumer.** Read only published sessions at `/e/[eventSlug]/schedule`, the speaker directory at `/e/[eventSlug]/speakers`, individual public session pages at `/e/[eventSlug]/sessions/[sessionId]`, or the app-chrome-free embed at `/embed/[eventSlug]/schedule`. Headshots and per-session `.ics` downloads are at `/api/e/[eventSlug]/people/[personId]/headshot` and `/api/e/[eventSlug]/sessions/[sessionId]/ics` for confirmed speakers on published sessions only. The `/demo` route is another public read-only view of the seeded example, not an editable event.
 
 ## API and exports
 
@@ -163,15 +164,18 @@ For a fork, do this under a distinct Worker name and Cloudflare account. Do not 
 | `GET` | `/api/v1/events/[eventSlug]/schedule` | Event rooms and published agenda slots with confirmed speakers and safe public media URLs. |
 | `GET` | `/api/admin/events/[eventSlug]/export/submissions.csv` | Current D1 submission records, for an authorised organiser. |
 | `POST` | `/api/admin/events/[eventSlug]/export/airtable` | Optional one-way Airtable upsert keyed by the submission ID, for an authorised organiser. |
+| `GET` | `/api/e/[eventSlug]/schedule` | Published agenda JSON; no submitter email or raw answers. |
+| `GET` | `/api/e/[eventSlug]/people/[personId]/headshot` | Headshot bytes for a confirmed speaker on a published session. |
+| `GET` | `/api/e/[eventSlug]/sessions/[sessionId]/ics` | PUBLISH `.ics` attachment without attendee PII. |
 
-For example:
+The three `/api/e/...` routes are public and need no API key. For example:
 
 ```bash
 curl -sS http://localhost:8787/api/v1/events/aie-sandbox/schedule \
   -H "Authorization: Bearer $PUBLIC_API_KEY"
 ```
 
-The Airtable endpoint requires all three Airtable settings. It pushes D1 outward and never reads Airtable back, so a failed or changed Airtable base cannot overwrite the programme database. CSV stays available when Airtable is not configured.
+The Airtable endpoint requires all three Airtable settings. Per-event opt-in (`0023`) gates the nightly cron push; manual export still works without it. D1 pushes outward and never reads Airtable back, so a failed or changed Airtable base cannot overwrite the programme database. CSV stays available when Airtable is not configured.
 
 ## Test and verify changes
 
