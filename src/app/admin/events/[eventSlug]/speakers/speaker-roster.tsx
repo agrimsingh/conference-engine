@@ -72,7 +72,7 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 	const [status, setStatus] = useState(initialStatus);
 	const [q, setQ] = useState(initialQuery);
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
-	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website\n");
+	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website,facebook\n");
 	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
 	const [emailSubject, setEmailSubject] = useState("Update from {{event_name}}");
 	const [emailBody, setEmailBody] = useState("Hi {{submitter_name}},\n\n");
@@ -415,7 +415,10 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 								<div className="flex flex-wrap items-start justify-between gap-3">
 									<div>
 										<p className="font-medium text-neutral-100">
-											{speaker.name}
+											{[speaker.salutation, speaker.name, speaker.honorific].filter(Boolean).join(" ")}
+											{speaker.pronouns ? (
+												<span className="font-normal text-neutral-500"> ({speaker.pronouns})</span>
+											) : null}
 											<span className="font-normal text-neutral-500"> · {speaker.email}</span>
 										</p>
 										<p className="mt-1 text-neutral-400">
@@ -569,7 +572,7 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<h2 className="font-medium text-neutral-100">Import CSV</h2>
 				<p className="mt-1 text-sm text-neutral-400">
-					Columns: email, name, job_title, company, bio, logistics, workflow_status, twitter, linkedin, github, website.
+					Columns: email, name, job_title, company, bio, logistics, workflow_status, twitter, linkedin, github, website, facebook.
 				</p>
 				<textarea
 					aria-label="Speaker CSV"

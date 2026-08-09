@@ -13,6 +13,9 @@ export type SpeakerProfileUpdate = {
 	bio: string;
 	jobTitle?: string | null;
 	company?: string | null;
+	salutation?: string | null;
+	pronouns?: string | null;
+	honorific?: string | null;
 	social?: SpeakerSocialLinks | string | null;
 };
 
@@ -46,6 +49,12 @@ export async function updateSpeakerProfile(
 	if (!jobTitle.ok) return jobTitle;
 	const company = optionalText(args.company, "Company", 160);
 	if (!company.ok) return company;
+	const salutation = optionalText(args.salutation, "Salutation", 40);
+	if (!salutation.ok) return salutation;
+	const pronouns = optionalText(args.pronouns, "Pronouns", 80);
+	if (!pronouns.ok) return pronouns;
+	const honorific = optionalText(args.honorific, "Honorific", 80);
+	if (!honorific.ok) return honorific;
 	let socialJson: string | null = null;
 	try {
 		socialJson = serializeSpeakerSocial(args.social ?? null);
@@ -55,14 +64,18 @@ export async function updateSpeakerProfile(
 	const now = Date.now();
 	const profile = await db.prepare(
 		`INSERT INTO speaker_profiles (
-			id, event_id, person_id, display_name, bio, job_title, company, social_json,
+			id, event_id, person_id, display_name, bio, job_title, company,
+			salutation, pronouns, honorific, social_json,
 			headshot_asset_id, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
 		ON CONFLICT(event_id, person_id) DO UPDATE SET
 			display_name = excluded.display_name,
 			bio = excluded.bio,
 			job_title = excluded.job_title,
 			company = excluded.company,
+			salutation = excluded.salutation,
+			pronouns = excluded.pronouns,
+			honorific = excluded.honorific,
 			social_json = excluded.social_json,
 			updated_at = excluded.updated_at
 		RETURNING *`,
@@ -74,6 +87,9 @@ export async function updateSpeakerProfile(
 		bio || null,
 		jobTitle.value,
 		company.value,
+		salutation.value,
+		pronouns.value,
+		honorific.value,
 		socialJson,
 		now,
 		now,

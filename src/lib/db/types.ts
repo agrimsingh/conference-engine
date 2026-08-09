@@ -214,6 +214,9 @@ export type SpeakerProfileRow = {
 	bio: string | null;
 	job_title: string | null;
 	company: string | null;
+	salutation: string | null;
+	pronouns: string | null;
+	honorific: string | null;
 	social_json: string | null;
 	headshot_asset_id: string | null;
 	logistics_text?: string | null;

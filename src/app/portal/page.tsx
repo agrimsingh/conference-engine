@@ -101,7 +101,7 @@ export default async function PortalPage({ searchParams }: Props) {
 				const resources = portalResources.filter((resource) => resource.event_id === event.id);
 				return resources.length ? <section key={event.id} className="mb-10"><h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">{event.name} resources</h2><PortalResourceList resources={resources} /></section> : null;
 			})}
-			{eventRows.filter((event) => !firstSubmissionIdByEvent.has(event.id)).map((event) => { const profile = profilesByEvent.get(event.id); return <section key={event.id} className="mb-10 rounded-lg border border-neutral-800 bg-neutral-900 p-4"><p className="font-medium text-neutral-100">{event.name}</p><p className="mb-3 mt-1 text-xs text-neutral-500">Speaker profile</p>{event.mode !== "demo" ? <ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} jobTitle={profile?.job_title ?? ""} company={profile?.company ?? ""} social={parseSpeakerSocial(profile?.social_json)} hasHeadshot={Boolean(profile?.headshot_asset_id)} /> : null}</section>; })}
+			{eventRows.filter((event) => !firstSubmissionIdByEvent.has(event.id)).map((event) => { const profile = profilesByEvent.get(event.id); return <section key={event.id} className="mb-10 rounded-lg border border-neutral-800 bg-neutral-900 p-4"><p className="font-medium text-neutral-100">{event.name}</p><p className="mb-3 mt-1 text-xs text-neutral-500">Speaker profile</p>{event.mode !== "demo" ? <ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} jobTitle={profile?.job_title ?? ""} company={profile?.company ?? ""} salutation={profile?.salutation ?? ""} pronouns={profile?.pronouns ?? ""} honorific={profile?.honorific ?? ""} social={parseSpeakerSocial(profile?.social_json)} hasHeadshot={Boolean(profile?.headshot_asset_id)} /> : null}</section>; })}
 
 			<section className="mb-10 space-y-3">
 						<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
@@ -149,8 +149,11 @@ export default async function PortalPage({ searchParams }: Props) {
 														bio={profile?.bio ?? ""}
 														jobTitle={profile?.job_title ?? ""}
 														company={profile?.company ?? ""}
-												social={parseSpeakerSocial(profile?.social_json)}
-												hasHeadshot={Boolean(profile?.headshot_asset_id)}
+														salutation={profile?.salutation ?? ""}
+														pronouns={profile?.pronouns ?? ""}
+														honorific={profile?.honorific ?? ""}
+														social={parseSpeakerSocial(profile?.social_json)}
+														hasHeadshot={Boolean(profile?.headshot_asset_id)}
 													/>
 												</div>
 											);

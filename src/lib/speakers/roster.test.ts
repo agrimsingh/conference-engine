@@ -15,6 +15,9 @@ function speaker(partial: Partial<RosterSpeaker> & Pick<RosterSpeaker, "personId
 	return {
 		jobTitle: null,
 		company: null,
+		salutation: null,
+		pronouns: null,
+		honorific: null,
 		bio: null,
 		logisticsText: null,
 		headshot: null,
@@ -50,11 +53,17 @@ describe("speaker roster domain", () => {
 			twitter: " https://x.com/a ",
 			linkedin: "",
 			website: "https://example.test",
+			facebook: " https://facebook.com/a ",
 		});
-		expect(encoded).toBe(JSON.stringify({ twitter: "https://x.com/a", website: "https://example.test" }));
+		expect(encoded).toBe(JSON.stringify({
+			twitter: "https://x.com/a",
+			website: "https://example.test",
+			facebook: "https://facebook.com/a",
+		}));
 		expect(parseSpeakerSocials(encoded)).toEqual({
 			twitter: "https://x.com/a",
 			website: "https://example.test",
+			facebook: "https://facebook.com/a",
 		});
 		expect(parseSpeakerSocials('{"twitter":"a","bogus":"nope"}')).toEqual({ twitter: "a" });
 		expect(parseSpeakerSocials("not-json")).toEqual({});

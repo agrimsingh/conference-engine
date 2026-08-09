@@ -12,6 +12,7 @@ import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { validatedAppOrigin } from "@/lib/security/origin";
 import { hasFormulaPrefix, parseBoundedCsv } from "@/lib/sessions/csv";
 import { listSpeakerCrmSummaries, type SpeakerCrmSummary } from "./crm";
+import { SPEAKER_SOCIAL_KEYS, type SpeakerSocialKey, type SpeakerSocialLinks } from "./social";
 
 export type { EventSpeakerProfileRow };
 
@@ -35,9 +36,9 @@ export type { EventSpeakerProfileRow };
 export const SPEAKER_WORKFLOW_STATUSES = ["invited", "confirmed", "declined", "withdrawn"] as const;
 export type SpeakerWorkflowStatus = (typeof SPEAKER_WORKFLOW_STATUSES)[number];
 
-export const SOCIAL_KEYS = ["twitter", "linkedin", "github", "website"] as const;
-export type SocialKey = (typeof SOCIAL_KEYS)[number];
-export type SpeakerSocials = Partial<Record<SocialKey, string>>;
+export const SOCIAL_KEYS = SPEAKER_SOCIAL_KEYS;
+export type SocialKey = SpeakerSocialKey;
+export type SpeakerSocials = SpeakerSocialLinks;
 
 export type RosterTaskSummary = {
 	id: string;
@@ -54,6 +55,9 @@ export type RosterSpeaker = {
 	name: string;
 	jobTitle: string | null;
 	company: string | null;
+	salutation: string | null;
+	pronouns: string | null;
+	honorific: string | null;
 	bio: string | null;
 	logisticsText: string | null;
 	headshot: { assetId: string; filename: string | null; uploadedAt: number } | null;
@@ -82,6 +86,9 @@ type LinkedSpeakerRow = {
 	submission_id: string;
 	job_title: string | null;
 	company: string | null;
+	salutation: string | null;
+	pronouns: string | null;
+	honorific: string | null;
 	bio: string | null;
 	logistics_text: string | null;
 	headshot_asset_id: string | null;
@@ -98,6 +105,9 @@ type ProfileOnlyRow = {
 	name: string | null;
 	job_title: string | null;
 	company: string | null;
+	salutation: string | null;
+	pronouns: string | null;
+	honorific: string | null;
 	bio: string | null;
 	logistics_text: string | null;
 	headshot_asset_id: string | null;
@@ -175,6 +185,9 @@ export function matchesRosterSearch(speaker: RosterSpeaker, q: string | undefine
 		speaker.email,
 		speaker.jobTitle ?? "",
 		speaker.company ?? "",
+		speaker.salutation ?? "",
+		speaker.pronouns ?? "",
+		speaker.honorific ?? "",
 		...Object.values(speaker.socials),
 	]
 		.join(" ")
@@ -234,6 +247,9 @@ export async function listEventSpeakerRoster(
 					s.id AS submission_id,
 					COALESCE(sp.job_title, esp.job_title) AS job_title,
 					COALESCE(sp.company, esp.company) AS company,
+					sp.salutation AS salutation,
+					sp.pronouns AS pronouns,
+					sp.honorific AS honorific,
 					sp.bio AS bio,
 					sp.logistics_text AS logistics_text,
 					sp.headshot_asset_id AS headshot_asset_id,
@@ -268,6 +284,9 @@ export async function listEventSpeakerRoster(
 					COALESCE(NULLIF(TRIM(sp.display_name), ''), p.name) AS name,
 					COALESCE(sp.job_title, esp.job_title) AS job_title,
 					COALESCE(sp.company, esp.company) AS company,
+					sp.salutation AS salutation,
+					sp.pronouns AS pronouns,
+					sp.honorific AS honorific,
 					sp.bio AS bio,
 					sp.logistics_text AS logistics_text,
 					sp.headshot_asset_id AS headshot_asset_id,
@@ -303,6 +322,9 @@ export async function listEventSpeakerRoster(
 		name: string | null;
 		job_title: string | null;
 		company: string | null;
+		salutation: string | null;
+		pronouns: string | null;
+		honorific: string | null;
 		bio: string | null;
 		logistics_text: string | null;
 		headshot_asset_id: string | null;
@@ -319,6 +341,9 @@ export async function listEventSpeakerRoster(
 				existing.profileId = row.profile_id;
 				existing.jobTitle = row.job_title;
 				existing.company = row.company;
+				existing.salutation = row.salutation;
+				existing.pronouns = row.pronouns;
+				existing.honorific = row.honorific;
 				existing.bio = row.bio;
 				existing.logisticsText = row.logistics_text;
 				existing.headshot = row.headshot_asset_id ? { assetId: row.headshot_asset_id, filename: row.headshot_filename, uploadedAt: row.headshot_created_at ?? 0 } : null;
@@ -334,6 +359,9 @@ export async function listEventSpeakerRoster(
 			name: row.name?.trim() || row.email,
 			jobTitle: row.job_title,
 			company: row.company,
+			salutation: row.salutation,
+			pronouns: row.pronouns,
+			honorific: row.honorific,
 			bio: row.bio,
 			logisticsText: row.logistics_text,
 			headshot: row.headshot_asset_id ? { assetId: row.headshot_asset_id, filename: row.headshot_filename, uploadedAt: row.headshot_created_at ?? 0 } : null,

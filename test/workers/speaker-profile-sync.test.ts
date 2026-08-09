@@ -60,9 +60,39 @@ describe("speaker profile ↔ roster sync", () => {
 			bio: "Portal bio",
 			jobTitle: "Staff Engineer",
 			company: "65 Labs",
-			social: { github: "portal-gh" },
+			salutation: "Dr",
+			pronouns: "she/her",
+			honorific: "PhD",
+			social: {
+				github: "portal-gh",
+				linkedin: "https://linkedin.com/in/portal",
+				website: "https://portal.example",
+				facebook: "https://facebook.com/portal",
+				twitter: "@portal",
+			},
 		});
 		expect(saved.ok).toBe(true);
+		if (!saved.ok) throw new Error("expected profile save");
+		expect(saved.profile).toMatchObject({
+			display_name: "Portal Name",
+			salutation: "Dr",
+			pronouns: "she/her",
+			honorific: "PhD",
+			social_json: JSON.stringify({
+				twitter: "@portal",
+				linkedin: "https://linkedin.com/in/portal",
+				github: "portal-gh",
+				website: "https://portal.example",
+				facebook: "https://facebook.com/portal",
+			}),
+		});
+
+		const stored = await getSpeakerProfile(env.DB, "sync-portal", "sync-portal-person");
+		expect(stored).toMatchObject({
+			salutation: "Dr",
+			pronouns: "she/her",
+			honorific: "PhD",
+		});
 
 		const roster = await listEventSpeakerRoster(env.DB, "sync-portal");
 		expect(roster).toMatchObject([
@@ -71,8 +101,17 @@ describe("speaker profile ↔ roster sync", () => {
 				name: "Portal Name",
 				jobTitle: "Staff Engineer",
 				company: "65 Labs",
+				salutation: "Dr",
+				pronouns: "she/her",
+				honorific: "PhD",
 				workflowStatus: "confirmed",
-				socials: { github: "portal-gh" },
+				socials: {
+					github: "portal-gh",
+					linkedin: "https://linkedin.com/in/portal",
+					website: "https://portal.example",
+					facebook: "https://facebook.com/portal",
+					twitter: "@portal",
+				},
 			},
 		]);
 	});
