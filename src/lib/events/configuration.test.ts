@@ -8,15 +8,20 @@ const complete: EventConfiguration = {
 	tasks: [{ id: "task", key: "bio", label: "Bio", task_kind: "text", required: 1, position: 0 }],
 	cfp: { id: "cfp", slug: "cfp", title: "Call for papers", status: "open", fieldCount: 3 },
 	review: { id: "review", name: "Default", status: "draft", criteriaCount: 1 },
+	messageTemplateCount: 1,
 };
 
 describe("event readiness", () => {
 	it("reports actual configuration and links incomplete items to their settings", () => {
-		const pending = { ...complete, rooms: [], cfp: { ...complete.cfp!, status: "draft" as const, fieldCount: 0 } };
+		const pending = { ...complete, rooms: [], cfp: { ...complete.cfp!, status: "draft" as const, fieldCount: 0 }, messageTemplateCount: 0 };
 		const items = eventReadiness(pending, "sample");
 		expect(items.find((item) => item.key === "rooms")).toMatchObject({ complete: false, href: "/admin/events/sample/settings#rooms" });
 		expect(items.find((item) => item.key === "cfp")).toMatchObject({ complete: false, href: "/admin/events/sample/forms" });
 		expect(items.find((item) => item.key === "review")).toMatchObject({ href: "/admin/events/sample/review" });
+		expect(items.find((item) => item.key === "communications")).toMatchObject({
+			complete: false,
+			href: "/admin/events/sample/communications",
+		});
 		expect(items.find((item) => item.key === "cfp-open")).toMatchObject({ complete: false });
 	});
 

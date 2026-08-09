@@ -4,11 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 
+type CloneSource = { slug: string; name: string };
+
 type Props = {
 	canCreate: boolean;
+	cloneSources?: CloneSource[];
 };
 
-export function CreateEventForm({ canCreate }: Props) {
+export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 	const router = useRouter();
 	const [name, setName] = useState("");
 	const [slug, setSlug] = useState("");
@@ -16,8 +19,10 @@ export function CreateEventForm({ canCreate }: Props) {
 	const [startDay, setStartDay] = useState("");
 	const [endDay, setEndDay] = useState("");
 	const [preset, setPreset] = useState<"minimal" | "conference">("minimal");
+	const [cloneFrom, setCloneFrom] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
+	const cloning = Boolean(cloneFrom);
 
 	if (!canCreate) {
 		return (
@@ -33,10 +38,16 @@ export function CreateEventForm({ canCreate }: Props) {
 		setPending(true);
 		setError(null);
 		try {
-			const response = await fetch("/api/admin/events", {
+			const endpoint = cloning
+				? `/api/admin/events/${encodeURIComponent(cloneFrom)}/clone`
+				: "/api/admin/events";
+			const body = cloning
+				? { name, slug, timezone, startDay, endDay }
+				: { name, slug, timezone, startDay, endDay, preset };
+			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ name, slug, timezone, startDay, endDay, preset }),
+				body: JSON.stringify(body),
 			});
 			const data = (await response.json()) as {
 				ok?: boolean;
@@ -44,7 +55,7 @@ export function CreateEventForm({ canCreate }: Props) {
 				slug?: string;
 			};
 			if (!response.ok || !data.ok || !data.slug) {
-				setError(data.error ?? "Could not create event");
+				setError(data.error ?? (cloning ? "Could not clone event" : "Could not create event"));
 				return;
 			}
 			router.push(`/admin/events/${data.slug}/setup`);
@@ -61,6 +72,26 @@ export function CreateEventForm({ canCreate }: Props) {
 			onSubmit={onSubmit}
 			className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-5"
 		>
+			{cloneSources.length > 0 ? (
+				<label className="block space-y-1.5 text-sm">
+					<span className="font-medium text-neutral-200">Start from</span>
+					<select
+						value={cloneFrom}
+						onChange={(e) => setCloneFrom(e.target.value)}
+						className={`w-full ${INPUT_CLASSES}`}
+					>
+						<option value="">New event (CFP preset)</option>
+						{cloneSources.map((source) => (
+							<option key={source.slug} value={source.slug}>
+								Clone {source.name} ({source.slug})
+							</option>
+						))}
+					</select>
+					<span className="block text-xs text-neutral-500">
+						Clones forms, criteria, tasks, rooms, tracks, and message templates. Never submissions or people.
+					</span>
+				</label>
+			) : null}
 			<label className="block space-y-1.5 text-sm">
 				<span className="font-medium text-neutral-200">Event name</span>
 				<input
@@ -97,24 +128,26 @@ export function CreateEventForm({ canCreate }: Props) {
 					className={`w-full ${INPUT_CLASSES}`}
 				/>
 			</label>
-			<label className="block space-y-1.5 text-sm">
-				<span className="font-medium text-neutral-200">CFP preset</span>
-				<select
-					value={preset}
-					onChange={(e) => setPreset(e.target.value === "conference" ? "conference" : "minimal")}
-					className={`w-full ${INPUT_CLASSES}`}
-				>
-					<option value="minimal">Minimal (title, abstract, speakers)</option>
-					<option value="conference">Conference (format-conditional fields)</option>
-				</select>
-			</label>
+			{!cloning ? (
+				<label className="block space-y-1.5 text-sm">
+					<span className="font-medium text-neutral-200">CFP preset</span>
+					<select
+						value={preset}
+						onChange={(e) => setPreset(e.target.value === "conference" ? "conference" : "minimal")}
+						className={`w-full ${INPUT_CLASSES}`}
+					>
+						<option value="minimal">Minimal (title, abstract, speakers)</option>
+						<option value="conference">Conference (format-conditional fields)</option>
+					</select>
+				</label>
+			) : null}
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			<button
 				type="submit"
 				disabled={pending}
 				className={`w-full sm:w-auto ${buttonClasses("primary")}`}
 			>
-				{pending ? "Creating…" : "Create event"}
+				{pending ? (cloning ? "Cloning…" : "Creating…") : cloning ? "Clone event" : "Create event"}
 			</button>
 		</form>
 	);
