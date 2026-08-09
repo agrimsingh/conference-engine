@@ -58,6 +58,7 @@ export function CfpForm({
 	const [resuming, setResuming] = useState(Boolean(initialDraftToken));
 	const [errors, setErrors] = useState<string[]>([]);
 	const [submissionId, setSubmissionId] = useState<string | null>(null);
+	const [showConfirmation, setShowConfirmation] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [draftPending, setDraftPending] = useState(false);
 	const [uploadBusyKey, setUploadBusyKey] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export function CfpForm({
 		if (!initialDraftToken) return;
 		let active = true;
 		void fetch(`/api/e/${eventSlug}/submit/${formSlug}/draft?token=${encodeURIComponent(initialDraftToken)}`, { cache: "no-store" })
-			.then(async (response) => ({ response, body: await readJson<{ ok?: boolean; error?: string; draft?: { submitterName?: string; submitterEmail?: string; answers?: AnswerMap; submissionId?: string | null } }>(response) }))
+			.then(async (response) => ({ response, body: await readJson<{ ok?: boolean; error?: string; draft?: { submitterName?: string; submitterEmail?: string; answers?: AnswerMap; submissionId?: string | null; status?: string } }>(response) }))
 			.then(({ response, body }) => {
 				if (!active) return;
 				if (!response.ok || !body?.ok || !body.draft) {
@@ -120,8 +121,13 @@ export function CfpForm({
 				setSubmitterEmail(body.draft.submitterEmail ?? "");
 				setAnswers(mergeAnswers(fields, body.draft.answers ?? {}));
 				autosaveSnapshot.current = draftPayloadKey(body.draft.submitterName ?? "", mergeAnswers(fields, body.draft.answers ?? {}));
-				if (body.draft.submissionId) setSubmissionId(body.draft.submissionId);
-				else setDraftNotice("Draft restored. Keep saving while you work.");
+				if (body.draft.submissionId) {
+					setSubmissionId(body.draft.submissionId);
+					setShowConfirmation(false);
+					setDraftNotice("Editing your submitted proposal. Changes save while the CFP is open.");
+				} else {
+					setDraftNotice("Draft restored. Keep saving while you work.");
+				}
 			})
 			.catch(() => active && setErrors(["We couldn't restore that draft. Try the link again."]))
 			.finally(() => active && setResuming(false));
@@ -210,9 +216,14 @@ export function CfpForm({
 				method: "POST", headers: { "content-type": "application/json" },
 				body: JSON.stringify({ token: draftToken, submitterName, answers }),
 			});
-			const body = await readJson<{ ok?: boolean; errors?: string[]; submissionId?: string }>(response);
+			const body = await readJson<{ ok?: boolean; errors?: string[]; submissionId?: string; editToken?: string }>(response);
 			if (!response.ok || !body?.ok || !body.submissionId) { setErrors(body?.errors ?? ["Submission failed"]); return; }
 			setSubmissionId(body.submissionId);
+			if (body.editToken) {
+				setDraftToken(body.editToken);
+				window.history.replaceState(null, "", `?draft=${encodeURIComponent(body.editToken)}`);
+			}
+			setShowConfirmation(true);
 			return;
 		}
 		const response = await fetch(`/api/e/${eventSlug}/submit/${formSlug}`, {
@@ -222,6 +233,7 @@ export function CfpForm({
 		const body = await readJson<{ ok?: boolean; errors?: string[]; submissionId?: string }>(response);
 		if (!response.ok || !body?.ok || !body.submissionId) { setErrors(body?.errors ?? ["Submission failed"]); return; }
 		setSubmissionId(body.submissionId);
+		setShowConfirmation(true);
 		} catch { setErrors(["Submission failed. Check your connection and try again."]); }
 		finally { setSubmitting(false); }
 	}
@@ -246,10 +258,11 @@ export function CfpForm({
 		);
 	}
 
-	if (submissionId) {
+	if (submissionId && showConfirmation) {
 		const renderedThankYou = thankYouCopy?.trim()
 			? renderFormCopy(thankYouCopy, { eventName, submitterName: submitterName.trim() || "there", title: formTitle })
 			: null;
+		const canEdit = Boolean(draftToken && draftsEnabled);
 		return (
 			<div className="mx-auto w-full max-w-2xl space-y-5 rounded-lg border border-neutral-800 bg-neutral-900 px-5 py-8">
 				<p className="text-xs font-medium uppercase tracking-wide text-emerald-400">
@@ -268,6 +281,11 @@ export function CfpForm({
 						Check your email for the confirmation and sign in to the proposal portal
 						with this email whenever you need to review your submitted proposal or its status.
 					</p>
+					{canEdit ? (
+						<p>
+							You can still edit this proposal while the call for proposals is open.
+						</p>
+					) : null}
 					<p className="text-neutral-500">
 						Reference:{" "}
 						<code className="rounded-md bg-neutral-950/60 px-1.5 py-0.5 text-xs text-neutral-300">
@@ -275,6 +293,19 @@ export function CfpForm({
 						</code>
 					</p>
 				</div>
+				{canEdit ? (
+					<button
+						type="button"
+						className={buttonClasses("secondary")}
+						onClick={() => {
+							setShowConfirmation(false);
+							setStep("edit");
+							setDraftNotice("Editing your submitted proposal. Changes save while the CFP is open.");
+						}}
+					>
+						Edit proposal
+					</button>
+				) : null}
 			</div>
 		);
 	}
@@ -290,6 +321,7 @@ export function CfpForm({
 					onBack={() => setStep("edit")}
 					onConfirm={() => void submit()}
 					busy={submitting}
+					updating={Boolean(submissionId)}
 				/>
 				{errors.length > 0 ? (
 					<ul className="mx-auto mt-4 w-full max-w-2xl rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">

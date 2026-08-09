@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveDraftForResume } from "@/lib/cfp/drafts";
-import { loadDraftForResume } from "@/lib/cfp/drafts";
+import { loadDraftForResume, saveDraftForResume, SubmissionNotEditableError } from "@/lib/cfp/drafts";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { validateCfpPayloadBounds } from "@/lib/cfp/submit";
@@ -42,7 +41,14 @@ export async function PUT(request: Request, context: Context) {
 	if (!draftAllowed || !ipAllowed) {
 		return NextResponse.json({ ok: false, error: "Too many draft saves. Please wait a moment and try again." }, { status: 429 });
 	}
-	const saved = await saveDraftForResume(db, { secret, token, submitterName, answers });
-	if (!saved) return NextResponse.json({ ok: false, error: "Draft link is invalid or expired" }, { status: 404 });
-	return NextResponse.json({ ok: true, draftId: saved.draftId, token: saved.token });
+	try {
+		const saved = await saveDraftForResume(db, { secret, token, submitterName, answers });
+		if (!saved) return NextResponse.json({ ok: false, error: "Draft link is invalid or expired" }, { status: 404 });
+		return NextResponse.json({ ok: true, draftId: saved.draftId, token: saved.token });
+	} catch (error) {
+		if (error instanceof SubmissionNotEditableError) {
+			return NextResponse.json({ ok: false, error: error.message }, { status: 409 });
+		}
+		throw error;
+	}
 }

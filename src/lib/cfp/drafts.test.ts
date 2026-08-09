@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isSubmissionLimitReachedError, validateSubmitterIdentity } from "./submit";
-import { finalizeDraft, issueDraftResumeToken, loadDraftForResume, prepareDraftResumeDelivery } from "./drafts";
+import { finalizeDraft, issueDraftResumeToken, loadDraftForResume, prepareDraftResumeDelivery, SubmissionNotEditableError } from "./drafts";
 
 function replayDatabase(): D1Database {
 	const statement = {
@@ -39,10 +39,69 @@ describe("durable drafts", () => {
 		expect(statements[1].values).not.toContain("resume-token");
 	});
 
-	it("treats an already finalized draft as an idempotent replay", async () => {
-		await expect(finalizeDraft(replayDatabase(), {
+	it("updates an already finalized draft in place when still submitted", async () => {
+		const statements: Array<{ sql: string }> = [];
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					sql,
+					first: async () => {
+						if (sql.includes("FROM submissions")) return { status: "submitted" };
+						if (sql.includes("FROM submission_drafts d") || sql.includes("JOIN submission_draft_tokens")) {
+							return {
+								id: "draft-1", event_id: "event-1", form_id: "form-1", verified_email: "speaker@example.com",
+								status: "submitted", submission_id: "draft-1",
+							};
+						}
+						if (sql.includes("SELECT * FROM events") || sql.includes("FROM events")) {
+							return { id: "event-1", slug: "event", name: "Event", timezone: "UTC", mode: "live", created_at: 0, updated_at: 0 };
+						}
+						return null;
+					},
+				}),
+			}),
+			batch: async (batch: Array<{ sql: string; meta?: { changes: number } }>) => {
+				statements.push(...batch);
+				return batch.map((item) => ({
+					...item,
+					meta: { changes: item.sql.includes("UPDATE submissions") ? 1 : 1 },
+				}));
+			},
+		} as unknown as D1Database;
+		const result = await finalizeDraft(db, {
+			secret: "secret", draftId: "draft-1", token: "resume", submitterName: "Speaker", answers: { title: "Revised" }, speakers: [{ name: "Speaker", email: "speaker@example.com" }],
+		});
+		expect(result.submissionId).toBe("draft-1");
+		expect(result.replay).toBe(false);
+		expect(result.editToken).toBeTruthy();
+		expect(statements.some((item) => item.sql.includes("UPDATE submissions"))).toBe(true);
+		expect(statements.some((item) => item.sql.includes("consumed"))).toBe(false);
+	});
+
+	it("rejects edits once the submission leaves pre-decision", async () => {
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					first: async () => {
+						if (sql.includes("FROM submissions")) return { status: "under_review" };
+						if (sql.includes("JOIN submission_draft_tokens") || sql.includes("FROM submission_drafts")) {
+							return {
+								id: "draft-1", event_id: "event-1", form_id: "form-1", verified_email: "speaker@example.com",
+								status: "submitted", submission_id: "draft-1",
+							};
+						}
+						if (sql.includes("FROM events") || sql.includes("SELECT * FROM events")) {
+							return { id: "event-1", slug: "event", name: "Event", timezone: "UTC", mode: "live", created_at: 0, updated_at: 0 };
+						}
+						return null;
+					},
+				}),
+			}),
+			batch: async () => [],
+		} as unknown as D1Database;
+		await expect(finalizeDraft(db, {
 			secret: "secret", draftId: "draft-1", token: "resume", submitterName: "Speaker", answers: {}, speakers: [],
-		})).resolves.toEqual({ submissionId: "draft-1", replay: true });
+		})).rejects.toBeInstanceOf(SubmissionNotEditableError);
 	});
 
 	it("recognizes the database limit guard for a deliberate conflict response", () => {

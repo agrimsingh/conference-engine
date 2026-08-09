@@ -9,6 +9,7 @@ type Props = {
 	onBack: () => void;
 	onConfirm: () => void;
 	busy: boolean;
+	updating?: boolean;
 };
 
 export function CfpReviewStep({
@@ -19,18 +20,21 @@ export function CfpReviewStep({
 	onBack,
 	onConfirm,
 	busy,
+	updating = false,
 }: Props) {
 	return (
 		<div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
 			<header className="space-y-2 border-b border-neutral-800 pb-5">
 				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-					Review before submitting
+					{updating ? "Review before updating" : "Review before submitting"}
 				</p>
 				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					Check your proposal
 				</h1>
 				<p className="text-pretty text-sm text-neutral-400">
-					Confirm your details below. You can go back to edit anything before you submit.
+					{updating
+						? "Confirm your changes below. You can go back to edit anything before you update."
+						: "Confirm your details below. You can go back to edit anything before you submit."}
 				</p>
 			</header>
 
@@ -64,7 +68,7 @@ export function CfpReviewStep({
 					Back to edit
 				</button>
 				<button type="button" disabled={busy} className={buttonClasses("primary")} onClick={onConfirm}>
-					{busy ? "Submitting…" : "Submit proposal"}
+					{busy ? (updating ? "Updating…" : "Submitting…") : updating ? "Update proposal" : "Submit proposal"}
 				</button>
 			</div>
 		</div>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { finalizeDraft, loadDraftForResume } from "@/lib/cfp/drafts";
+import { finalizeDraft, loadDraftForResume, SubmissionNotEditableError } from "@/lib/cfp/drafts";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswersWithAssets } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
@@ -50,6 +50,9 @@ export async function POST(request: Request, context: Context) {
 		if (isSubmissionLimitReachedError(error)) {
 			return NextResponse.json({ ok: false, errors: ["This CFP has reached its submission limit."] }, { status: 409 });
 		}
+		if (error instanceof SubmissionNotEditableError) {
+			return NextResponse.json({ ok: false, errors: [error.message] }, { status: 409 });
+		}
 		throw error;
 	}
 	await repairSubmissionDelivery({
@@ -60,5 +63,5 @@ export async function POST(request: Request, context: Context) {
 			}),
 		inviteCoSpeakers: () => sendPendingInvitesForSubmission(db, { submissionId: result.submissionId, origin: new URL(request.url).origin }),
 	});
-	return NextResponse.json({ ok: true, submissionId: result.submissionId, replay: result.replay });
+	return NextResponse.json({ ok: true, submissionId: result.submissionId, replay: result.replay, editToken: result.editToken });
 }
