@@ -3,6 +3,7 @@ import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { sendTaskReminders } from "@/lib/email/reminders";
+import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -35,9 +36,13 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: result.configurationError }, { status: 503 });
 	}
 
+	const broadcasted = result.sent > 0
+		? await broadcastEventInvalidate(event.id, "email.reminders")
+		: false;
 	return NextResponse.json({
 		ok: true,
 		sent: result.sent,
 		skipped: result.skipped,
+		broadcasted,
 	});
 }
