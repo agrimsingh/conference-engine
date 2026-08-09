@@ -157,35 +157,35 @@ const PIPELINE: {
 	{
 		stage: "Review",
 		description:
-			"Named reviewers give each assigned proposal a 1–5 score and optional comment against the active rubric.",
+			"Named reviewers score each assigned proposal 1–5 and leave comments against the active rubric.",
 		href: "/demo?perspective=reviewer",
 		linkLabel: "Explore reviewer view",
 	},
 	{
 		stage: "Accept",
 		description:
-			"Decisions use templated email, while calendar attachments are sent when a session is scheduled or rescheduled.",
+			"Triage happens on the submission detail — full proposal, every score, every comment on one screen. Decisions fire a templated email.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "Explore organizer view",
 	},
 	{
-		stage: "Speaker tasks",
+		stage: "Speaker ops",
 		description:
-			"Accepted speakers get a magic-link portal for bio, headshot, slides, and supporting docs. Every upload lands in object storage, every gap stays visible.",
+			"Accepted speakers get a magic-link portal to submit bio, headshot, and slides. Gaps surface in speaker ops and the program cockpit so you can chase the right people without digging through email.",
 		href: "/demo?perspective=speaker",
 		linkLabel: "Explore speaker view",
 	},
 	{
 		stage: "Schedule",
 		description:
-			"Drag talks onto the grid. Room clashes and double-booked speakers flag themselves before you drop.",
+			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. The cockpit keeps a live count of accepts still without a slot.",
 		href: "/demo?perspective=organizer",
 		linkLabel: "See schedule readiness",
 	},
 	{
 		stage: "Publish",
 		description:
-			"A public schedule in list, day, week, track, and room views — plus a read-only JSON API for your site and apps.",
+			"Defaults to today or the next session day. List, day, week, track, and room views — plus a read-only JSON API for your site or app.",
 		href: `/e/${DEMO_EVENT}/schedule`,
 		linkLabel: "View published schedule",
 	},
