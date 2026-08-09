@@ -33,5 +33,9 @@ export default defineConfig({
 	test: {
 		include: ["test/workers/**/*.test.ts"],
 		setupFiles: ["./test/workers/apply-migrations.ts"],
+		// Worker tests share one Miniflare D1 database; run files sequentially.
+		fileParallelism: false,
+		maxWorkers: 1,
+		minWorkers: 1,
 	},
 });

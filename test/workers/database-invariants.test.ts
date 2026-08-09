@@ -35,7 +35,18 @@ describe("D1 runtime invariants", () => {
 	it("loads only the explicit test secret binding", () => {
 		const bindings = env as unknown as Record<string, unknown>;
 		expect(bindings.AUTH_SECRET).toBe("worker-test-auth-secret");
-		for (const name of ["RESEND_API_KEY", "AIRTABLE_API_KEY", "PUBLIC_API_KEY"]) {
+		expect(bindings.DB).toBeDefined();
+		expect(bindings.FILES).toBeDefined();
+		expect(bindings.EVENT_ROOM).toBeDefined();
+		for (const name of [
+			"RESEND_API_KEY",
+			"AIRTABLE_API_KEY",
+			"PUBLIC_API_KEY",
+			"SESSIONS",
+			"ASSETS",
+			"IMAGES",
+			"WORKER_SELF_REFERENCE",
+		]) {
 			expect(bindings[name]).toBeUndefined();
 		}
 	});
