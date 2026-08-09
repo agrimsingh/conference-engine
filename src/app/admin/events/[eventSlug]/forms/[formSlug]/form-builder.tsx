@@ -707,7 +707,7 @@ export function FormBuilder({
 					<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail, confirmation copy for email, and thank-you copy after submit. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the default copy.</p>
 					<label className="mt-3 block">Welcome copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={welcomeCopy} onChange={(e) => setWelcomeCopy(e.target.value)} /></label>
 					<label className="mt-3 block">Confirmation copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={confirmationCopy} onChange={(e) => setConfirmationCopy(e.target.value)} /></label>
-					<label className="mt-3 block">Reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
+					<label className="mt-3 block">Speaker task reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
 					<label className="mt-3 block">Thank-you copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={thankYouCopy} onChange={(e) => setThankYouCopy(e.target.value)} /></label>
 				</details>
 				<label className="block text-xs text-neutral-400">
@@ -751,6 +751,9 @@ export function FormBuilder({
 						/>
 					</label>
 				</div>
+				<p className="text-xs text-neutral-500">
+					Set a close date to enable draft reminder emails for unsubmitted drafts in the final 72 hours.
+				</p>
 				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
 					<summary className="cursor-pointer font-medium text-neutral-200">Category routing</summary>
 					<p className="mt-2 text-neutral-500">Route a select answer to an organizer category. Leave both fields blank for no category.</p>

@@ -6,6 +6,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"co_speaker_invite",
 	"calendar_invite",
 	"task_reminder",
+	"draft_reminder",
 	"speaker_announcement",
 	"portal_magic_link",
 	"organizer_magic_link",
@@ -146,6 +147,22 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			].join("\n"),
 		};
 	},
+	draft_reminder: (ctx) => ({
+		subject: `Reminder: finish your ${ctx.eventName} proposal before it closes`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`You have an unfinished draft for "${ctx.title}" at ${ctx.eventName}.`,
+			ctx.endsAtIso ? `This call for proposals closes at ${ctx.endsAtIso}.` : "This call for proposals is closing soon.",
+			"",
+			"Resume your draft here:",
+			ctx.portalUrl ?? ctx.portalHint ?? "(link unavailable)",
+			"",
+			"If you already submitted or no longer plan to, you can ignore this email.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
 	speaker_announcement: (ctx) => ({
 		subject: `Update from ${ctx.eventName}`,
 		text: [
@@ -250,6 +267,7 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 	return (
 		key !== "calendar_invite" &&
 		key !== "task_reminder" &&
+		key !== "draft_reminder" &&
 		key !== "speaker_announcement" &&
 		key !== "portal_magic_link" &&
 		key !== "organizer_magic_link" &&
