@@ -99,7 +99,35 @@ describe("D1 runtime invariants", () => {
 	});
 
 	it("applies the production migrations, makes ownership canonical, and fails preflight closed", async () => {
-		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM d1_migrations").first<{ count: number }>())?.count).toBe(15);
+		const requiredMigrationNames = [
+			"0001_core.sql",
+			"0002_speaker_tasks.sql",
+			"0003_evaluation_email_agenda.sql",
+			"0004_event_rooms.sql",
+			"0005_submission_category.sql",
+			"0006_reviewers.sql",
+			"0007_submission_labels.sql",
+			"0008_co_speakers.sql",
+			"0009_review_assignments.sql",
+			"0010_accounts.sql",
+			"0011_agenda_slot_room_id.sql",
+			"0012_production_hardening.sql",
+			"0013_final_gate_security.sql",
+			"0014_delivery_claim_hardening.sql",
+			"0015_product_foundation.sql",
+			"0016_self_service_configuration.sql",
+			"0017_cfp_lifecycle.sql",
+			"0018_evaluation_workflows.sql",
+			"0019_communications_portal.sql",
+			"0020_session_lineage_media.sql",
+			"0021_session_materialization_claims.sql",
+		];
+		const appliedMigrationNames = (await env.DB.prepare(
+			"SELECT name FROM d1_migrations ORDER BY id",
+		).all<{ name: string }>()).results.map((migration) => migration.name);
+		expect(
+			appliedMigrationNames.filter((name) => requiredMigrationNames.includes(name)),
+		).toEqual(requiredMigrationNames);
 		await seedEvent("ownership-event", "ownership-event");
 		await env.DB.prepare(
 			"INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('owner-account', 'owner@example.test', 'Owner', ?, ?)",

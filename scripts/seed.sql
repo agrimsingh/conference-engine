@@ -1,28 +1,47 @@
--- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
-DELETE FROM evaluation_scores;
+-- LOCAL FIXTURE RESET ONLY. `npm run db:seed:local` runs this as part of
+-- `npm run db:reset:local`; never pass this file to Wrangler with --remote or
+-- run it against shared or production D1. Keep D1's migration metadata intact,
+-- but clear every application table in child-to-parent FK order before creating
+-- the writable aie-sandbox fixture below.
+DELETE FROM email_delivery_envelopes;
+DELETE FROM agenda_calendar_lifecycles;
+DELETE FROM co_speaker_invitation_history;
+DELETE FROM co_speaker_invitation_claims;
+DELETE FROM evaluation_criterion_scores;
 DELETE FROM review_assignments;
-DELETE FROM reviewers;
-DELETE FROM evaluation_plans;
-DELETE FROM outbound_messages;
+DELETE FROM evaluation_scores;
+DELETE FROM event_invitations;
 DELETE FROM submission_draft_tokens;
-DELETE FROM submission_drafts;
-DELETE FROM agenda_slots;
-DELETE FROM event_rooms;
 DELETE FROM speaker_tasks;
-DELETE FROM task_templates;
+DELETE FROM agenda_slots;
+DELETE FROM email_deliveries;
+DELETE FROM outbound_messages;
 DELETE FROM submission_labels;
 DELETE FROM submission_speakers;
-DELETE FROM submissions;
+DELETE FROM submission_drafts;
+DELETE FROM evaluation_criteria;
+DELETE FROM reviewers;
+DELETE FROM evaluation_plans;
+DELETE FROM task_templates;
 DELETE FROM form_fields;
-DELETE FROM cfp_forms;
-DELETE FROM event_members;
+DELETE FROM agenda_tracks;
+DELETE FROM event_rooms;
 DELETE FROM speaker_profiles;
 DELETE FROM assets;
-DELETE FROM people;
 DELETE FROM event_ownership;
 DELETE FROM event_memberships;
+DELETE FROM event_members;
+DELETE FROM auth_challenges;
+DELETE FROM submissions;
+DELETE FROM cfp_forms;
+DELETE FROM people;
+DELETE FROM accounts;
+DELETE FROM event_message_templates;
 DELETE FROM rate_limit_buckets;
+DELETE FROM production_hardening_migration_guard;
 DELETE FROM events;
+
+-- Seed: aie-sandbox event + open AIE CFP form (matches createAieCfpPreset)
 
 INSERT INTO events (id, slug, name, timezone, ownership_claimable, created_at, updated_at)
 VALUES (
@@ -36,7 +55,8 @@ VALUES (
 );
 
 INSERT INTO cfp_forms (
-	id, event_id, slug, title, description, status, opens_at, closes_at, created_at, updated_at
+	id, event_id, slug, title, description, status, kind, opens_at, closes_at,
+	category_routing_json, thank_you_copy, created_at, updated_at
 ) VALUES (
 	'form_aie_cfp',
 	'evt_aie_sandbox',
@@ -44,6 +64,30 @@ INSERT INTO cfp_forms (
 	'AI Engineer CFP',
 	'Submit a Stage, Lightning, Workshop, or Online session. Fields adapt to your format.',
 	'open',
+	'public',
+	NULL,
+	NULL,
+	'{"fieldKey":"format","map":{"stage":"Stage","lightning":"Lightning","workshop":"Workshop","online":"Online"}}',
+	NULL,
+	1754650000000,
+	1754650000000
+);
+
+-- Matches the deterministic 0015 backfill identity for this historical event.
+-- It has no public fields and must remain hidden from public/organizer form lists.
+INSERT INTO cfp_forms (
+	id, event_id, slug, title, description, status, kind, opens_at, closes_at,
+	category_routing_json, thank_you_copy, created_at, updated_at
+) VALUES (
+	'foundation-system-form:6576745f6169655f73616e64626f78:0',
+	'evt_aie_sandbox',
+	'__system',
+	'System form',
+	NULL,
+	'draft',
+	'system',
+	NULL,
+	NULL,
 	NULL,
 	NULL,
 	1754650000000,
