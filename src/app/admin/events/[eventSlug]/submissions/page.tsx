@@ -200,7 +200,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						</div>
 					) : null}
 					<div className="flex flex-wrap items-start gap-x-6 gap-y-3 pt-3">
-						<ActivatePlanButton eventSlug={event.slug} />
+						<ActivatePlanButton eventSlug={event.slug} planActive={Boolean(activePlan)} />
 						<ExportButtons eventSlug={event.slug} />
 					</div>
 				</PageHeader>
