@@ -1,10 +1,12 @@
 import {
 	isFieldType,
 	parseFieldConfig,
+	parseFormSections,
 	parseVisibilityRule,
 	parseCategoryRoute,
 	type CategoryRoute,
 	type FormFieldDef,
+	type FormSectionDef,
 } from "@/lib/domain";
 import {
 	getEventBySlug,
@@ -19,6 +21,7 @@ export type LoadedCfpForm = {
 	event: EventRow;
 	form: CfpFormRow;
 	fields: FormFieldDef[];
+	sections: FormSectionDef[];
 	categoryRoute: CategoryRoute | null;
 };
 
@@ -56,8 +59,15 @@ export async function loadCfpForm(
 					? { ...config, minSpeakers: form.min_speakers, maxSpeakers: form.max_speakers }
 					: config,
 			helpText: helpTextFromStoredConfig(row.config),
+			sectionKey: row.section_key?.trim() || undefined,
 		};
 	});
 
-	return { event, form, fields, categoryRoute: parseCategoryRoute(form.category_routing_json) };
+	return {
+		event,
+		form,
+		fields,
+		sections: parseFormSections(form.sections_json),
+		categoryRoute: parseCategoryRoute(form.category_routing_json),
+	};
 }

@@ -43,6 +43,8 @@ export type CfpFormRow = {
 	closes_at: number | null;
 	/** Optional JSON category route, configured per form by an organizer. */
 	category_routing_json?: string | null;
+	/** Optional JSON section metadata from the form builder (Phase 3). */
+	sections_json?: string | null;
 	welcome_copy: string | null;
 	confirmation_copy: string | null;
 	reminder_copy: string | null;
@@ -67,6 +69,7 @@ export type FormFieldRow = {
 	visibility_rule: string;
 	config: string;
 	soft_deleted: number;
+	section_key?: string | null;
 };
 
 export type SubmissionRow = {
