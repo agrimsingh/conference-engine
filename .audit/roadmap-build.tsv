@@ -21,3 +21,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T08:25:35Z	wave1	Merged applicant Phase 4 to main	RL+autosave+progress+review step; section stub for P3	7ba2d76	tests green
 2026-08-09T08:26:15Z	wave1	Merged platform Phase 8 to main	public JSON strip PII + Airtable opt-in cron; queues deferred if noted	8fc90e2	tests green
 2026-08-09T08:29:07Z	wave1	Merged builder+verify; roadmap phases 0-9 on main	P3 rebase resolved via FormSection aliases + migration 0024; P9 lifecycle+CI+backup	56f7ed8/89ad1bd	146 unit + 114 workers
+2026-08-09T08:30:01Z	process	Stopped roadmap loop shell	Phases 0-9 already on main; stale Wave0 prompt only generating ticks	pid 33793	killed
