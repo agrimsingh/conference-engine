@@ -53,6 +53,7 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
 1. Accelevents sync (struck in brief)
    - `/admin/events/[eventSlug]/integrations/accelevents`
    - `/api/admin/events/[eventSlug]/integrations/accelevents`, `.../sync`
+   - Speakers attach via session `PUT` (`speakerList` / `speakersAsTag`); optional daily auto-sync (01:00 UTC)
 
 2. Portal wiki and resources (struck in brief)
    - `/admin/events/[eventSlug]/resources`
