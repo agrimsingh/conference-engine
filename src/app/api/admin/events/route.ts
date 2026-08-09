@@ -6,7 +6,7 @@ import {
 } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getEventBySlug } from "@/lib/db/queries";
-import { createEventWithDefaults } from "@/lib/events/create-event";
+import { createEventWithDefaults, isEventCfpPresetId } from "@/lib/events/create-event";
 import { validateEventSettings } from "@/lib/events/settings";
 
 type Body = {
@@ -15,6 +15,7 @@ type Body = {
 	timezone?: unknown;
 	startDay?: unknown;
 	endDay?: unknown;
+	preset?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
 		typeof body.timezone === "string" ? body.timezone.trim() : undefined;
 	const startDay = typeof body.startDay === "string" ? body.startDay.trim() : "";
 	const endDay = typeof body.endDay === "string" ? body.endDay.trim() : "";
+	const preset = body.preset === undefined ? "minimal" : body.preset;
+	if (!isEventCfpPresetId(preset)) {
+		return NextResponse.json(
+			{ ok: false, error: "Preset must be minimal or conference" },
+			{ status: 400 },
+		);
+	}
 
 	if (!name || name.length < 2) {
 		return NextResponse.json(
@@ -66,7 +74,7 @@ export async function POST(request: Request) {
 	const owner = account ?? null;
 	const created = await createEventWithDefaults(
 		db,
-		{ name, slug, timezone, startDay, endDay },
+		{ name, slug, timezone, startDay, endDay, preset },
 		owner,
 	);
 

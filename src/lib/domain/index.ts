@@ -29,7 +29,7 @@ export {
 	type SpeakerAnswer,
 } from "./form-fields";
 
-export { createAieCfpPreset, type AieCfpPreset } from "./aie-cfp-preset";
+export { createConferenceCfpPreset, type ConferenceCfpPreset } from "./conference-cfp-preset";
 
 export {
 	AIE_CATEGORY_LABELS,

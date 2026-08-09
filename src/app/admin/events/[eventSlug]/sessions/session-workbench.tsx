@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button, StatusPill, submissionStatusTone } from "@/components/ui";
 
 type SessionRow = { id: string; title: string; speaker: string | null; status: string; origin: string; hasSlot: boolean; lineageParentId: string | null };
+type CloneSource = { id: string; title: string; eventName: string; eventSlug: string; status: string; speaker: string | null };
 type PreviewRow = { row: number; issues: string[]; duplicate: string; input: { title?: string } | null };
 
 async function postJson(url: string, body: unknown) {
@@ -12,7 +13,15 @@ async function postJson(url: string, body: unknown) {
 	return { response, value: value as { ok?: boolean; error?: string; rows?: PreviewRow[]; created?: number; idempotent?: number; repaired?: number; failed?: number; partial?: boolean; sessionId?: string; changed?: number } };
 }
 
-export function SessionWorkbench({ eventSlug, sessions }: { eventSlug: string; sessions: SessionRow[] }) {
+export function SessionWorkbench({
+	eventSlug,
+	sessions,
+	cloneSources,
+}: {
+	eventSlug: string;
+	sessions: SessionRow[];
+	cloneSources: CloneSource[];
+}) {
 	const base = `/api/admin/events/${eventSlug}/sessions`;
 	const [message, setMessage] = useState<string | null>(null);
 	const [importCsv, setImportCsv] = useState("title,abstract,speaker_name,speaker_email,video_url,google_doc_url,supporting_url\n");
@@ -96,8 +105,25 @@ export function SessionWorkbench({ eventSlug, sessions }: { eventSlug: string; s
 
 			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
 				<h2 className="text-base font-medium text-neutral-100">Clone session content</h2>
-				<p className="mt-1 text-sm text-neutral-400">Copies the session, confirmed speakers, media fields, and an explicit parent/root lineage. Cross-event copies require access to both events.</p>
-				<form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void clone(event.currentTarget); }}><input name="sourceSubmissionId" required maxLength={128} placeholder="Source session ID" className="min-w-64 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm" /><Button type="submit" disabled={busy}>Clone content</Button></form>
+				<p className="mt-1 text-sm text-neutral-400">Copies the session, confirmed speakers, media fields, and an explicit parent/root lineage. Pick an accepted, scheduled, or published session from any event you can manage.</p>
+				{cloneSources.length === 0 ? (
+					<p className="mt-3 text-sm text-neutral-500">No cloneable sessions yet. Accept or schedule a session first.</p>
+				) : (
+					<form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void clone(event.currentTarget); }}>
+						<label className="grid min-w-72 flex-1 gap-1 text-sm">
+							<span className="text-neutral-400">Source session</span>
+							<select name="sourceSubmissionId" required className="rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm">
+								<option value="">Select a session…</option>
+								{cloneSources.map((source) => (
+									<option key={source.id} value={source.id}>
+										{source.eventSlug === eventSlug ? source.title : `${source.eventName}: ${source.title}`} ({source.status}{source.speaker ? ` · ${source.speaker}` : ""})
+									</option>
+								))}
+							</select>
+						</label>
+						<Button type="submit" disabled={busy}>Clone content</Button>
+					</form>
+				)}
 			</section>
 
 			<section>
