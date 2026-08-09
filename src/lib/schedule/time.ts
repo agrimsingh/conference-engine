@@ -138,3 +138,24 @@ export function deriveScheduleDays(args: {
 	if (scheduled.length > 0) return scheduled;
 	return [dayKeyInTimeZone(args.now ?? Date.now(), args.timeZone)];
 }
+
+/** Default day tab when no `?day=` param: today if it has sessions, else next session day, else first event day. */
+export function defaultScheduleDayKey(
+	days: readonly string[],
+	scheduledDayKeys: ReadonlySet<string>,
+	todayKey: string,
+): string {
+	if (days.length === 0) {
+		return todayKey;
+	}
+	if (scheduledDayKeys.has(todayKey)) {
+		return todayKey;
+	}
+	const upcomingWithSessions = days.find(
+		(day) => day >= todayKey && scheduledDayKeys.has(day),
+	);
+	if (upcomingWithSessions !== undefined) {
+		return upcomingWithSessions;
+	}
+	return days[0]!;
+}

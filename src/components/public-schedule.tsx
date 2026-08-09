@@ -24,6 +24,7 @@ import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { PublicSessionsDiscover } from "@/components/public-sessions-discover";
 import { PublicItinerary } from "@/components/public-itinerary";
 import {
+	defaultScheduleDayKey,
 	deriveScheduleDays,
 	dayKeyInTimeZone,
 	formatClock,
@@ -222,14 +223,21 @@ export async function PublicSchedule({
 		listAgendaSlotsWithSubmissions(db, event.id),
 		listAgendaTracks(db, event.id, { includeRetired: true }),
 	]);
+	const scheduledDayKeys = new Set(
+		slots.map((slot) => dayKeyInTimeZone(slot.starts_at, event.timezone)),
+	);
 	const days = deriveScheduleDays({
 		startDay: event.start_day,
 		endDay: event.end_day,
-		scheduledDays: slots.map((slot) => dayKeyInTimeZone(slot.starts_at, event.timezone)),
+		scheduledDays: [...scheduledDayKeys],
 		timeZone: event.timezone,
 	});
+	// eslint-disable-next-line react-hooks/purity -- request-time default day in a server component
+	const todayKey = dayKeyInTimeZone(Date.now(), event.timezone);
 	const requestedDay = parseDayKey(dayParam);
-	const dayKey = requestedDay && days.includes(requestedDay) ? requestedDay : days[0]!;
+	const dayKey = requestedDay && days.includes(requestedDay)
+		? requestedDay
+		: defaultScheduleDayKey(days, scheduledDayKeys, todayKey);
 	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
 		? "list"
 		: requestedView;
