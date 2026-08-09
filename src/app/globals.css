@@ -3,6 +3,7 @@
 :root {
 	--background: #0a0a0b;
 	--foreground: #ededed;
+	--accent: #10b981;
 }
 
 @theme inline {
@@ -53,4 +54,9 @@ select:focus-visible,
 
 input, select, textarea, button, a {
 	-webkit-tap-highlight-color: transparent;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+	accent-color: var(--accent);
 }

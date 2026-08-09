@@ -386,7 +386,7 @@ export function CfpForm({
 					aria-label="Required fields completed"
 				>
 					<div
-						className="h-full rounded-full bg-indigo-400 transition-[width] duration-300"
+						className="h-full rounded-full bg-emerald-400 transition-[width] duration-300"
 						style={{ width: progress.total > 0 ? `${(progress.completed / progress.total) * 100}%` : "0%" }}
 					/>
 				</div>
@@ -402,7 +402,7 @@ export function CfpForm({
 								key={group.section.key}
 								type="button"
 								aria-current={selected ? "step" : undefined}
-								className={`rounded-full px-3 py-1.5 text-sm transition-colors ${selected ? "bg-indigo-500/20 text-indigo-100 ring-1 ring-indigo-400/40" : "bg-neutral-900 text-neutral-400 ring-1 ring-neutral-800 hover:text-neutral-200"}`}
+								className={`rounded-full px-3 py-1.5 text-sm transition-colors ${selected ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-400/40" : "bg-neutral-900 text-neutral-400 ring-1 ring-neutral-800 hover:text-neutral-200"}`}
 								onClick={() => setSelectedSectionKey(group.section?.key ?? null)}
 							>
 								{group.section.title}
@@ -468,7 +468,7 @@ export function CfpForm({
 					))}
 				</ul>
 			) : null}
-			{draftNotice ? <p className="rounded-md border border-indigo-400/30 bg-indigo-400/10 px-3 py-2 text-sm text-indigo-100" role="status">{draftNotice}</p> : null}
+			{draftNotice ? <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100" role="status">{draftNotice}</p> : null}
 			{draftsEnabled && draftToken ? (
 				<p className="text-xs text-neutral-500" role="status" aria-live="polite">
 					{autosaveStatus === "saving" ? "Autosaving draft…" : null}

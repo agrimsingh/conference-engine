@@ -175,7 +175,7 @@ export function EmbedBuilder({
 						))}
 					</div>
 				</fieldset>
-				<button type="button" disabled={saving} onClick={create} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+				<button type="button" disabled={saving} onClick={create} className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-emerald-400 disabled:opacity-50">
 					{saving ? "Creating…" : "Create embed"}
 				</button>
 				{message ? <p role="status" className="text-sm text-neutral-300">{message}</p> : null}

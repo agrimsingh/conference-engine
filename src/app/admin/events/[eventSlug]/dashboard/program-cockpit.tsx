@@ -230,7 +230,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 				</div>
 			</div>
 
-			<ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+			<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
 				{(
 					[
 						["Tasks", counts.outstandingTasks],
@@ -246,7 +246,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 				).map(([label, count]) => (
 					<li
 						key={label}
-						className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2"
+						className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 last:col-span-2 sm:last:col-span-1"
 					>
 						<p className="text-xs text-neutral-500">{label}</p>
 						<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-100">

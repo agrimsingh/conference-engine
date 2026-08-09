@@ -431,7 +431,7 @@ export function ScheduleBoard({
 						{formatDayLabel(dayKey, timeZone)} · {timeZone}
 					</p>
 					<nav className="flex flex-wrap gap-1" aria-label="Schedule day">
-						{days.map((day) => <Link key={day} href={`/admin/events/${eventSlug}/schedule?day=${day}`} className={day === dayKey ? "rounded-md bg-indigo-500 px-2.5 py-1 text-xs font-medium text-white" : "rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"}>{formatDayLabel(day, timeZone)}</Link>)}
+						{days.map((day) => <Link key={day} href={`/admin/events/${eventSlug}/schedule?day=${day}`} className={day === dayKey ? "rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-medium text-neutral-950" : "rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"}>{formatDayLabel(day, timeZone)}</Link>)}
 					</nav>
 				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-300">
 					Room
@@ -500,7 +500,7 @@ export function ScheduleBoard({
 						type="button"
 						disabled={dayPublishable.length === 0 || pending}
 						onClick={() => requestPublish(dayPublishable)}
-						className="rounded-md border border-indigo-400/60 px-2.5 py-1 text-xs text-indigo-100 disabled:opacity-40"
+						className="rounded-md border border-emerald-500/40 px-2.5 py-1 text-xs text-emerald-300 disabled:opacity-40"
 					>
 						Publish day ({dayPublishable.length})
 					</button>
@@ -588,7 +588,7 @@ export function ScheduleBoard({
 								type="button"
 								disabled={pending}
 								onClick={confirmPublish}
-								className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400"
+								className="rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400"
 							>
 								Approve &amp; publish {publishConfirm.sessionIds.length}
 							</button>
@@ -742,7 +742,7 @@ export function ScheduleBoard({
 									{session.status === "published" ? (
 										<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button>
 									) : session.status === "scheduled" ? (
-										<button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => requestPublish([session])}>Publish</button>
+										<button type="button" className="rounded-md border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300" onClick={() => requestPublish([session])}>Publish</button>
 									) : null}
 								</div>
 								</li>

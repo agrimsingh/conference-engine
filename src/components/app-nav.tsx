@@ -10,14 +10,14 @@ export function AppNav({
 	ariaLabel?: string;
 }) {
 	return (
-		<header className="sticky top-0 z-40 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
+		<header className="sticky top-0 z-40 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur-md">
 			<nav
 				aria-label={ariaLabel}
-				className="mx-auto flex min-h-12 max-w-6xl flex-nowrap items-center gap-3 overflow-x-auto px-4 py-2 whitespace-nowrap"
+				className="mx-auto flex min-h-14 max-w-6xl items-center gap-3 px-4 sm:px-6"
 			>
-				<Link href="/" className="mr-2 flex shrink-0 items-center gap-2">
+				<Link href="/" className="flex shrink-0 items-center gap-2 rounded-md">
 					<LogoMark />
-					<span className="text-sm font-semibold tracking-tight text-neutral-100">
+					<span className="text-sm font-semibold tracking-tight text-neutral-100 max-[360px]:hidden">
 						conference-engine
 					</span>
 				</Link>

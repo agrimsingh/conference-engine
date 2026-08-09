@@ -9,19 +9,19 @@ type Props = {
 
 export function PageHeader({ eyebrow, title, description, children }: Props) {
 	return (
-		<header className="mb-8 space-y-2 border-b border-neutral-800 pb-5">
+		<header className="mb-6 border-b border-neutral-800 pb-6 sm:mb-8">
 			<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 				{eyebrow}
 			</p>
-			<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
+			<h1 className="mt-2 text-balance text-2xl font-semibold tracking-tight text-neutral-100 sm:text-3xl">
 				{title}
 			</h1>
 			{description ? (
-				<div className="max-w-2xl text-pretty text-sm text-neutral-400">
+				<div className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-neutral-400">
 					{description}
 				</div>
 			) : null}
-			{children}
+			{children ? <div className="mt-4">{children}</div> : null}
 		</header>
 	);
 }
