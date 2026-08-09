@@ -34,4 +34,31 @@ describe("public embeds", () => {
 		expect(JSON.stringify(payload)).not.toContain("Hidden talk");
 		expect(payload?.itineraryUrl).toBe(`/e/${eventA.slug}/schedule?view=itinerary&embed=agenda`);
 	});
+
+	it("filters an itinerary handoff by submitted format instead of its topic category", async () => {
+		const event = await seedEvent("Format-filtered itinerary");
+		await createEmbed(env.DB, event.eventId, {
+			name: "Stage agenda",
+			slug: "stage-agenda",
+			widgetType: "itinerary",
+			brandColor: "#2563eb",
+			trackIds: [],
+			formats: ["Stage"],
+			rooms: ["Main"],
+			visibleFields: ["title", "format"],
+		});
+		const form = await env.DB.prepare("SELECT id FROM cfp_forms WHERE event_id = ? AND kind = 'public' LIMIT 1").bind(event.eventId).first<{ id: string }>();
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, category, created_at, updated_at) VALUES ('embed-format-stage', ?, ?, 'published', ?, 'Agents', ?, ?)").bind(form!.id, event.eventId, JSON.stringify({ title: "Stage session", format: "stage" }), now, now),
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, category, created_at, updated_at) VALUES ('embed-format-workshop', ?, ?, 'published', ?, 'Agents', ?, ?)").bind(form!.id, event.eventId, JSON.stringify({ title: "Workshop session", format: "workshop" }), now, now),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-format-stage-slot', ?, 'embed-format-stage', 'Main', ?, ?, 'stage-format@test.invalid', ?, ?)").bind(event.eventId, now, now + 1_800_000, now, now),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('embed-format-workshop-slot', ?, 'embed-format-workshop', 'Main', ?, ?, 'workshop-format@test.invalid', ?, ?)").bind(event.eventId, now + 3_600_000, now + 5_400_000, now, now),
+		]);
+
+		const payload = await buildPublicEmbedPayload(env.DB, event.slug, "stage-agenda");
+
+		expect(payload?.sessions).toEqual([
+			expect.objectContaining({ id: "embed-format-stage", format: "Stage", track: "Unassigned" }),
+		]);
+	});
 });

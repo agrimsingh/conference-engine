@@ -5,8 +5,9 @@ import {
 	listPublicSpeakersForEvent,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
-import { AIE_FORMAT_CATEGORY_ROUTE, displayCategory, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
+import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/public-format";
 
 export const EMBED_WIDGET_TYPES = ["sessions", "speakers", "agenda", "itinerary", "speaker_gallery"] as const;
 export type EmbedWidgetType = (typeof EMBED_WIDGET_TYPES)[number];
@@ -175,10 +176,7 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 	const sessions = published.map((slot) => {
 		const answers = parseAnswers(slot.answers_json);
 		const track = publicScheduleTrack(slot.track_id, tracks);
-		const rawFormat = typeof answers.format === "string" ? answers.format.trim() : "";
-		const format = rawFormat
-			? AIE_FORMAT_CATEGORY_ROUTE.map[rawFormat] ?? rawFormat
-			: displayCategory(slot.category);
+		const format = publicSessionFormat(answers, slot.category);
 		return {
 			id: slot.submission_id,
 			title: titleFromAnswers(answers),
@@ -204,7 +202,9 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 				}),
 			url: `/e/${event.slug}/sessions/${slot.submission_id}`,
 		};
-	}).filter((session) => (embed.config.trackIds.length === 0 || (session.trackId && embed.config.trackIds.includes(session.trackId))) && (embed.config.formats.length === 0 || embed.config.formats.includes(session.format)) && (embed.config.rooms.length === 0 || embed.config.rooms.includes(session.room))).sort((a, b) => a.startsAt - b.startsAt);
+	});
+	const filteredSessions = filterPublicEmbedSessions(sessions, embed.config)
+		.sort((a, b) => a.startsAt - b.startsAt);
 	const speakers = speakerRows.map((speaker) => ({
 		id: speaker.person_id,
 		name: speaker.display_name,
@@ -213,11 +213,11 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 		company: speaker.company,
 		headshotUrl: speaker.has_headshot === 1 ? `/api/e/${event.slug}/people/${speaker.person_id}/headshot` : null,
 		url: `/e/${event.slug}/speakers/${speaker.person_id}`,
-		sessions: sessions
+		sessions: filteredSessions
 			.filter((session) => session.speakers.some((sessionSpeaker) => sessionSpeaker.id === speaker.person_id))
 			.map((session) => ({ id: session.id, title: session.title, startsAt: session.startsAt, endsAt: session.endsAt, room: session.room, url: session.url })),
 	})).filter((speaker) => speaker.sessions.length > 0).sort((a, b) => surnameSortKey(a.name).localeCompare(surnameSortKey(b.name), undefined, { sensitivity: "base" }));
-	return { ok: true, event: { slug: event.slug, name: event.name, timezone: event.timezone }, embed: { slug: embed.slug, name: embed.name, widgetType: embed.widget_type, config: embed.config }, sessions, speakers, itineraryUrl: `/e/${event.slug}/schedule?view=itinerary&embed=${encodeURIComponent(embed.slug)}` };
+	return { ok: true, event: { slug: event.slug, name: event.name, timezone: event.timezone }, embed: { slug: embed.slug, name: embed.name, widgetType: embed.widget_type, config: embed.config }, sessions: filteredSessions, speakers, itineraryUrl: `/e/${event.slug}/schedule?view=itinerary&embed=${encodeURIComponent(embed.slug)}` };
 }
 
 export function buildEmbedUrls(origin: string, eventSlug: string, embedSlug: string) {

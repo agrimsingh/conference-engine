@@ -8,7 +8,9 @@ import {
 	listEventRooms,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
-import { displayCategory, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { getPublicEmbedBySlug } from "@/lib/embeds/embed";
+import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/public-format";
 import {
 	publicScheduleTrack,
 	publicScheduleTrackColumns,
@@ -37,7 +39,7 @@ export type PublicScheduleBasePath = "/e" | "/embed";
 
 export type PublicScheduleProps = {
 	params: Promise<{ eventSlug: string }>;
-	searchParams: Promise<{ day?: string; view?: string; room?: string }>;
+	searchParams: Promise<{ day?: string; view?: string; room?: string; embed?: string }>;
 	basePath: PublicScheduleBasePath;
 };
 
@@ -55,7 +57,9 @@ type EnrichedSlot = {
 	title: string;
 	abstract: string;
 	format: string;
+	room: string;
 	roomName: string;
+	trackId: string | null;
 	track: PublicScheduleTrack;
 	startsAtMs: number;
 	endsAtMs: number;
@@ -118,12 +122,13 @@ function viewLabel(view: ScheduleView): string {
 function hrefFor(
 	basePath: PublicScheduleBasePath,
 	eventSlug: string,
-	args: { day: string; view: ScheduleView; room: string },
+	args: { day: string; view: ScheduleView; room: string; embed?: string },
 ): string {
 	const params = new URLSearchParams();
 	params.set("day", args.day);
 	params.set("view", args.view);
 	if (args.room !== "all") params.set("room", args.room);
+	if (args.embed) params.set("embed", args.embed);
 	return `${basePath}/${eventSlug}/schedule?${params.toString()}`;
 }
 
@@ -198,11 +203,19 @@ export async function PublicSchedule({
 	basePath,
 }: PublicScheduleProps) {
 	const { eventSlug } = await params;
-	const { day: dayParam, view: viewParam, room: roomParam } = await searchParams;
+	const { day: dayParam, view: viewParam, room: roomParam, embed: embedParam } = await searchParams;
 
 	const db = await getDb();
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) notFound();
+	const requestedView = parseView(viewParam);
+	const requiresItineraryEmbed = basePath === "/e"
+		&& (requestedView === "itinerary" || requestedView === "my-schedule")
+		&& embedParam !== undefined;
+	const itineraryEmbed = requiresItineraryEmbed
+		? await getPublicEmbedBySlug(db, event.id, embedParam.trim())
+		: null;
+	if (requiresItineraryEmbed && !itineraryEmbed) notFound();
 
 	const [rooms, slots, tracks] = await Promise.all([
 		listEventRooms(db, event.id),
@@ -217,7 +230,6 @@ export async function PublicSchedule({
 	});
 	const requestedDay = parseDayKey(dayParam);
 	const dayKey = requestedDay && days.includes(requestedDay) ? requestedDay : days[0]!;
-	const requestedView = parseView(viewParam);
 	const view = basePath === "/embed" && (requestedView === "itinerary" || requestedView === "my-schedule")
 		? "list"
 		: requestedView;
@@ -270,8 +282,10 @@ export async function PublicSchedule({
 			submissionId: slot.submission_id,
 			title: titleFromAnswers(answers),
 			abstract,
-			format: displayCategory(slot.category),
+			format: publicSessionFormat(answers, slot.category),
+			room: slot.room_name,
 			roomName: slot.room_name,
+			trackId: slot.track_id ?? null,
 			track: publicScheduleTrack(slot.track_id, tracks),
 			startsAtMs: slot.starts_at,
 			endsAtMs: slot.ends_at,
@@ -292,6 +306,12 @@ export async function PublicSchedule({
 			detailHref: `${basePath}/${event.slug}/sessions/${slot.submission_id}`,
 		});
 	}
+	const itinerarySlots = itineraryEmbed
+		? filterPublicEmbedSessions(
+			enriched,
+			itineraryEmbed.config,
+		)
+		: enriched;
 
 	const applyRoom = (list: EnrichedSlot[]) =>
 		list.filter(
@@ -366,11 +386,12 @@ export async function PublicSchedule({
 									key={v}
 									role="tab"
 									aria-selected={active}
-									href={hrefFor(basePath, event.slug, {
-										day: dayKey,
-										view: v,
-										room: roomFilter,
-									})}
+										href={hrefFor(basePath, event.slug, {
+											day: dayKey,
+											view: v,
+											room: roomFilter,
+											embed: itineraryEmbed?.slug,
+										})}
 									className={
 										active
 											? "rounded-md bg-neutral-800 px-3 py-1.5 text-sm font-medium text-neutral-100"
@@ -396,6 +417,7 @@ export async function PublicSchedule({
 										day: dayKey,
 										view,
 										room,
+										embed: itineraryEmbed?.slug,
 									})}
 									className={
 										active
@@ -416,7 +438,7 @@ export async function PublicSchedule({
 				{days.map((key) => (
 					<Link
 						key={key}
-						href={hrefFor(basePath, event.slug, { day: key, view, room: roomFilter })}
+						href={hrefFor(basePath, event.slug, { day: key, view, room: roomFilter, embed: itineraryEmbed?.slug })}
 						aria-current={key === dayKey ? "date" : undefined}
 						className={key === dayKey
 							? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
@@ -432,7 +454,7 @@ export async function PublicSchedule({
 					eventSlug={event.slug}
 					timezone={event.timezone}
 					mode={view}
-					sessions={(view === "itinerary" ? applyRoom(enriched.filter((slot) => slot.dayKey === dayKey)) : enriched).map((slot) => ({
+					sessions={(view === "itinerary" ? applyRoom(itinerarySlots.filter((slot) => slot.dayKey === dayKey)) : itinerarySlots).map((slot) => ({
 						id: slot.id,
 						sessionId: slot.submissionId,
 						title: slot.title,
