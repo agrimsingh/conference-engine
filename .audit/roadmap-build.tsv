@@ -57,3 +57,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T17:39:05Z	p2	Cancelled logistics/token-receipts product work	user clarified token claim is personal not product	-	cancelled
 2026-08-09T17:40:12Z	p2	Merged OpenAPI Sessionboard framing; P2 closed	schemas+examples; README vs Mintlify; logistics cancelled	04aeb9a	merged
 2026-08-09T17:41:26Z	release	Redeploy after P2 OpenAPI+Airtable docs	source f0845a5	-	live openapi schemas
+2026-08-09T18:16:57Z	fix	Fan withdraw+dead-schedule+org-notify prefs	Outlook skipped (no mailbox)	69ef9db	started
