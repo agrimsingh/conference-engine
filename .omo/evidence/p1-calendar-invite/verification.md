@@ -16,6 +16,10 @@ All three show the Google Calendar card (When / Where / Who) plus RSVP buttons. 
 
 Implication for product code: attachment-only `text/calendar; method=REQUEST` with `ORGANIZER` matching `From` (`team@65labs.org`) is enough. No dual-mime or Content-Class change required on tip.
 
+## Prod place strip (human evidence)
+
+`gmail-prod-place-strip.png` — Gmail chrome for the real `calendar_invite` send (`Scheduled` / place path). Same Yes / Maybe / No card as the probes. Confirms product MIME (single `invite.ics` attachment) is sufficient; not just Resend probes.
+
 ## Prod place (same ICS contract)
 
 - Host: `https://conference-engine.65labs.org`
