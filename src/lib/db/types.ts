@@ -22,6 +22,8 @@ export type EventRow = {
 	/** Civil event boundaries used to seed schedule navigation when no slots exist. */
 	start_day: string | null;
 	end_day: string | null;
+	mode?: "live" | "demo";
+	track_conflict_policy?: "hard" | "allow";
 	created_at: number;
 	updated_at: number;
 };
@@ -42,6 +44,7 @@ export type CfpFormRow = {
 	max_speakers: number;
 	drafts_enabled: number;
 	submission_limit: number;
+	kind?: "public" | "system";
 	created_at: number;
 	updated_at: number;
 };
@@ -70,6 +73,7 @@ export type SubmissionRow = {
 	submitter_email: string | null;
 	submitter_name: string | null;
 	submitter_person_id: string | null;
+	origin?: "cfp" | "manual" | "invited" | "imported" | "cloned";
 	created_at: number;
 	updated_at: number;
 	submitted_at: number | null;
@@ -105,6 +109,9 @@ export type TaskTemplateRow = {
 	task_kind: "text" | "file";
 	required: number;
 	position: number;
+	soft_deleted?: number;
+	created_at?: number;
+	updated_at?: number;
 };
 
 export type SpeakerTaskRow = {
@@ -113,6 +120,9 @@ export type SpeakerTaskRow = {
 	submission_id: string;
 	person_id: string;
 	template_key: string;
+	template_label?: string;
+	template_task_kind?: "text" | "file";
+	template_required?: number;
 	status: "pending" | "completed";
 	asset_id: string | null;
 	text_value: string | null;
@@ -197,6 +207,7 @@ export type AgendaSlotRow = {
 	event_id: string;
 	submission_id: string;
 	room_id: string | null;
+	track_id?: string | null;
 	room_name: string;
 	starts_at: number;
 	ends_at: number;
@@ -211,6 +222,31 @@ export type EventRoomRow = {
 	name: string;
 	position: number;
 	created_at: number;
+};
+
+export type AgendaTrackRow = {
+	id: string;
+	event_id: string;
+	name: string;
+	slug: string;
+	position: number;
+	soft_deleted: number;
+	created_at: number;
+	updated_at: number;
+};
+
+export type EvaluationCriterionRow = {
+	id: string;
+	plan_id: string;
+	label: string;
+	description: string | null;
+	weight: number;
+	scale_min: number;
+	scale_max: number;
+	position: number;
+	soft_deleted: number;
+	created_at: number;
+	updated_at: number;
 };
 
 export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {

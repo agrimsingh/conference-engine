@@ -1,8 +1,11 @@
 import type { FormFieldDef } from "@/lib/domain/form-fields";
 import type { AccountRow } from "@/lib/db/types";
+import { DEFAULT_TASK_TEMPLATES } from "@/lib/domain/task-templates";
 import { validateEventSettings } from "./settings";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
+/** Reserved namespace for the hidden per-event form used by system workflows. */
+export const SYSTEM_CFP_FORM_SLUG = "__system";
 
 function defaultCfpFields(): FormFieldDef[] {
 	return [
@@ -80,11 +83,14 @@ export async function createEventWithDefaults(
 	const now = Date.now();
 	const eventId = crypto.randomUUID();
 	const formId = crypto.randomUUID();
+	const systemFormId = crypto.randomUUID();
 	const statements: D1PreparedStatement[] = [
 		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, opens_at, closes_at, created_at, updated_at)
       VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, "Call for proposals", "Submit a session proposal.", now, now),
+		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, kind, opens_at, closes_at, created_at, updated_at)
+      VALUES (?, ?, ?, 'System form', NULL, 'draft', 'system', NULL, NULL, ?, ?)`).bind(systemFormId, eventId, SYSTEM_CFP_FORM_SLUG, now, now),
 		db.prepare(`INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at)
       VALUES (?, ?, ?, 'draft', ?, ?, ?)`).bind(crypto.randomUUID(), eventId, "Default review", mintReviewerToken(), now, now),
 	];
@@ -98,6 +104,21 @@ export async function createEventWithDefaults(
 	for (const [position, roomName] of ["Main Stage", "Room B"].entries()) {
 		statements.push(db.prepare(`INSERT INTO event_rooms (id, event_id, name, position, created_at)
       VALUES (?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), eventId, roomName, position, now));
+	}
+	for (const template of DEFAULT_TASK_TEMPLATES) {
+		statements.push(db.prepare(`INSERT INTO task_templates (
+      id, event_id, key, label, task_kind, required, position, soft_deleted, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`).bind(
+			crypto.randomUUID(),
+			eventId,
+			template.key,
+			template.label,
+			template.taskKind,
+			template.required ? 1 : 0,
+			template.position,
+			now,
+			now,
+		));
 	}
 	if (owner) {
 		statements.push(

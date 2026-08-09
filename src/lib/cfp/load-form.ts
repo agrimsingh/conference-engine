@@ -6,8 +6,8 @@ import {
 } from "@/lib/domain";
 import {
 	getEventBySlug,
-	getFormBySlug,
 	getOpenForm,
+	getPublicFormBySlug,
 	listFormFields,
 } from "@/lib/db/queries";
 import { helpTextFromStoredConfig } from "@/lib/cfp/form-admin";
@@ -30,7 +30,7 @@ export async function loadCfpForm(
 
 	const form = opts?.requireOpen
 		? await getOpenForm(db, event.id, formSlug)
-		: await getFormBySlug(db, event.id, formSlug);
+		: await getPublicFormBySlug(db, event.id, formSlug);
 	if (!form) return null;
 
 	const rows = await listFormFields(db, form.id);

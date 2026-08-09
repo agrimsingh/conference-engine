@@ -1,5 +1,4 @@
-import { speakerTaskTypesInOrder } from "@/lib/domain";
-import type { PersonRow, SubmissionSpeakerRow } from "@/lib/db/types";
+import type { PersonRow, SubmissionSpeakerRow, TaskTemplateRow } from "@/lib/db/types";
 
 /**
  * Turning a confirmed submission speaker into a working speaker: person
@@ -12,29 +11,29 @@ export type MaterializedSpeaker = {
 	spawnedTaskKeys: string[];
 };
 
+export class MissingTaskTemplatesError extends Error {
+	readonly code = "MISSING_TASK_TEMPLATES";
+
+	constructor(readonly eventId: string) {
+		super(`Event ${eventId} has no active task templates`);
+		this.name = "MissingTaskTemplatesError";
+	}
+}
+
 export async function ensureTaskTemplates(
 	db: D1Database,
 	eventId: string,
-): Promise<void> {
-	const stmts = speakerTaskTypesInOrder().map((meta) =>
-		db
-			.prepare(
-				`INSERT OR IGNORE INTO task_templates (
-          id, event_id, key, label, task_kind, required, position
-        ) VALUES (?, ?, ?, ?, ?, 1, ?)`,
-			)
-			.bind(
-				`tmpl_${eventId}_${meta.key}`,
-				eventId,
-				meta.key,
-				meta.label,
-				meta.kind,
-				meta.position,
-			),
-	);
-	if (stmts.length) {
-		await db.batch(stmts);
-	}
+): Promise<TaskTemplateRow[]> {
+	const templates = await db
+		.prepare(
+			`SELECT * FROM task_templates
+       WHERE event_id = ? AND soft_deleted = 0
+       ORDER BY position ASC, key ASC`,
+		)
+		.bind(eventId)
+		.all<TaskTemplateRow>();
+	if (templates.results.length === 0) throw new MissingTaskTemplatesError(eventId);
+	return templates.results;
 }
 
 export async function materializeAcceptedSpeaker(
@@ -43,9 +42,11 @@ export async function materializeAcceptedSpeaker(
 		eventId: string;
 		submissionId: string;
 		speaker: SubmissionSpeakerRow;
+		templates?: TaskTemplateRow[];
 	},
 	now: number,
 ): Promise<MaterializedSpeaker> {
+	const templates = args.templates ?? await ensureTaskTemplates(db, args.eventId);
 	const person = await ensurePersonForSpeaker(db, args.speaker, now);
 
 	await db
@@ -67,6 +68,7 @@ export async function materializeAcceptedSpeaker(
 			submissionId: args.submissionId,
 			personId: person.id,
 		},
+		templates,
 		now,
 	);
 
@@ -156,24 +158,29 @@ async function ensureSpeakerProfile(
 async function spawnSpeakerTasks(
 	db: D1Database,
 	args: { eventId: string; submissionId: string; personId: string },
+	templates: TaskTemplateRow[],
 	now: number,
 ): Promise<string[]> {
 	const keys: string[] = [];
-	const stmts = speakerTaskTypesInOrder().map((meta) => {
-		keys.push(meta.key);
+	const stmts = templates.map((template) => {
+		keys.push(template.key);
 		return db
 			.prepare(
 				`INSERT OR IGNORE INTO speaker_tasks (
           id, event_id, submission_id, person_id, template_key,
+          template_label, template_task_kind, template_required,
           status, asset_id, text_value, completed_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL, ?, ?)`,
 			)
 			.bind(
 				crypto.randomUUID(),
 				args.eventId,
 				args.submissionId,
 				args.personId,
-				meta.key,
+				template.key,
+				template.label,
+				template.task_kind,
+				template.required,
 				now,
 				now,
 			);

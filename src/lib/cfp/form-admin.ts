@@ -49,7 +49,7 @@ export async function listFormsForEvent(
 	const result = await db
 		.prepare(
 			`SELECT * FROM cfp_forms
-       WHERE event_id = ?
+       WHERE event_id = ? AND kind = 'public'
        ORDER BY created_at ASC`,
 		)
 		.bind(eventId)

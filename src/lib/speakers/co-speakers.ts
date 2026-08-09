@@ -15,6 +15,7 @@ import { getAuthSecret } from "@/lib/db/cloudflare";
 import { hmacHash } from "@/lib/security/crypto";
 import {
 	ensureTaskTemplates,
+	MissingTaskTemplatesError,
 	materializeAcceptedSpeaker,
 } from "./materialize";
 
@@ -295,8 +296,36 @@ export async function confirmCoSpeaker(
 	if (speaker.status === "removed") {
 		return { ok: false, error: "Speaker was removed by organizers", status: 409 };
 	}
+	const submission = await getSubmissionById(db, speaker.submission_id);
+	let templates;
+	if (submission && isPostAcceptance(submission.status)) {
+		try {
+			templates = await ensureTaskTemplates(db, submission.event_id);
+		} catch (error) {
+			if (error instanceof MissingTaskTemplatesError) {
+				return { ok: false, error: error.message, status: 500 };
+			}
+			throw error;
+		}
+	}
+
 	if (speaker.status === "confirmed") {
-		return { ok: true, speaker, spawnedTaskKeys: [] };
+		if (!submission || !isPostAcceptance(submission.status)) {
+			return { ok: true, speaker, spawnedTaskKeys: [] };
+		}
+		const materialized = await materializeAcceptedSpeaker(
+			db,
+			{
+				eventId: submission.event_id,
+				submissionId: submission.id,
+				speaker,
+				templates,
+			},
+			Date.now(),
+		);
+		const repaired = await getSubmissionSpeakerById(db, speaker.id);
+		if (!repaired) return { ok: false, error: "Speaker missing after repair", status: 500 };
+		return { ok: true, speaker: repaired, spawnedTaskKeys: materialized.spawnedTaskKeys };
 	}
 
 	const now = Date.now();
@@ -309,16 +338,15 @@ export async function confirmCoSpeaker(
 		.bind(now, speaker.id)
 		.run();
 
-	const submission = await getSubmissionById(db, speaker.submission_id);
 	let spawnedTaskKeys: string[] = [];
 	if (submission && isPostAcceptance(submission.status)) {
-		await ensureTaskTemplates(db, submission.event_id);
 		const materialized = await materializeAcceptedSpeaker(
 			db,
 			{
 				eventId: submission.event_id,
 				submissionId: submission.id,
 				speaker,
+				templates,
 			},
 			now,
 		);

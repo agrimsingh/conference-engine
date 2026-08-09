@@ -13,6 +13,7 @@ import { notifySubmissionLifecycle } from "@/lib/email/notify";
 import type { OutboundSendResult } from "@/lib/email/resend";
 import {
 	ensureTaskTemplates,
+	MissingTaskTemplatesError,
 	materializeAcceptedSpeaker,
 } from "./materialize";
 
@@ -57,15 +58,6 @@ export async function acceptSubmission(
 			}
 			throw error;
 		}
-
-		await db
-			.prepare(
-				`UPDATE submissions
-         SET status = ?, updated_at = ?
-         WHERE id = ?`,
-			)
-			.bind(nextStatus, now, submissionId)
-			.run();
 	}
 
 	const speakers = await listSpeakersForSubmission(db, submissionId);
@@ -80,7 +72,26 @@ export async function acceptSubmission(
 		return { ok: false, error: "Submission has no confirmed speakers", status: 400 };
 	}
 
-	await ensureTaskTemplates(db, submission.event_id);
+	let templates;
+	try {
+		templates = await ensureTaskTemplates(db, submission.event_id);
+	} catch (error) {
+		if (error instanceof MissingTaskTemplatesError) {
+			return { ok: false, error: error.message, status: 500 };
+		}
+		throw error;
+	}
+
+	if (submission.status !== "accepted") {
+		await db
+			.prepare(
+				`UPDATE submissions
+         SET status = ?, updated_at = ?
+         WHERE id = ?`,
+			)
+			.bind(nextStatus, now, submissionId)
+			.run();
+	}
 
 	const speakerPersonIds: string[] = [];
 	const spawnedTaskKeys = new Set<string>();
@@ -92,6 +103,7 @@ export async function acceptSubmission(
 				eventId: submission.event_id,
 				submissionId,
 				speaker,
+				templates,
 			},
 			now,
 		);

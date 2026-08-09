@@ -1,10 +1,12 @@
 import type {
 	AccountRow,
+	AgendaTrackRow,
 	AgendaSlotRow,
 	AgendaSlotWithSubmissionRow,
 	AssetRow,
 	CfpFormRow,
 	EvaluationPlanRow,
+	EvaluationCriterionRow,
 	EvaluationScoreRow,
 	EventMembershipRow,
 	EventRoomRow,
@@ -395,8 +397,20 @@ export async function getOpenForm(
 	return db
 		.prepare(
 			`SELECT * FROM cfp_forms
-       WHERE event_id = ? AND slug = ? AND status = 'open'`,
+       WHERE event_id = ? AND slug = ? AND status = 'open' AND kind = 'public'`,
 		)
+		.bind(eventId, formSlug)
+		.first<CfpFormRow>();
+}
+
+/** Public CFP surfaces never disclose internal system forms. */
+export async function getPublicFormBySlug(
+	db: D1Database,
+	eventId: string,
+	formSlug: string,
+): Promise<CfpFormRow | null> {
+	return db
+		.prepare(`SELECT * FROM cfp_forms WHERE event_id = ? AND slug = ? AND kind = 'public'`)
 		.bind(eventId, formSlug)
 		.first<CfpFormRow>();
 }
@@ -768,11 +782,41 @@ export async function listTaskTemplatesForEvent(
 	const result = await db
 		.prepare(
 			`SELECT * FROM task_templates
-       WHERE event_id = ?
+       WHERE event_id = ? AND soft_deleted = 0
        ORDER BY position ASC`,
 		)
 		.bind(eventId)
 		.all<TaskTemplateRow>();
+	return result.results;
+}
+
+export async function listAgendaTracks(
+	db: D1Database,
+	eventId: string,
+): Promise<AgendaTrackRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM agenda_tracks
+       WHERE event_id = ? AND soft_deleted = 0
+       ORDER BY position ASC, name ASC`,
+		)
+		.bind(eventId)
+		.all<AgendaTrackRow>();
+	return result.results;
+}
+
+export async function listEvaluationCriteriaForPlan(
+	db: D1Database,
+	planId: string,
+): Promise<EvaluationCriterionRow[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM evaluation_criteria
+       WHERE plan_id = ? AND soft_deleted = 0
+       ORDER BY position ASC, label ASC`,
+		)
+		.bind(planId)
+		.all<EvaluationCriterionRow>();
 	return result.results;
 }
 

@@ -99,7 +99,7 @@ describe("D1 runtime invariants", () => {
 	});
 
 	it("applies the production migrations, makes ownership canonical, and fails preflight closed", async () => {
-		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM d1_migrations").first<{ count: number }>())?.count).toBe(14);
+		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM d1_migrations").first<{ count: number }>())?.count).toBe(15);
 		await seedEvent("ownership-event", "ownership-event");
 		await env.DB.prepare(
 			"INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('owner-account', 'owner@example.test', 'Owner', ?, ?)",
