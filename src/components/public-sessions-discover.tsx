@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DiscoverFacetSelect } from "@/components/schedule-query-select";
 import { ShowMoreText } from "@/components/show-more-text";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { EmptyState } from "@/components/ui";
@@ -31,34 +32,38 @@ export function PublicSessionsDiscover({
 	eventSlug,
 	basePath,
 	initialDayKey,
+	initialRoom = "all",
 }: {
 	sessions: DiscoverListSession[];
 	timezone: string;
 	eventSlug: string;
 	basePath: "/e" | "/embed";
 	initialDayKey: string;
+	initialRoom?: string;
 }) {
 	const [q, setQ] = useState("");
 	const [track, setTrack] = useState("all");
 	const [format, setFormat] = useState("all");
-	const [location, setLocation] = useState("all");
 	const [dayScope, setDayScope] = useState<"day" | "all">("day");
 
 	const tracks = useMemo(() => discoverFacetValues(sessions, "trackName"), [sessions]);
 	const formats = useMemo(() => discoverFacetValues(sessions, "format"), [sessions]);
-	const locations = useMemo(() => discoverFacetValues(sessions, "location"), [sessions]);
 
 	const scoped = useMemo(() => {
 		const base =
 			dayScope === "day"
 				? sessions.filter((session) => session.dayKey === initialDayKey)
 				: sessions;
-		return filterPublicDiscoverSessions(base, { q, track, format, location });
-	}, [sessions, dayScope, initialDayKey, q, track, format, location]);
+		return filterPublicDiscoverSessions(base, {
+			q,
+			track,
+			format,
+			location: initialRoom,
+		});
+	}, [sessions, dayScope, initialDayKey, q, track, format, initialRoom]);
 
 	const showTrackFacet = tracks.length > 1;
 	const showFormatFacet = formats.length > 1;
-	const showLocationFacet = locations.length > 1;
 
 	return (
 		<div className="space-y-5">
@@ -73,54 +78,50 @@ export function PublicSessionsDiscover({
 						className="mt-1.5 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500"
 					/>
 				</label>
-				<div className="flex flex-wrap gap-2">
-					<button
-						type="button"
-						onClick={() => setDayScope("day")}
-						className={
-							dayScope === "day"
-								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
-						}
-					>
-						This day
-					</button>
-					<button
-						type="button"
-						onClick={() => setDayScope("all")}
-						className={
-							dayScope === "all"
-								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
-						}
-					>
-						All days
-					</button>
+				<div className="flex flex-wrap items-end gap-3">
+					<div className="flex flex-wrap gap-2">
+						<button
+							type="button"
+							onClick={() => setDayScope("day")}
+							className={
+								dayScope === "day"
+									? "rounded-md bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-100"
+									: "rounded-md border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300"
+							}
+						>
+							This day
+						</button>
+						<button
+							type="button"
+							onClick={() => setDayScope("all")}
+							className={
+								dayScope === "all"
+									? "rounded-md bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-100"
+									: "rounded-md border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300"
+							}
+						>
+							All days
+						</button>
+					</div>
+					{showTrackFacet ? (
+						<DiscoverFacetSelect
+							label="Track"
+							value={track}
+							options={tracks}
+							onChange={setTrack}
+							allLabel="All tracks"
+						/>
+					) : null}
+					{showFormatFacet ? (
+						<DiscoverFacetSelect
+							label="Format"
+							value={format}
+							options={formats}
+							onChange={setFormat}
+							allLabel="All formats"
+						/>
+					) : null}
 				</div>
-				{showTrackFacet ? (
-					<FacetRow
-						label="Track"
-						value={track}
-						options={tracks}
-						onChange={setTrack}
-					/>
-				) : null}
-				{showFormatFacet ? (
-					<FacetRow
-						label="Format"
-						value={format}
-						options={formats}
-						onChange={setFormat}
-					/>
-				) : null}
-				{showLocationFacet ? (
-					<FacetRow
-						label="Location"
-						value={location}
-						options={locations}
-						onChange={setLocation}
-					/>
-				) : null}
 			</div>
 
 			{scoped.length === 0 ? (
@@ -181,54 +182,6 @@ export function PublicSessionsDiscover({
 					})}
 				</ol>
 			)}
-		</div>
-	);
-}
-
-function FacetRow({
-	label,
-	value,
-	options,
-	onChange,
-}: {
-	label: string;
-	value: string;
-	options: string[];
-	onChange: (next: string) => void;
-}) {
-	return (
-		<div className="flex flex-wrap items-center gap-1.5">
-			<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
-				{label}
-			</span>
-			<button
-				type="button"
-				onClick={() => onChange("all")}
-				className={
-					value === "all"
-						? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-						: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
-				}
-			>
-				All
-			</button>
-			{options.map((option) => {
-				const active = value === option;
-				return (
-					<button
-						key={option}
-						type="button"
-						onClick={() => onChange(option)}
-						className={
-							active
-								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
-						}
-					>
-						{option}
-					</button>
-				);
-			})}
 		</div>
 	);
 }

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { PublicSessionsDiscover } from "@/components/public-sessions-discover";
+import { ScheduleQuerySelect } from "@/components/schedule-query-select";
 import { PublicItinerary } from "@/components/public-itinerary";
 import {
 	defaultScheduleDayKey,
@@ -381,7 +382,7 @@ export async function PublicSchedule({
 					</p>
 				</div>
 
-				<div className="flex flex-col gap-3">
+				<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
 					<div
 						role="tablist"
 						aria-label="Schedule view"
@@ -412,32 +413,20 @@ export async function PublicSchedule({
 						})}
 					</div>
 
-					<div className="flex flex-wrap items-center gap-1.5">
-						<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
-							Room
-						</span>
-						{["all", ...roomsForDay].map((room) => {
-							const active = roomFilter === room;
-							return (
-								<Link
-									key={room}
-									href={hrefFor(basePath, event.slug, {
-										day: dayKey,
-										view,
-										room,
-										embed: itineraryEmbed?.slug,
-									})}
-									className={
-										active
-											? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-											: "rounded-full border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-neutral-500"
-									}
-								>
-									{room === "all" ? "All rooms" : room}
-								</Link>
-							);
-						})}
-					</div>
+					<ScheduleQuerySelect
+						label="Room"
+						value={roomFilter}
+						options={["all", ...roomsForDay].map((room) => ({
+							value: room,
+							label: room === "all" ? "All rooms" : room,
+							href: hrefFor(basePath, event.slug, {
+								day: dayKey,
+								view,
+								room,
+								embed: itineraryEmbed?.slug,
+							}),
+						}))}
+					/>
 				</div>
 			</header>
 
@@ -511,6 +500,7 @@ export async function PublicSchedule({
 						eventSlug={event.slug}
 						basePath={basePath}
 						initialDayKey={dayKey}
+						initialRoom={roomFilter}
 					/>
 				)
 			) : null}
