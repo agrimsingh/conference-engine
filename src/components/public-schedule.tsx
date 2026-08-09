@@ -28,6 +28,7 @@ import {
 	parseDayKey,
 	weekDayKeys,
 } from "@/lib/schedule/time";
+import { speakerRoleLine } from "@/lib/speakers/public-directory";
 
 export type ScheduleView = "list" | "day" | "week" | "track" | "room";
 
@@ -131,27 +132,26 @@ function SpeakerLine({
 	if (speakers.length === 0) return null;
 	return (
 		<ul className="mt-1 flex flex-wrap gap-3">
-			{speakers.map((speaker, index) => (
-				<li key={`${speaker.personId ?? speaker.name}-${index}`}>
-					<PublicSpeakerAvatar
-						eventSlug={eventSlug}
-						personId={speaker.personId}
-						name={speaker.name}
-						hasHeadshot={speaker.hasHeadshot}
-						size="sm"
-						profileHref={
-							basePath === "/e" && speaker.personId
-								? `/e/${eventSlug}/speakers/${speaker.personId}`
-								: null
-						}
-					/>
-					{speaker.jobTitle || speaker.company ? (
-						<p className="mt-0.5 text-xs text-neutral-500">
-							{[speaker.jobTitle, speaker.company].filter(Boolean).join(" · ")}
-						</p>
-					) : null}
-				</li>
-			))}
+			{speakers.map((speaker, index) => {
+				const role = speakerRoleLine(speaker);
+				return (
+					<li key={`${speaker.personId ?? speaker.name}-${index}`}>
+						<PublicSpeakerAvatar
+							eventSlug={eventSlug}
+							personId={speaker.personId}
+							name={speaker.name}
+							hasHeadshot={speaker.hasHeadshot}
+							size="sm"
+							profileHref={
+								basePath === "/e" && speaker.personId
+									? `/e/${eventSlug}/speakers/${speaker.personId}`
+									: null
+							}
+						/>
+						{role ? <p className="mt-0.5 text-xs text-neutral-500">{role}</p> : null}
+					</li>
+				);
+			})}
 		</ul>
 	);
 }
