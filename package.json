@@ -20,7 +20,8 @@
     "test:unit": "vitest run --config vitest.config.mts",
     "test:workers": "vitest run --config vitest.workers.config.mts",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test test/e2e/release-smoke.spec.ts"
+    "test:e2e:smoke": "playwright test test/e2e/release-smoke.spec.ts",
+    "test:e2e:ci": "playwright test test/e2e/release-smoke.spec.ts --grep \"public surfaces\""
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.9",
