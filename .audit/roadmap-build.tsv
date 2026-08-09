@@ -50,3 +50,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T17:29:38Z	p1	Merged submission pacing chart	cumulative series above cockpit; prior null	1cebf96	unit green
 2026-08-09T17:30:25Z	p1	Merged portal profile identity fields	0037 salutation/pronouns/honorific; facebook social	02ea821	unit green
 2026-08-09T17:31:23Z	p1	Merged organizer submission notify	received+updated templates; owner/admins; no draft-save spam	1d76f4f	tsc+unit
+2026-08-09T17:31:42Z	p1	Merged calendar inbox proof; P1 wave closed	Gmail PARTIAL (REQUEST+ORGANIZER+UID); strip unproven; Outlook blocked	4bac857	evidence only
