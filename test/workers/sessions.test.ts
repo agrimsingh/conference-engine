@@ -5,6 +5,7 @@ import { cloneSession, commitSessionImport, createSession, loadPublicSession, pr
 import type { AccountRow } from "@/lib/db/types";
 import { materializeAcceptedSpeaker } from "@/lib/speakers/materialize";
 import { approveSessionContent } from "./approve-content";
+import { updateSessionContent } from "@/lib/content/revisions";
 
 const now = 1_781_000_000_000;
 let sequence = 0;
@@ -16,8 +17,12 @@ async function event(label: string) {
 	return createEventWithDefaults(env.DB, { name: label, slug: `sessions-${sequence}`, timezone: "UTC", startDay: "2026-11-01", endDay: "2026-11-02" }, owner);
 }
 
-function bulk(room: DurableObjectStub, eventId: string, action: "publish" | "unpublish", sessionIds: string[]) {
-	return room.fetch("https://event-room/bulk-publication", { method: "POST", headers: { "content-type": "application/json", "x-ce-event-id": eventId }, body: JSON.stringify({ action, sessionIds }) });
+function bulk(room: DurableObjectStub, eventId: string, action: "publish" | "unpublish", sessionIds: string[], approveContent = false) {
+	return room.fetch("https://event-room/bulk-publication", { method: "POST", headers: { "content-type": "application/json", "x-ce-event-id": eventId }, body: JSON.stringify({ action, sessionIds, approveContent }) });
+}
+
+function contentMutation(room: DurableObjectStub, eventId: string, body: Record<string, unknown>) {
+	return room.fetch("https://event-room/session-content", { method: "POST", headers: { "content-type": "application/json", "x-ce-event-id": eventId }, body: JSON.stringify(body) });
 }
 
 describe("organizer session creation, lineage, and publication", () => {
@@ -309,6 +314,126 @@ describe("organizer session creation, lineage, and publication", () => {
 		expect(track).not.toBeNull();
 		await env.DB.prepare("UPDATE agenda_slots SET track_id = ? WHERE submission_id = ?").bind(track!.id, session.id).run();
 		expect(await loadPublicSession(env.DB, created.slug, session.id)).toMatchObject({ slot: { trackId: track!.id, trackName: track!.name } });
+	});
+
+	it("requires explicit approval, then pins the current draft and publishes in one agenda action", async () => {
+		const created = await event("Guided publication");
+		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Agenda-generated title", abstract: "Initial abstract" } });
+		await env.DB.batch([
+			env.DB.prepare("UPDATE submissions SET status = 'scheduled' WHERE id = ?").bind(session.id),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('guided-publication-slot', ?, ?, 'Main', ?, ?, 'guided-publication@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T12:00:00Z"), Date.parse("2026-11-01T12:30:00Z"), now, now),
+		]);
+		expect(await updateSessionContent(env.DB, {
+			eventId: created.eventId,
+			submissionId: session.id,
+			editorAccountId: null,
+			editorName: "Agenda builder",
+			content: { title: "Agenda-generated title", abstract: "Final agenda abstract" },
+		})).toEqual({ ok: true });
+
+		const room = env.EVENT_ROOM.getByName(created.eventId);
+		const blocked = await bulk(room, created.eventId, "publish", [session.id]);
+		expect(blocked.status).toBe(409);
+		expect(await blocked.json()).toMatchObject({ ok: false, approvalRequired: true });
+		expect(await env.DB.prepare("SELECT status, content_status FROM submissions WHERE id = ?").bind(session.id).first()).toEqual({ status: "scheduled", content_status: "draft" });
+
+		const published = await bulk(room, created.eventId, "publish", [session.id], true);
+		expect(published.status).toBe(200);
+		expect(await published.json()).toMatchObject({ ok: true, changed: 1, approved: 1 });
+		expect(await env.DB.prepare(`SELECT s.status, s.content_status, r.snapshot_json
+		  FROM submissions s
+		  JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
+		  JOIN content_revisions r ON r.id = h.approved_revision_id
+		 WHERE s.id = ?`).bind(session.id).first()).toEqual({
+			status: "published",
+			content_status: "approved",
+			snapshot_json: JSON.stringify({ title: "Agenda-generated title", abstract: "Final agenda abstract", contentStatus: "draft" }),
+		});
+
+		expect((await bulk(room, created.eventId, "unpublish", [session.id])).status).toBe(200);
+		expect(await updateSessionContent(env.DB, {
+			eventId: created.eventId,
+			submissionId: session.id,
+			editorAccountId: null,
+			editorName: "Agenda builder",
+			content: { title: "Agenda-generated title", abstract: "Revised before republishing" },
+		})).toEqual({ ok: true });
+		const republished = await room.fetch("https://event-room/schedule", {
+			method: "PATCH",
+			headers: { "content-type": "application/json", "x-ce-event-id": created.eventId },
+			body: JSON.stringify({ submissionId: session.id, action: "publish", approveContent: true }),
+		});
+		expect(republished.status).toBe(200);
+		expect(await republished.json()).toMatchObject({ ok: true, status: "published", approved: 1 });
+		expect(await env.DB.prepare(`SELECT r.snapshot_json
+		  FROM content_heads h JOIN content_revisions r ON r.id = h.approved_revision_id
+		 WHERE h.event_id = ? AND h.entity_type = 'session' AND h.entity_id = ?`).bind(created.eventId, session.id).first()).toEqual({
+			snapshot_json: JSON.stringify({ title: "Agenda-generated title", abstract: "Revised before republishing", contentStatus: "draft" }),
+		});
+	});
+
+	it("serializes a concurrent content edit with approval so a current draft is never mislabeled approved", async () => {
+		const created = await event("Publication edit race");
+		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Race title", abstract: "Original" } });
+		const owner = await env.DB.prepare("SELECT account_id FROM event_ownership WHERE event_id = ?").bind(created.eventId).first<{ account_id: string }>();
+		await env.DB.batch([
+			env.DB.prepare("UPDATE submissions SET status = 'scheduled' WHERE id = ?").bind(session.id),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('publication-race-slot', ?, ?, 'Main', ?, ?, 'publication-race@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T13:00:00Z"), Date.parse("2026-11-01T13:30:00Z"), now, now),
+		]);
+		const room = env.EVENT_ROOM.getByName(created.eventId);
+		const [edit, publish] = await Promise.all([
+			contentMutation(room, created.eventId, { action: "update", submissionId: session.id, editorAccountId: owner!.account_id, editorName: "Concurrent editor", title: "Race title", abstract: "Concurrent draft" }),
+			bulk(room, created.eventId, "publish", [session.id], true),
+		]);
+		expect([edit.status, publish.status]).toEqual([200, 200]);
+		const state = await env.DB.prepare(`SELECT s.status, s.content_status, h.current_revision_id, h.approved_revision_id,
+		       current.snapshot_json AS current_snapshot, approved.snapshot_json AS approved_snapshot
+		  FROM submissions s JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
+		  JOIN content_revisions current ON current.id = h.current_revision_id
+		  JOIN content_revisions approved ON approved.id = h.approved_revision_id
+		 WHERE s.id = ?`).bind(session.id).first<{ status: string; content_status: string; current_revision_id: string; approved_revision_id: string; current_snapshot: string; approved_snapshot: string }>();
+		expect(state?.status).toBe("published");
+		if (state?.content_status === "approved") {
+			expect(state.current_revision_id).toBe(state.approved_revision_id);
+			expect(state.approved_snapshot).toContain("Concurrent draft");
+		} else {
+			expect(state?.content_status).toBe("draft");
+			expect(state?.current_revision_id).not.toBe(state?.approved_revision_id);
+			expect(state?.current_snapshot).toContain("Concurrent draft");
+		}
+	});
+
+	it("rolls back snapshot approval when publication fails", async () => {
+		const created = await event("Publication rollback");
+		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Rollback title", abstract: "Must remain private" } });
+		await env.DB.batch([
+			env.DB.prepare("UPDATE submissions SET status = 'scheduled' WHERE id = ?").bind(session.id),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('publication-rollback-slot', ?, ?, 'Main', ?, ?, 'publication-rollback@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T14:00:00Z"), Date.parse("2026-11-01T14:30:00Z"), now, now),
+			env.DB.prepare(`CREATE TRIGGER fail_publication_transaction BEFORE UPDATE OF status ON submissions
+			  WHEN NEW.id = '${session.id}' AND NEW.status = 'published'
+			  BEGIN SELECT RAISE(ABORT, 'injected publication failure'); END`),
+		]);
+		const response = await bulk(env.EVENT_ROOM.getByName(created.eventId), created.eventId, "publish", [session.id], true);
+		expect(response.status).toBe(500);
+		expect(await response.json()).toMatchObject({ ok: false, error: expect.stringMatching(/nothing was published/i) });
+		expect(await env.DB.prepare("SELECT status, content_status FROM submissions WHERE id = ?").bind(session.id).first()).toEqual({ status: "scheduled", content_status: "draft" });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM content_heads WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?").bind(created.eventId, session.id).first()).toEqual({ count: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM content_revisions WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?").bind(created.eventId, session.id).first()).toEqual({ count: 0 });
+		await env.DB.prepare("DROP TRIGGER fail_publication_transaction").run();
+	});
+
+	it("fails closed instead of publishing a blank legacy snapshot", async () => {
+		const created = await event("Invalid legacy content");
+		const session = await createSession(env.DB, { eventId: created.eventId, origin: "manual", input: { title: "Will be corrupted" } });
+		await env.DB.batch([
+			env.DB.prepare("UPDATE submissions SET status = 'scheduled', answers_json = '{}' WHERE id = ?").bind(session.id),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('invalid-legacy-slot', ?, ?, 'Main', ?, ?, 'invalid-legacy@test.invalid', ?, ?)").bind(created.eventId, session.id, Date.parse("2026-11-01T15:00:00Z"), Date.parse("2026-11-01T15:30:00Z"), now, now),
+		]);
+		const response = await bulk(env.EVENT_ROOM.getByName(created.eventId), created.eventId, "publish", [session.id], true);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({ ok: false, error: expect.stringMatching(/title/i) });
+		expect(await env.DB.prepare("SELECT status, content_status FROM submissions WHERE id = ?").bind(session.id).first()).toEqual({ status: "scheduled", content_status: "draft" });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM content_heads WHERE entity_id = ?").bind(session.id).first()).toEqual({ count: 0 });
 	});
 
 	it("serializes bulk publication with unplace so no published session loses its slot", async () => {

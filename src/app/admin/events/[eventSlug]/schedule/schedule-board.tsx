@@ -361,7 +361,7 @@ export function ScheduleBoard({
 						{
 							method: "PATCH",
 							headers: { "content-type": "application/json" },
-							body: JSON.stringify({ action: "publish" }),
+							body: JSON.stringify({ action: "publish", approveContent: true }),
 						},
 					);
 					const payload = await readJson<{ ok?: boolean; error?: string; status?: string }>(
@@ -387,7 +387,7 @@ export function ScheduleBoard({
 					{
 						method: "POST",
 						headers: { "content-type": "application/json" },
-						body: JSON.stringify({ action: "publish", sessionIds: ids }),
+						body: JSON.stringify({ action: "publish", sessionIds: ids, approveContent: true }),
 					},
 				);
 				const payload = await readJson<{
@@ -568,7 +568,7 @@ export function ScheduleBoard({
 							{publishConfirm.sessionIds.length === 1 ? "session" : "sessions"}?
 						</h2>
 						<p className="text-sm text-neutral-400">
-							Published sessions appear on the public schedule. This cannot be undone without unpublishing.
+							This approves each current session-content revision as the immutable public snapshot, then publishes it to the public schedule. Later edits stay private until you approve and publish them again.
 						</p>
 						<ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-neutral-300">
 							{publishConfirm.titles.map((title, index) => (
@@ -590,7 +590,7 @@ export function ScheduleBoard({
 								onClick={confirmPublish}
 								className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400"
 							>
-								Publish {publishConfirm.sessionIds.length}
+								Approve &amp; publish {publishConfirm.sessionIds.length}
 							</button>
 						</div>
 					</div>

@@ -85,13 +85,15 @@ export async function PATCH(request: Request, context: RouteContext) {
 	const body = parsed.body;
 	const action = body.action;
 	if (!isScheduleAction(action) || action === "unplace") return NextResponse.json({ ok: false, error: "action must be publish or unpublish" }, { status: 400 });
-	return mutateAction(action, context, authorized);
+	if ("approveContent" in body && typeof body.approveContent !== "boolean") return NextResponse.json({ ok: false, error: "approveContent must be a boolean" }, { status: 400 });
+	return mutateAction(action, context, authorized, body.approveContent === true);
 }
 
 async function mutateAction(
 	action: ScheduleAction,
 	context: RouteContext,
 	authorized?: Extract<Awaited<ReturnType<typeof authorizeSchedule>>, { ok: true }>,
+	approveContent = false,
 ): Promise<NextResponse> {
 	const resolved = authorized ?? await authorizeSchedule(context);
 	if (!resolved.ok) return resolved.response;
@@ -103,7 +105,7 @@ async function mutateAction(
 	const response = await env.EVENT_ROOM.getByName(access.event.id).fetch("https://event-room/schedule", {
 		method: action === "unplace" ? "DELETE" : "PATCH",
 		headers: { "content-type": "application/json", "x-ce-event-id": access.event.id },
-		body: JSON.stringify({ submissionId, action }),
+		body: JSON.stringify({ submissionId, action, ...(action === "publish" ? { approveContent } : {}) }),
 	});
 	const value: unknown = await response.json();
 	if (!value || typeof value !== "object" || Array.isArray(value)) return NextResponse.json({ ok: false, error: "Invalid room response" }, { status: 502 });

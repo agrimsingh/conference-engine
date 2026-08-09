@@ -9,6 +9,18 @@ export type SessionContent = {
 	contentStatus: ContentStatus;
 };
 
+export function publicationSnapshotFromAnswers(raw: string): { ok: true; snapshot: SessionContent } | { ok: false; error: string } {
+	let value: unknown;
+	try { value = JSON.parse(raw); } catch { return { ok: false, error: "Session content is invalid JSON. Save valid content before publishing." }; }
+	if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "Session content must be a JSON object. Save valid content before publishing." };
+	const title = Reflect.get(value, "title");
+	const abstract = Reflect.get(value, "abstract");
+	if (typeof title !== "string" || title.trim().length === 0 || title.length > 240) return { ok: false, error: "Session title must contain 1 to 240 characters before publishing." };
+	if (abstract !== undefined && typeof abstract !== "string") return { ok: false, error: "Session abstract must be text before publishing." };
+	if (typeof abstract === "string" && abstract.length > 8_000) return { ok: false, error: "Session abstract must be at most 8000 characters before publishing." };
+	return { ok: true, snapshot: { title, abstract: abstract ?? "", contentStatus: "draft" } };
+}
+
 function answersObject(raw: string): Record<string, unknown> {
 	try {
 		const value: unknown = JSON.parse(raw);

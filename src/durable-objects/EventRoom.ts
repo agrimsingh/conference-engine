@@ -4,13 +4,27 @@ import { stableAgendaUid } from "@/lib/email/ics";
 import { deleteRoom, updateEventConfiguration, updateRoom } from "@/lib/events/configuration";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
+import { publicationSnapshotFromAnswers, restoreSessionRevision, setSessionContentStatus, updateSessionContent, type ContentStatus } from "@/lib/content/revisions";
 
 type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string; trackId?: string | null };
-type BulkPublicationInput = { eventId: string; submissionIds: string[]; action: "publish" | "unpublish" };
+type BulkPublicationInput = { eventId: string; submissionIds: string[]; action: "publish" | "unpublish"; approveContent: boolean };
+type PublicationRow = {
+	id: string;
+	status: string;
+	content_status: string;
+	answers_json: string;
+	current_revision_id: string | null;
+	approved_revision_id: string | null;
+	slot_id: string | null;
+};
 type ConfigurationMutation =
 	| { action: "event-settings"; input: Record<string, unknown> }
 	| { action: "room-update"; id: unknown; name: unknown }
 	| { action: "room-delete"; id: unknown };
+type SessionContentMutation =
+	| { action: "update"; submissionId: string; editorAccountId: string; editorName: string; title: string; abstract: string }
+	| { action: "status"; submissionId: string; status: ContentStatus }
+	| { action: "restore"; submissionId: string; editorAccountId: string; editorName: string; revisionId: string };
 
 export class EventRoom extends DurableObject<CloudflareEnv> {
 	private queue: Promise<void> = Promise.resolve();
@@ -43,6 +57,13 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			const result = await this.serialized(() => this.schedule(input));
 			return Response.json(result, { status: result.ok ? 200 : result.status });
 		}
+		if (request.method === "POST" && url.pathname === "/session-content") {
+			const eventId = request.headers.get("x-ce-event-id") ?? "";
+			const mutation = await parseSessionContentMutation(request);
+			if (!eventId || !mutation) return Response.json({ ok: false, error: "Invalid session content request" }, { status: 400 });
+			const result = await this.serialized(() => this.mutateSessionContent(eventId, mutation));
+			return Response.json(result, { status: result.ok ? 200 : result.status });
+		}
 		if (request.method === "POST" && url.pathname === "/bulk-publication") {
 			const input = await parseBulkPublicationRequest(request);
 			if (!input) return Response.json({ ok: false, error: "Invalid bulk publication request" }, { status: 400 });
@@ -57,7 +78,8 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			const submissionId = typeof body.submissionId === "string" ? body.submissionId : "";
 			const action = request.method === "DELETE" ? "unplace" : body.action;
 			if (!eventId || !submissionId || !isScheduleAction(action)) return Response.json({ ok: false, error: "Invalid schedule action" }, { status: 400 });
-			const result = await this.serialized(() => this.scheduleAction(eventId, submissionId, action));
+			if ("approveContent" in body && typeof body.approveContent !== "boolean") return Response.json({ ok: false, error: "Invalid schedule action" }, { status: 400 });
+			const result = await this.serialized(() => this.scheduleAction(eventId, submissionId, action, body.approveContent === true));
 			return Response.json(result, { status: result.ok ? 200 : result.status });
 		}
 
@@ -169,8 +191,22 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		return { ok: true };
 	}
 
-	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction): Promise<{ ok: true; status: string; slot?: Record<string, unknown> } | { ok: false; error: string; status: number }> {
-		const submission = await this.env.DB.prepare("SELECT id, event_id, status, content_status FROM submissions WHERE id = ?").bind(submissionId).first<{ id: string; event_id: string; status: string; content_status: string }>();
+	private async mutateSessionContent(eventId: string, mutation: SessionContentMutation): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(eventId).first<{ mode: "live" | "demo" }>();
+		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		if (event.mode === "demo") return { ok: false, error: "This event is read-only", status: 403 };
+		if (mutation.action === "update") return updateSessionContent(this.env.DB, { eventId, submissionId: mutation.submissionId, editorAccountId: mutation.editorAccountId, editorName: mutation.editorName, content: { title: mutation.title, abstract: mutation.abstract } });
+		if (mutation.action === "status") return setSessionContentStatus(this.env.DB, { eventId, submissionId: mutation.submissionId, status: mutation.status });
+		return restoreSessionRevision(this.env.DB, { eventId, submissionId: mutation.submissionId, revisionId: mutation.revisionId, editorAccountId: mutation.editorAccountId, editorName: mutation.editorName });
+	}
+
+	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction, approveContent = false): Promise<{ ok: true; status: string; approved?: number; slot?: Record<string, unknown> } | { ok: false; error: string; status: number; approvalRequired?: boolean }> {
+		const submission = await this.env.DB.prepare(`SELECT s.id, s.event_id, s.status, s.content_status, s.answers_json,
+		       h.current_revision_id, h.approved_revision_id, a.id AS slot_id
+		  FROM submissions s
+		  LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
+		  LEFT JOIN agenda_slots a ON a.event_id = s.event_id AND a.submission_id = s.id
+		 WHERE s.id = ?`).bind(submissionId).first<PublicationRow & { event_id: string }>();
 		if (!submission || submission.event_id !== eventId) return { ok: false, error: "Submission not found", status: 404 };
 		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(eventId).first<{ mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
@@ -194,39 +230,97 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		}
 		const target = action === "publish" ? "published" : "scheduled";
 		if (action === "publish") {
-			const head = await this.env.DB.prepare("SELECT approved_revision_id FROM content_heads WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?").bind(eventId, submission.id).first<{ approved_revision_id: string | null }>();
-			if (submission.content_status !== "approved" || !head?.approved_revision_id) return { ok: false, error: "Approve session content before publishing", status: 409 };
+			if (!submission.slot_id) return { ok: false, error: "Place this session on the agenda before publishing", status: 409 };
+			if ((submission.content_status !== "approved" || !submission.approved_revision_id || submission.current_revision_id !== submission.approved_revision_id) && !approveContent) {
+				return { ok: false, error: "Approval required. Confirm ‘Approve current content & publish’ to pin the current revision and make this session public.", status: 409, approvalRequired: true };
+			}
 		}
 		if (!isSubmissionStatus(submission.status) || (action === "publish" && submission.status !== "scheduled") || (action === "unpublish" && submission.status !== "published")) {
 			return { ok: false, error: `Cannot ${action} this submission`, status: 409 };
 		}
-		await this.env.DB.batch([
-			this.env.DB.prepare("UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?").bind(target, now, submission.id),
-		]);
+		let approval = { statements: [] as D1PreparedStatement[], approved: 0 };
+		try {
+			if (action === "publish" && approveContent) approval = await this.prepareContentApprovals(eventId, [submission], now);
+			await this.env.DB.batch([
+				...approval.statements,
+				this.env.DB.prepare("UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?").bind(target, now, submission.id),
+			]);
+		} catch (error) {
+			return publicationFailure(error);
+		}
 		this.broadcast(JSON.stringify({ type: "invalidate", reason: `schedule.${action}`, eventId, at: now }));
-		return { ok: true, status: target };
+		return { ok: true, status: target, approved: approval.approved };
 	}
 
 	/** Publication shares the exact queue used by place/move/unplace. Validation
 	 * and status writes therefore observe one coherent agenda snapshot. */
-	private async bulkPublication(input: BulkPublicationInput): Promise<{ ok: true; changed: number } | { ok: false; error: string; status: number }> {
+	private async bulkPublication(input: BulkPublicationInput): Promise<{ ok: true; changed: number; approved: number } | { ok: false; error: string; status: number; approvalRequired?: boolean }> {
 		const ids = [...new Set(input.submissionIds)];
 		if (ids.length === 0 || ids.length > 100) return { ok: false, error: "Choose between 1 and 100 sessions", status: 400 };
 		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(input.eventId).first<{ mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
 		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
 		const placeholders = ids.map(() => "?").join(", ");
-		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, h.approved_revision_id, a.id AS slot_id FROM submissions s LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<{ id: string; status: string; content_status: string; approved_revision_id: string | null; slot_id: string | null }>();
+		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, s.answers_json,
+		       h.current_revision_id, h.approved_revision_id, a.id AS slot_id
+		  FROM submissions s
+		  LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
+		  LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
+		 WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<PublicationRow>();
 		if (rows.results.length !== ids.length) return { ok: false, error: "One or more sessions are outside this event or no longer exist", status: 404 };
 		if (input.action === "publish") {
-			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id || row.content_status !== "approved" || !row.approved_revision_id)) return { ok: false, error: "Only approved scheduled sessions with an agenda slot can be published", status: 409 };
+			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id)) return { ok: false, error: "Only scheduled sessions with an agenda slot can be published", status: 409 };
+			if (rows.results.some((row) => row.content_status !== "approved" || !row.approved_revision_id || row.current_revision_id !== row.approved_revision_id) && !input.approveContent) {
+				return { ok: false, error: "Approval required. Confirm ‘Approve current content & publish’ to pin every selected revision before publication.", status: 409, approvalRequired: true };
+			}
 		} else if (rows.results.some((row) => row.status !== "published")) {
 			return { ok: false, error: "Only published sessions can be unpublished", status: 409 };
 		}
 		const now = Date.now();
-		await this.env.DB.prepare(`UPDATE submissions SET status = ?, updated_at = ? WHERE event_id = ? AND id IN (${placeholders})`).bind(input.action === "publish" ? "published" : "scheduled", now, input.eventId, ...ids).run();
+		let approval = { statements: [] as D1PreparedStatement[], approved: 0 };
+		try {
+			if (input.action === "publish" && input.approveContent) approval = await this.prepareContentApprovals(input.eventId, rows.results, now);
+			await this.env.DB.batch([
+				...approval.statements,
+				this.env.DB.prepare(`UPDATE submissions SET status = ?, updated_at = ? WHERE event_id = ? AND id IN (${placeholders})`).bind(input.action === "publish" ? "published" : "scheduled", now, input.eventId, ...ids),
+			]);
+		} catch (error) {
+			return publicationFailure(error);
+		}
 		this.broadcast(JSON.stringify({ type: "invalidate", reason: `schedule.bulk-${input.action}`, eventId: input.eventId, at: now }));
-		return { ok: true, changed: ids.length };
+		return { ok: true, changed: ids.length, approved: approval.approved };
+	}
+
+	/** Build the immutable public snapshots inside the same D1 batch that flips
+	 * publication state. The explicit approveContent request is the organizer's
+	 * approval act; a failed batch leaves both approval and publication unchanged. */
+	private async prepareContentApprovals(eventId: string, rows: PublicationRow[], now: number): Promise<{ statements: D1PreparedStatement[]; approved: number }> {
+		const statements: D1PreparedStatement[] = [];
+		let approved = 0;
+		for (const row of rows) {
+			if (row.content_status === "approved" && row.approved_revision_id && row.current_revision_id === row.approved_revision_id) continue;
+			let revisionId = row.current_revision_id;
+			if (!revisionId) {
+				revisionId = crypto.randomUUID();
+				const latest = await this.env.DB.prepare("SELECT COALESCE(MAX(revision_number), 0) AS revision_number FROM content_revisions WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?")
+					.bind(eventId, row.id).first<{ revision_number: number }>();
+				const parsed = publicationSnapshotFromAnswers(row.answers_json);
+				if (!parsed.ok) throw new Error(parsed.error);
+				statements.push(
+					this.env.DB.prepare("INSERT INTO content_revisions (id, event_id, entity_type, entity_id, revision_number, snapshot_json, editor_name, created_at) VALUES (?, ?, 'session', ?, ?, ?, 'Publication approval', ?)")
+						.bind(revisionId, eventId, row.id, (latest?.revision_number ?? 0) + 1, JSON.stringify(parsed.snapshot), now),
+					this.env.DB.prepare("INSERT INTO content_heads (event_id, entity_type, entity_id, current_revision_id, approved_revision_id, updated_at) VALUES (?, 'session', ?, ?, ?, ?) ON CONFLICT(event_id, entity_type, entity_id) DO UPDATE SET current_revision_id = excluded.current_revision_id, approved_revision_id = excluded.approved_revision_id, updated_at = excluded.updated_at")
+						.bind(eventId, row.id, revisionId, revisionId, now),
+				);
+			} else {
+				statements.push(this.env.DB.prepare("UPDATE content_heads SET approved_revision_id = current_revision_id, updated_at = ? WHERE event_id = ? AND entity_type = 'session' AND entity_id = ?")
+					.bind(now, eventId, row.id));
+			}
+			statements.push(this.env.DB.prepare("UPDATE submissions SET content_status = 'approved', updated_at = ? WHERE event_id = ? AND id = ?")
+				.bind(now, eventId, row.id));
+			approved += 1;
+		}
+		return { statements, approved };
 	}
 
 	private async speakers(submissionId: string): Promise<string[]> {
@@ -239,7 +333,7 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> { if (message === "ping") ws.send("pong"); }
-	async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> { ws.close(code, reason); }
+	async webSocketClose(_ws: WebSocket, _code: number, _reason: string): Promise<void> { /* The socket is already closed; this handler is only the hibernation notification. */ }
 }
 
 async function parseScheduleRequest(request: Request): Promise<ScheduleInput | null> {
@@ -260,7 +354,8 @@ async function parseBulkPublicationRequest(request: Request): Promise<BulkPublic
 	const body = value as Record<string, unknown>;
 	const eventId = request.headers.get("x-ce-event-id") ?? "";
 	if (!eventId || (body.action !== "publish" && body.action !== "unpublish") || !Array.isArray(body.sessionIds) || body.sessionIds.some((id) => typeof id !== "string" || id.length === 0 || id.length > 128)) return null;
-	return { eventId, action: body.action, submissionIds: body.sessionIds };
+	if ("approveContent" in body && typeof body.approveContent !== "boolean") return null;
+	return { eventId, action: body.action, submissionIds: body.sessionIds, approveContent: body.approveContent === true };
 }
 
 async function parseConfigurationMutation(request: Request): Promise<ConfigurationMutation | null> {
@@ -272,4 +367,36 @@ async function parseConfigurationMutation(request: Request): Promise<Configurati
 	if (body.action === "room-update") return { action: body.action, id: body.id, name: body.name };
 	if (body.action === "room-delete") return { action: body.action, id: body.id };
 	return null;
+}
+
+async function parseSessionContentMutation(request: Request): Promise<SessionContentMutation | null> {
+	let value: unknown;
+	try { value = await request.json(); } catch { return null; }
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const action = Reflect.get(value, "action");
+	const submissionId = Reflect.get(value, "submissionId");
+	if (typeof submissionId !== "string" || submissionId.length === 0 || submissionId.length > 128) return null;
+	if (action === "status") {
+		const status = Reflect.get(value, "status");
+		if (status !== "draft" && status !== "in_review" && status !== "approved") return null;
+		return { action, submissionId, status };
+	}
+	const editorAccountId = Reflect.get(value, "editorAccountId");
+	const editorName = Reflect.get(value, "editorName");
+	if (typeof editorAccountId !== "string" || typeof editorName !== "string" || !editorName.trim()) return null;
+	if (action === "update") {
+		const title = Reflect.get(value, "title");
+		const abstract = Reflect.get(value, "abstract");
+		return typeof title === "string" && typeof abstract === "string" ? { action, submissionId, editorAccountId, editorName, title, abstract } : null;
+	}
+	if (action === "restore") {
+		const revisionId = Reflect.get(value, "revisionId");
+		return typeof revisionId === "string" && revisionId.length > 0 && revisionId.length <= 128 ? { action, submissionId, editorAccountId, editorName, revisionId } : null;
+	}
+	return null;
+}
+
+function publicationFailure(error: unknown): { ok: false; error: string; status: number } {
+	if (error instanceof Error && error.message.includes("before publishing")) return { ok: false, error: error.message, status: 409 };
+	return { ok: false, error: "Approval and publication failed together; nothing was published. Retry the action.", status: 500 };
 }

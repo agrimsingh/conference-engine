@@ -68,7 +68,7 @@ export function SessionWorkbench({
 
 	async function bulk(action: "publish" | "unpublish") {
 		setBusy(true); setMessage(null);
-		const { value } = await postJson(`${base}/bulk-publish`, { action, sessionIds: selected });
+		const { value } = await postJson(`${base}/bulk-publish`, { action, sessionIds: selected, ...(action === "publish" ? { approveContent: true } : {}) });
 		setBusy(false);
 		if (value.ok) { setMessage(`${action === "publish" ? "Published" : "Unpublished"} ${value.changed ?? 0} sessions. Reloading…`); window.location.reload(); }
 		else setMessage(value.error ?? "Could not update publication");
@@ -127,7 +127,7 @@ export function SessionWorkbench({
 			</section>
 
 			<section>
-				<div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-base font-medium text-neutral-100">Sessions</h2><p className="mt-1 text-sm text-neutral-400">Publishing is all-or-nothing: every selected session needs a schedule slot and scheduled status.</p></div><div className="flex gap-2"><Button variant="primary" onClick={() => void bulk("publish")} disabled={busy || selected.length === 0}>Publish selected</Button><Button onClick={() => void bulk("unpublish")} disabled={busy || selected.length === 0}>Unpublish selected</Button></div></div>
+				<div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-base font-medium text-neutral-100">Sessions</h2><p className="mt-1 text-sm text-neutral-400">Publishing is all-or-nothing: every selected session needs a schedule slot. Publishing explicitly approves each current content revision as its immutable public snapshot.</p></div><div className="flex gap-2"><Button variant="primary" onClick={() => void bulk("publish")} disabled={busy || selected.length === 0}>Approve &amp; publish selected</Button><Button onClick={() => void bulk("unpublish")} disabled={busy || selected.length === 0}>Unpublish selected</Button></div></div>
 				<div className="mt-3 overflow-x-auto rounded-lg border border-neutral-800"><table className="w-full text-left text-sm"><thead className="bg-neutral-900 text-xs uppercase tracking-wide text-neutral-500"><tr><th className="p-3"><span className="sr-only">Select</span></th><th className="p-3">Session</th><th className="p-3">Speaker</th><th className="p-3">Origin</th><th className="p-3">State</th></tr></thead><tbody>{sessions.map((session) => <tr key={session.id} className="border-t border-neutral-800"><td className="p-3"><input aria-label={`Select ${session.title}`} type="checkbox" checked={selected.includes(session.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, session.id] : current.filter((id) => id !== session.id))} /></td><td className="p-3 text-neutral-100"><p>{session.title}</p><p className="font-mono text-xs text-neutral-600">{session.id}{session.lineageParentId ? ` · clone of ${session.lineageParentId}` : ""}</p></td><td className="p-3 text-neutral-400">{session.speaker ?? "—"}</td><td className="p-3 text-neutral-400">{session.origin}</td><td className="p-3"><StatusPill tone={submissionStatusTone(session.status)}>{session.status}{session.hasSlot ? " · placed" : ""}</StatusPill></td></tr>)}</tbody></table></div>
 			</section>
 		</div>

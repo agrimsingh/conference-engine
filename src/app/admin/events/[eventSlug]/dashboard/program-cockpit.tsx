@@ -616,6 +616,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								void runAction("publish-all", () =>
 									requestJson(`/api/admin/events/${eventSlug}/sessions/bulk-publish`, "POST", {
 										action: "publish",
+										approveContent: true,
 										sessionIds: snapshot.scheduledUnpublished.map(
 											(item) => item.submissionId,
 										),
@@ -623,7 +624,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 								)
 							}
 						>
-							Publish all
+							Approve &amp; publish all
 						</Button>
 					</div>
 					<ul className="mt-3 divide-y divide-neutral-800">
@@ -644,12 +645,12 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 											requestJson(
 												`/api/admin/events/${eventSlug}/submissions/${item.submissionId}/schedule`,
 												"PATCH",
-												{ action: "publish" },
+												{ action: "publish", approveContent: true },
 											),
 										)
 									}
 								>
-									Publish
+									Approve &amp; publish
 								</Button>
 							</li>
 						))}
