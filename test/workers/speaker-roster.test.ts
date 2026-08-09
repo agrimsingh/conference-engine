@@ -193,8 +193,9 @@ describe("speaker roster reminders and bulk email", () => {
 				sent: 1,
 				skipped: 0,
 			});
-			expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Slides");
-			expect(String(fetchMock.mock.calls[0]?.[1]?.body)).not.toContain("Bio");
+			const [, reminderInit] = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
+			expect(String(reminderInit.body)).toContain("Slides");
+			expect(String(reminderInit.body)).not.toContain("Bio");
 
 			const forced = await sendTaskReminders(reminderEnv, {
 				eventId: "due-filter-event",
@@ -245,7 +246,8 @@ describe("speaker roster reminders and bulk email", () => {
 			);
 			expect(result).toMatchObject({ sent: 1, skipped: 0, templateKey: "speaker_announcement" });
 			expect(result.error).toBeUndefined();
-			const body = String(fetchMock.mock.calls[0]?.[1]?.body);
+			const [, announceInit] = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
+			const body = String(announceInit.body);
 			expect(body).toContain("Room change for announce-event");
 			expect(body).toContain("Hi Ann, please check the portal.");
 			expect(body).not.toContain("outstanding speaker task");

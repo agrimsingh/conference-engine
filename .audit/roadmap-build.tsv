@@ -39,3 +39,4 @@ ts	phase	decision	why	evidence	result
 2026-08-09T09:34:07Z	release	Merged portal lint + bypass cookie fix	client useState now; secure from https protocol	87412cf	lint green
 2026-08-09T09:35:00Z	release	Merged public session meta	title/company on discover; Format on detail	5736fe3	unit+workers green in agent
 2026-08-09T09:35:43Z	release	Merged speaker profile sync	speaker_profiles SoT; esp workflow only; 0028 backfill	e3699fe	unit+workers sync green in agent
+2026-08-09T09:37:35Z	release	Merged due-aware reminders + roster bulk email	cron due_or_overdue; speaker_announcement; tsc cast on fetch mock	ce19114	unit green; tsc fixed post-merge
