@@ -21,7 +21,7 @@ An accepted proposal becomes a session. Attendees only see what you publish. Sta
 - **Speakers** — submit, withdraw if plans change, then finish bio / headshot / slides (and other tasks) in a magic-link portal.
 - **Attendees** (and embeds) — read the published schedule; it defaults to today or the next session day.
 
-It deliberately does **not** do ticketing, payments, or marketing. [D1](https://developers.cloudflare.com/d1/) is the source of truth. Spreadsheet exports, a keyed API, optional **Accelevents** push, and **Airtable mirror mode** (one-way push, optional nightly opt-in) are exits. They never write back into the programme database, and Airtable never syncs into D1.
+It deliberately does **not** do ticketing, payments, or marketing. The programme you edit here is the live record. CSV/XLSX exports, a keyed API, optional **Accelevents** sync, and **Airtable** copies are exits for other tools — they update those tools from this app, not the reverse.
 
 More product context: [PRODUCT.md](./PRODUCT.md).
 
@@ -88,7 +88,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 - **Speaker operations.** Roster, notes, announcements, and task reminders without turning into a CRM. The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific); speakers can withdraw themselves. Gaps stay on the cockpit until they land.
 - **Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Sessionboard session CSVs import with their column names aliased; publish and content approval stay on the same path.
 - **Public surfaces.** Published schedule (defaults to today or the next session day), speakers, session pages, and an iframe embed. Headshots and `.ics` ship for published sessions.
-- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, and push one-way to Airtable (mirror mode: manual or nightly opt-in, never Airtable→D1) or Accelevents. The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
+- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, copy submissions into Airtable (manual or nightly), and sync speakers/sessions to Accelevents. The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
 
 ## Day-to-day use
 
@@ -111,8 +111,8 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | `ADMIN_BYPASS_ENABLED` | `1` local only; `0` in production. |
 | `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
-| `AIRTABLE_*` | Optional Airtable mirror mode: one-way D1→Airtable push (manual or nightly opt-in). Never reverse sync. |
-| Accelevents | Configured per event under **Integrations** (one-way push; D1 stays source of record). Public speaker headshots are included, and organizers can opt in to the existing daily Worker sync while retaining manual preview and push. |
+| `AIRTABLE_*` | Optional: copy submissions into Airtable (manual push or nightly). Airtable edits are not pulled back. |
+| Accelevents | Per event under **Integrations**: sync speakers and sessions out to Accelevents (preview, push, optional daily). |
 
 ```bash
 npx wrangler secret put AUTH_SECRET

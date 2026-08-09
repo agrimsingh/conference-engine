@@ -50,7 +50,7 @@ Replace `[eventSlug]` with a live slug (`aie-sandbox` locally). `[formSlug]` is 
 
 Items the brief struck or listed as stack bonuses, but this tip already exposes.
 
-1. Accelevents one-way sync (struck in brief)
+1. Accelevents sync (struck in brief)
    - `/admin/events/[eventSlug]/integrations/accelevents`
    - `/api/admin/events/[eventSlug]/integrations/accelevents`, `.../sync`
 
@@ -63,7 +63,7 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
    - Embed admin: `/admin/events/[eventSlug]/embeds`
    - Embed APIs: `/api/e/[eventSlug]/embeds/[embedSlug]`, `.../html`, `.../xml`, `.../ical`, `.../loader.js`
 
-4. Airtable mirror mode (judgment call: one-way D1→Airtable so teams keep living in sheets; never reverse sync)
+4. Airtable copy (judgment call: push submissions so teams can stay in sheets; no pull-back)
    - `/api/admin/events/[eventSlug]/export/airtable`, `.../export/airtable/sync`
 
 5. Keyed public API (stack bonus)

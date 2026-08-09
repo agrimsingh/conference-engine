@@ -47,8 +47,8 @@ describe("Accelevents integration panel", () => {
 				}}
 			/>,
 		));
-		const preview = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Preview D1 changes");
-		const push = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Push reviewed preview");
+		const preview = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Preview changes");
+		const push = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Push to Accelevents");
 		if (!preview) throw new Error("Preview button missing");
 		if (!push) throw new Error("Push button missing");
 		expect(push.disabled).toBe(true);
@@ -85,8 +85,8 @@ describe("Accelevents integration panel", () => {
 			if (!found) throw new Error(`${label} button missing`);
 			return found;
 		};
-		await act(async () => button("Preview D1 changes").click());
-		await act(async () => button("Push reviewed preview").click());
+		await act(async () => button("Preview changes").click());
+		await act(async () => button("Push to Accelevents").click());
 
 		expect(fetchMock).toHaveBeenLastCalledWith(
 			"/api/admin/events/event-a/integrations/accelevents/sync",
@@ -95,7 +95,7 @@ describe("Accelevents integration panel", () => {
 		expect(container.textContent).toContain("speaker person-ada: Accelevents denied speaker update");
 	});
 
-	it("lets the organizer opt in to the existing daily Worker sync", async () => {
+	it("lets the organizer opt in to automatic daily sync", async () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({
 			ok: true,
 			integration: {
@@ -135,6 +135,6 @@ describe("Accelevents integration panel", () => {
 				}),
 			}),
 		);
-		expect(container.textContent).toContain("runs daily");
+		expect(container.textContent).toContain("every day at 01:00 UTC");
 	});
 });

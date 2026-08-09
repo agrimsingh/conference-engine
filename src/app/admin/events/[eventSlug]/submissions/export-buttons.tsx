@@ -77,14 +77,14 @@ export function ExportButtons({ eventSlug }: Props) {
 			);
 			const data = (await response.json()) as { ok?: boolean; error?: string; enabled?: boolean };
 			if (!response.ok || !data.ok) {
-				setError(data.error ?? "Could not update nightly Airtable mirror sync");
+				setError(data.error ?? "Could not update nightly Airtable sync");
 				return;
 			}
 			setSyncEnabled(Boolean(data.enabled));
 			setMessage(
 				data.enabled
-					? "Nightly Airtable mirror sync enabled for this event (one-way)."
-					: "Nightly Airtable mirror sync disabled.",
+					? "Nightly Airtable sync enabled for this event."
+					: "Nightly Airtable sync disabled.",
 			);
 		} catch {
 			setError("Network error");
@@ -120,12 +120,12 @@ export function ExportButtons({ eventSlug }: Props) {
 					disabled={pending}
 					className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
 				>
-					{pending ? "Pushing…" : "Push to Airtable mirror"}
+					{pending ? "Pushing…" : "Push submissions to Airtable"}
 				</button>
 			</div>
 			<p className="text-xs text-neutral-500">
 				Files bundle is CFP submission uploads. Latest speaker deliverables stay on the Files page.
-				Airtable mirror is one-way (D1→Airtable); never reverse sync.
+				Airtable gets a copy of your submissions; edits in Airtable are not pulled back here.
 			</p>
 			{syncConfigured ? (
 				<label className="flex items-center gap-2 text-neutral-300">
@@ -135,11 +135,11 @@ export function ExportButtons({ eventSlug }: Props) {
 						disabled={syncPending}
 						onChange={(event) => void toggleNightlySync(event.target.checked)}
 					/>
-					<span>Nightly Airtable mirror sync (one-way, 1:00 UTC)</span>
+					<span>Sync submissions to Airtable nightly (01:00 UTC)</span>
 				</label>
 			) : (
 				<p className="text-xs text-neutral-500">
-					Nightly Airtable mirror sync is unavailable until Airtable credentials are configured.
+					Nightly Airtable sync needs Airtable credentials on this deployment.
 				</p>
 			)}
 			{message ? <p className="text-xs text-neutral-400">{message}</p> : null}
