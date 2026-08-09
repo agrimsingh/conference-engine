@@ -29,6 +29,12 @@ export {
 	type SpeakerAnswer,
 } from "./form-fields";
 
+export {
+	isFormSectionDef,
+	parseFormSections,
+	type FormSectionDef,
+} from "./form-sections";
+
 export { createConferenceCfpPreset, type ConferenceCfpPreset } from "./conference-cfp-preset";
 
 export {

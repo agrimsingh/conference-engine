@@ -56,6 +56,7 @@ describe("CfpForm required multiselect validation", () => {
 					draftsEnabled={false}
 					submissionLimit={0}
 					fields={[topics]}
+					sections={[]}
 				/>,
 			);
 		});
@@ -95,6 +96,7 @@ describe("CfpForm maxLength char count", () => {
 					draftsEnabled={false}
 					submissionLimit={0}
 					fields={[title]}
+					sections={[]}
 				/>,
 			);
 		});
@@ -115,5 +117,39 @@ describe("CfpForm maxLength char count", () => {
 		});
 
 		expect(container.textContent).toContain("5/10");
+	});
+});
+
+describe("CfpForm progress and review step", () => {
+	it("shows required progress and moves to review before submitting", async () => {
+		await act(async () => {
+			root.render(
+				<CfpForm
+					eventSlug="test-event"
+					formSlug="cfp"
+					eventName="Test event"
+					formTitle="Test CFP"
+					formDescription={null}
+					welcomeCopy={null}
+					thankYouCopy={null}
+					draftToken=""
+					draftsEnabled={false}
+					submissionLimit={0}
+					fields={[title]}
+					sections={[]}
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain("Required progress");
+		expect(container.textContent).toContain("0/3");
+
+		const form = container.querySelector("form");
+		await act(async () => {
+			form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		});
+
+		expect(container.textContent).toContain("Review before submitting");
+		expect(container.textContent).toContain("Check your proposal");
 	});
 });

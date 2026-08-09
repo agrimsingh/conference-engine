@@ -8,6 +8,7 @@ import { readBoundedCfpJson } from "@/lib/cfp/request";
 import type { AnswerMap } from "@/lib/domain";
 import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
+import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function PUT(request: Request, context: Context) {
@@ -32,6 +33,14 @@ export async function PUT(request: Request, context: Context) {
 	} catch (error) {
 		if (error instanceof DemoEventWriteError) return NextResponse.json({ ok: false, error: "This form is read-only" }, { status: 403 });
 		throw error;
+	}
+	const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+	const [draftAllowed, ipAllowed] = await Promise.all([
+		consumeFixedWindowRateLimit(db, { secret, bucket: "draft-save-draft", subject: `${eventSlug}:${formSlug}:draft:${draft.id}`, limit: 180, windowMs: 15 * 60_000 }),
+		consumeFixedWindowRateLimit(db, { secret, bucket: "draft-save-ip", subject: `${eventSlug}:${formSlug}:ip:${ip}`, limit: 60, windowMs: 15 * 60_000 }),
+	]);
+	if (!draftAllowed || !ipAllowed) {
+		return NextResponse.json({ ok: false, error: "Too many draft saves. Please wait a moment and try again." }, { status: 429 });
 	}
 	const saved = await saveDraftForResume(db, { secret, token, submitterName, answers });
 	if (!saved) return NextResponse.json({ ok: false, error: "Draft link is invalid or expired" }, { status: 404 });

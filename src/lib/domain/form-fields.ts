@@ -36,6 +36,8 @@ export type FormFieldDef = {
 	visibilityRule: VisibilityRule;
 	config: FieldConfig;
 	helpText?: string;
+	/** Set when Phase 3 form sections are configured for this field. */
+	sectionKey?: string;
 };
 
 type FieldTypeMeta = {

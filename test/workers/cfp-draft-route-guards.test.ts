@@ -122,4 +122,20 @@ describe("draft route guards", () => {
 		expect(saved.tokens).toHaveLength(2);
 		expect(saved.tokens.map((savedToken) => savedToken.state).sort()).toEqual(["current", "superseded"]);
 	});
+
+	it("rate limits repeated draft saves after validation succeeds", async () => {
+		const rateToken = "cfp-draft-rate-token";
+		await seed({ eventId: "draft-rate-event", eventSlug: "draft-rate", formId: "draft-rate-form", formSlug: "cfp", draftToken: rateToken });
+		const context = { params: Promise.resolve({ eventSlug: "draft-rate", formSlug: "cfp" }) };
+		const body = { token: rateToken, submitterName: "Saved", answers: { title: "Draft" } };
+		let lastStatus = 0;
+		for (let attempt = 0; attempt < 181; attempt += 1) {
+			const response = await saveDraft(jsonRequest("https://conference.example.test/api/e/draft-rate/submit/cfp/draft/save", "PUT", body), context);
+			lastStatus = response.status;
+			if (response.status === 429) break;
+		}
+		expect(lastStatus).toBe(429);
+		const payload = await saveDraft(jsonRequest("https://conference.example.test/api/e/draft-rate/submit/cfp/draft/save", "PUT", body), context).then((response) => response.json());
+		expect(payload).toMatchObject({ ok: false, error: expect.stringMatching(/too many draft saves/i) });
+	});
 });

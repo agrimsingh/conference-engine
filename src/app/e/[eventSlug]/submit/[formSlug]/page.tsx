@@ -60,6 +60,7 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 				draftsEnabled={loaded.form.drafts_enabled === 1}
 				submissionLimit={loaded.form.submission_limit}
 				fields={loaded.fields}
+				sections={loaded.sections}
 			/>
 		</main>
 	);

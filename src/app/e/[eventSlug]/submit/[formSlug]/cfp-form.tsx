@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
 import {
 	evaluateVisibilityRule,
 	type AnswerMap,
 	type FormFieldDef,
+	type FormSectionDef,
 	type SpeakerAnswer,
 } from "@/lib/domain";
 import { renderFormCopy } from "@/lib/cfp/form-copy";
+import { computeCfpProgress } from "@/lib/cfp/form-progress";
+import { groupVisibleFieldsBySection } from "@/lib/cfp/form-sections";
 import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";
+import { CfpReviewStep } from "./cfp-review-step";
+
+const AUTOSAVE_DELAY_MS = 2_500;
 
 type Props = {
 	eventSlug: string;
@@ -23,7 +29,11 @@ type Props = {
 	draftsEnabled: boolean;
 	submissionLimit: number;
 	fields: FormFieldDef[];
+	sections: FormSectionDef[];
 };
+
+type FormStep = "edit" | "review";
+type AutosaveStatus = "idle" | "saving" | "saved" | "error";
 
 export function CfpForm({
 	eventSlug,
@@ -37,6 +47,7 @@ export function CfpForm({
 	draftsEnabled,
 	submissionLimit,
 	fields,
+	sections,
 }: Props) {
 	const [answers, setAnswers] = useState<AnswerMap>(() => initialAnswers(fields));
 	const [submitterName, setSubmitterName] = useState("");
@@ -49,12 +60,46 @@ export function CfpForm({
 	const [submitting, setSubmitting] = useState(false);
 	const [draftPending, setDraftPending] = useState(false);
 	const [invalidMultiselectKey, setInvalidMultiselectKey] = useState<string | null>(null);
+	const [step, setStep] = useState<FormStep>("edit");
+	const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
+	const [autosaveStatus, setAutosaveStatus] = useState<AutosaveStatus>("idle");
 	const fieldRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
+	const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const autosaveSnapshot = useRef<string>("");
 	const busy = submitting || draftPending || resuming;
 
 	const visibleFields = useMemo(
 		() => fields.filter((f) => evaluateVisibilityRule(f.visibilityRule, answers)),
 		[fields, answers],
+	);
+
+	const sectionGroups = useMemo(
+		() => groupVisibleFieldsBySection(sections, visibleFields),
+		[sections, visibleFields],
+	);
+
+	const showSectionNav = sections.length > 0 && sectionGroups.some((group) => group.section !== null);
+
+	useEffect(() => {
+		if (!showSectionNav) {
+			setActiveSectionKey(null);
+			return;
+		}
+		setActiveSectionKey((current) => {
+			if (current && sectionGroups.some((group) => group.section?.key === current)) return current;
+			return sectionGroups.find((group) => group.section)?.section?.key ?? null;
+		});
+	}, [showSectionNav, sectionGroups]);
+
+	const fieldsForStep = useMemo(() => {
+		if (!showSectionNav || !activeSectionKey) return visibleFields;
+		const group = sectionGroups.find((item) => item.section?.key === activeSectionKey);
+		return group?.fields ?? visibleFields;
+	}, [activeSectionKey, sectionGroups, showSectionNav, visibleFields]);
+
+	const progress = useMemo(
+		() => computeCfpProgress(fields, answers, { name: submitterName, email: submitterEmail }),
+		[answers, fields, submitterEmail, submitterName],
 	);
 
 	useEffect(() => {
@@ -71,6 +116,7 @@ export function CfpForm({
 				setSubmitterName(body.draft.submitterName ?? "");
 				setSubmitterEmail(body.draft.submitterEmail ?? "");
 				setAnswers(mergeAnswers(fields, body.draft.answers ?? {}));
+				autosaveSnapshot.current = draftPayloadKey(body.draft.submitterName ?? "", mergeAnswers(fields, body.draft.answers ?? {}));
 				if (body.draft.submissionId) setSubmissionId(body.draft.submissionId);
 				else setDraftNotice("Draft restored. Keep saving while you work.");
 			})
@@ -97,18 +143,58 @@ export function CfpForm({
 		finally { setDraftPending(false); }
 	}
 
-	async function saveDraft() {
-		if (!draftToken) return requestResumeLink();
-		setDraftPending(true);
+	const persistDraft = useCallback(async (args: { silent?: boolean } = {}) => {
+		if (!draftToken) return;
+		if (!args.silent) setDraftPending(true);
+		else setAutosaveStatus("saving");
 		try {
-			const response = await fetch(`/api/e/${eventSlug}/submit/${formSlug}/draft/save`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: draftToken, submitterName, answers }) });
+			const response = await fetch(`/api/e/${eventSlug}/submit/${formSlug}/draft/save`, {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ token: draftToken, submitterName, answers }),
+			});
 			const body = await readJson<{ ok?: boolean; error?: string; token?: string }>(response);
-			if (!response.ok || !body?.ok || !body.token) { setErrors([body?.error ?? "Couldn't save the draft. Your existing draft remains unchanged."]); return; }
+			if (!response.ok || !body?.ok || !body.token) {
+				const message = body?.error ?? "Couldn't save the draft. Your existing draft remains unchanged.";
+				if (args.silent) {
+					setAutosaveStatus("error");
+					return;
+				}
+				setErrors([message]);
+				return;
+			}
 			setDraftToken(body.token);
 			window.history.replaceState(null, "", `?draft=${encodeURIComponent(body.token)}`);
-			setDraftNotice("Draft saved. This link is private; you can also use the emailed link from another device.");
-		} catch { setErrors(["Couldn't save the draft. Your existing draft remains unchanged."]); }
-		finally { setDraftPending(false); }
+			autosaveSnapshot.current = draftPayloadKey(submitterName, answers);
+			if (args.silent) setAutosaveStatus("saved");
+			else setDraftNotice("Draft saved. This link is private; you can also use the emailed link from another device.");
+		} catch {
+			if (args.silent) setAutosaveStatus("error");
+			else setErrors(["Couldn't save the draft. Your existing draft remains unchanged."]);
+		} finally {
+			if (!args.silent) setDraftPending(false);
+		}
+	}, [answers, draftToken, eventSlug, formSlug, submitterName]);
+
+	useEffect(() => {
+		if (!draftsEnabled || !draftToken || resuming || step !== "edit" || busy) return;
+		const payload = draftPayloadKey(submitterName, answers);
+		if (payload === autosaveSnapshot.current) return;
+		if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+		autosaveTimer.current = setTimeout(() => {
+			void persistDraft({ silent: true });
+		}, AUTOSAVE_DELAY_MS);
+		return () => {
+			if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+		};
+	}, [answers, busy, draftToken, draftsEnabled, persistDraft, resuming, step, submitterName]);
+
+	async function saveDraft() {
+		if (!draftToken) {
+			await requestResumeLink();
+			return;
+		}
+		await persistDraft();
 	}
 
 	async function submit() {
@@ -170,6 +256,29 @@ export function CfpForm({
 		);
 	}
 
+	if (step === "review") {
+		return (
+			<>
+				<CfpReviewStep
+					submitterName={submitterName}
+					submitterEmail={submitterEmail}
+					fields={visibleFields}
+					answers={answers}
+					onBack={() => setStep("edit")}
+					onConfirm={() => void submit()}
+					busy={submitting}
+				/>
+				{errors.length > 0 ? (
+					<ul className="mx-auto mt-4 w-full max-w-2xl rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+						{errors.map((err) => (
+							<li key={err}>{err}</li>
+						))}
+					</ul>
+				) : null}
+			</>
+		);
+	}
+
 	return (
 		<form
 			className="mx-auto flex w-full max-w-2xl flex-col gap-6"
@@ -183,7 +292,8 @@ export function CfpForm({
 					return;
 				}
 				setInvalidMultiselectKey(null);
-				void submit();
+				setErrors([]);
+				setStep("review");
 			}}
 		>
 			<header className="space-y-2 border-b border-neutral-800 pb-5">
@@ -204,6 +314,55 @@ export function CfpForm({
 				{welcomeCopy ? <p className="text-pretty text-sm text-neutral-300">{welcomeCopy}</p> : null}
 				<p className="text-xs text-neutral-500">Submit in English. There is no fee to submit a proposal.</p>
 			</header>
+
+			<div className="space-y-2">
+				<div className="flex items-center justify-between gap-3 text-xs text-neutral-400">
+					<span>Required progress</span>
+					<span className="tabular-nums text-neutral-300">
+						{progress.completed}/{progress.total}
+					</span>
+				</div>
+				<div
+					className="h-2 overflow-hidden rounded-full bg-neutral-800"
+					role="progressbar"
+					aria-valuemin={0}
+					aria-valuemax={progress.total}
+					aria-valuenow={progress.completed}
+					aria-label="Required fields completed"
+				>
+					<div
+						className="h-full rounded-full bg-indigo-400 transition-[width] duration-300"
+						style={{ width: progress.total > 0 ? `${(progress.completed / progress.total) * 100}%` : "0%" }}
+					/>
+				</div>
+			</div>
+
+			{showSectionNav ? (
+				<nav aria-label="Proposal sections" className="flex flex-wrap gap-2">
+					{sectionGroups.map((group) => {
+						if (!group.section) return null;
+						const selected = group.section.key === activeSectionKey;
+						return (
+							<button
+								key={group.section.key}
+								type="button"
+								aria-current={selected ? "step" : undefined}
+								className={`rounded-full px-3 py-1.5 text-sm transition-colors ${selected ? "bg-indigo-500/20 text-indigo-100 ring-1 ring-indigo-400/40" : "bg-neutral-900 text-neutral-400 ring-1 ring-neutral-800 hover:text-neutral-200"}`}
+								onClick={() => setActiveSectionKey(group.section?.key ?? null)}
+							>
+								{group.section.title}
+							</button>
+						);
+					})}
+				</nav>
+			) : null}
+
+			{showSectionNav && activeSectionKey ? (
+				<div className="rounded-md border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-sm text-neutral-300">
+					{sectionGroups.find((group) => group.section?.key === activeSectionKey)?.section?.description
+						?? sectionGroups.find((group) => group.section?.key === activeSectionKey)?.section?.title}
+				</div>
+			) : null}
 
 			<section className="grid gap-4 sm:grid-cols-2">
 				<label className="flex flex-col gap-1 text-sm">
@@ -229,7 +388,7 @@ export function CfpForm({
 				</label>
 			</section>
 
-			{visibleFields.map((field) => (
+			{fieldsForStep.map((field) => (
 				<FieldInput
 					key={field.key}
 					field={field}
@@ -254,6 +413,13 @@ export function CfpForm({
 				</ul>
 			) : null}
 			{draftNotice ? <p className="rounded-md border border-indigo-400/30 bg-indigo-400/10 px-3 py-2 text-sm text-indigo-100" role="status">{draftNotice}</p> : null}
+			{draftsEnabled && draftToken ? (
+				<p className="text-xs text-neutral-500" role="status" aria-live="polite">
+					{autosaveStatus === "saving" ? "Autosaving draft…" : null}
+					{autosaveStatus === "saved" ? "Draft autosaved." : null}
+					{autosaveStatus === "error" ? "Autosave paused. Use Save draft or keep editing." : null}
+				</p>
+			) : null}
 
 			{draftsEnabled ? (
 				<div className="flex flex-wrap items-center gap-3 border-t border-neutral-800 pt-4 text-sm">
@@ -270,10 +436,14 @@ export function CfpForm({
 				disabled={busy}
 				className={`self-start ${buttonClasses("primary")}`}
 			>
-				{submitting ? "Submitting…" : "Submit proposal"}
+				Review proposal
 			</button>
 		</form>
 	);
+}
+
+function draftPayloadKey(submitterName: string, answers: AnswerMap): string {
+	return JSON.stringify({ submitterName, answers });
 }
 
 function initialAnswers(fields: FormFieldDef[]): AnswerMap {
