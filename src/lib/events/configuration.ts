@@ -1,4 +1,4 @@
-import { validateEventSettings } from "./settings";
+import { parseTrackConflictPolicy, validateEventSettings, type TrackConflictPolicy } from "./settings";
 import { validateEventScheduleBounds } from "../schedule/date-bounds";
 
 export type ConfigurationEvent = {
@@ -10,6 +10,7 @@ export type ConfigurationEvent = {
 	day_start_minutes: number;
 	day_end_minutes: number;
 	slot_duration_minutes: number;
+	track_conflict_policy: TrackConflictPolicy;
 };
 
 export type ConfigurationRoom = { id: string; name: string; position: number };
@@ -36,7 +37,7 @@ function activeRows<T>(result: D1Result<T>): T[] { return result.results; }
 
 export async function loadEventConfiguration(db: D1Database, eventId: string): Promise<EventConfiguration> {
 	const [event, rooms, tracks, tasks, cfp, review] = await Promise.all([
-		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
+		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
 		db.prepare(`SELECT id, key, label, task_kind, required, position FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<ConfigurationTask>(),
@@ -82,8 +83,9 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 	const dayEndMinutes = typeof input.dayEndMinutes === "number" ? input.dayEndMinutes : Number.NaN;
 	const slotDurationMinutes = typeof input.slotDurationMinutes === "number" ? input.slotDurationMinutes : Number.NaN;
 	if (!Number.isInteger(dayStartMinutes) || !Number.isInteger(dayEndMinutes) || !Number.isInteger(slotDurationMinutes)) throw new Error("Schedule defaults must be whole minutes.");
-	const valid = validateEventSettings({ startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes });
+	const valid = validateEventSettings({ startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy: input.trackConflictPolicy });
 	if (!valid.ok) throw new Error(valid.error);
+	const trackConflictPolicy = input.trackConflictPolicy === undefined ? null : parseTrackConflictPolicy(input.trackConflictPolicy);
 	const existingSlots = await db
 		.prepare("SELECT starts_at, ends_at FROM agenda_slots WHERE event_id = ?")
 		.bind(eventId)
@@ -105,8 +107,8 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 			throw new Error(`Can't save schedule defaults because an existing session ${boundsError.toLowerCase()}.`);
 		}
 	}
-	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, updated_at = ? WHERE id = ?`)
-		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, Date.now(), eventId).run();
+	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), updated_at = ? WHERE id = ?`)
+		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, Date.now(), eventId).run();
 }
 
 export async function createRoom(db: D1Database, eventId: string, rawName: unknown): Promise<void> {

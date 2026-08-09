@@ -53,7 +53,7 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 
 ## Evidence on Hand
 
-- Live production deployment: https://conference-engine.65labs.org with seeded demo event `aie-sandbox` (CFP, schedule, portal, review board, admin dashboard all runnable end-to-end).
+- Live production deployment: https://conference-engine.65labs.org with seeded read-only demo event `demo-cfp-to-stage` at `/demo` (CFP, schedule, portal, review board, admin dashboard all runnable end-to-end).
 - Real transactional email delivery via Resend (provider IDs logged for submission confirmations, acceptance, magic links, reminders).
 - Public repository with per-slice commit history: https://github.com/agrimsingh/conference-engine.
 - Customer's own requirements doc and video walkthrough (local `research/`, not in repo): six firm requirements, the "$40,000 for this software" quote, and the "very fancy form builder" framing.
