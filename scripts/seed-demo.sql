@@ -358,7 +358,7 @@ WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
 ), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
-	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Agents"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
 	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),
@@ -372,7 +372,7 @@ WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
 ), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
-	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Agents"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
 	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),

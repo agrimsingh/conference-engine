@@ -88,7 +88,7 @@ describe("demo public state", () => {
 		}
 		const filteredSessions = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "sessions");
 		expect(filteredSessions?.sessions).toHaveLength(2);
-		expect(filteredSessions?.sessions.every((session) => session.trackId === "demo-track-agents" && session.format === "Agents" && session.room === "Main Stage")).toBe(true);
+		expect(filteredSessions?.sessions.every((session) => session.trackId === "demo-track-agents" && ["Stage", "Lightning"].includes(session.format) && session.room === "Main Stage")).toBe(true);
 		const speakerPayload = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "speakers");
 		expect(speakerPayload?.speakers).toContainEqual(expect.objectContaining({ name: "Amara Diallo", jobTitle: "Staff Engineer", company: "Resilient Labs" }));
 
