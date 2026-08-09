@@ -46,7 +46,6 @@ export default async function PortalPage({ searchParams }: Props) {
 	}
 
 	const db = await getDb();
-	const now = Date.now();
 	const submissions = await listSubmissionsForPerson(db, session.personId);
 	const tasks = await listTasksForPerson(db, session.personId);
 
@@ -142,7 +141,6 @@ export default async function PortalPage({ searchParams }: Props) {
 												) : (
 														<TaskChecklist
 															compact
-															now={now}
 															timeZone={events.get(row.event_id)?.timezone}
 															tasks={submissionTasks.map((task) => {
 															const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
