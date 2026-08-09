@@ -18,6 +18,7 @@ import {
 	SEGMENTED_CONTAINER_CLASSES,
 	EmptyState,
 } from "@/components/ui";
+import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import {
 	deriveScheduleDays,
 	dayKeyInTimeZone,
@@ -37,6 +38,12 @@ export type PublicScheduleProps = {
 	basePath: PublicScheduleBasePath;
 };
 
+type PublicScheduleSpeaker = {
+	personId: string | null;
+	name: string;
+	hasHeadshot: boolean;
+};
+
 type EnrichedSlot = {
 	id: string;
 	submissionId: string;
@@ -46,7 +53,7 @@ type EnrichedSlot = {
 	startsAtMs: number;
 	endsAtMs: number;
 	status: string;
-	speakers: string[];
+	speakers: PublicScheduleSpeaker[];
 	dayKey: string;
 	detailHref: string;
 };
@@ -107,14 +114,50 @@ function hrefFor(
 	return `${basePath}/${eventSlug}/schedule?${params.toString()}`;
 }
 
+function SpeakerLine({
+	speakers,
+	eventSlug,
+	basePath,
+}: {
+	speakers: PublicScheduleSpeaker[];
+	eventSlug: string;
+	basePath: PublicScheduleBasePath;
+}) {
+	if (speakers.length === 0) return null;
+	return (
+		<ul className="mt-1 flex flex-wrap gap-3">
+			{speakers.map((speaker, index) => (
+				<li key={`${speaker.personId ?? speaker.name}-${index}`}>
+					<PublicSpeakerAvatar
+						eventSlug={eventSlug}
+						personId={speaker.personId}
+						name={speaker.name}
+						hasHeadshot={speaker.hasHeadshot}
+						size="sm"
+						profileHref={
+							basePath === "/e" && speaker.personId
+								? `/e/${eventSlug}/speakers/${speaker.personId}`
+								: null
+						}
+					/>
+				</li>
+			))}
+		</ul>
+	);
+}
+
 function SlotCard({
 	slot,
 	timezone,
+	eventSlug,
+	basePath,
 	showRoom,
 	showTrack,
 }: {
 	slot: EnrichedSlot;
 	timezone: string;
+	eventSlug: string;
+	basePath: PublicScheduleBasePath;
 	showRoom?: boolean;
 	showTrack?: boolean;
 }) {
@@ -127,9 +170,7 @@ function SlotCard({
 				{showTrack ? ` · ${slot.track.name}` : ""}
 			</p>
 			<Link className="mt-0.5 block font-medium text-neutral-100 hover:underline" href={slot.detailHref}>{slot.title}</Link>
-			{slot.speakers.length > 0 ? (
-				<p className="text-neutral-400">{slot.speakers.join(", ")}</p>
-			) : null}
+			<SpeakerLine speakers={slot.speakers} eventSlug={eventSlug} basePath={basePath} />
 		</div>
 	);
 }
@@ -168,6 +209,29 @@ export async function PublicSchedule({
 
 	const enriched: EnrichedSlot[] = [];
 	const speakersBySubmission = await listSpeakersForSubmissions(db, publicSlots.map((slot) => slot.submission_id));
+	const personIds = [
+		...new Set(
+			[...speakersBySubmission.values()]
+				.flat()
+				.filter((speaker) => speaker.status === "confirmed" && speaker.person_id)
+				.map((speaker) => speaker.person_id!),
+		),
+	];
+	const headshotByPerson = new Map<string, boolean>();
+	if (personIds.length > 0) {
+		const placeholders = personIds.map(() => "?").join(", ");
+		const profiles = await db
+			.prepare(
+				`SELECT person_id, headshot_asset_id
+         FROM speaker_profiles
+         WHERE event_id = ? AND person_id IN (${placeholders})`,
+			)
+			.bind(event.id, ...personIds)
+			.all<{ person_id: string; headshot_asset_id: string | null }>();
+		for (const profile of profiles.results) {
+			headshotByPerson.set(profile.person_id, Boolean(profile.headshot_asset_id));
+		}
+	}
 	for (const slot of publicSlots) {
 		const answers = parseAnswers(slot.answers_json);
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
@@ -182,7 +246,13 @@ export async function PublicSchedule({
 			status: slot.submission_status,
 			speakers: speakers
 				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => speaker.name || speaker.email),
+				.map((speaker) => ({
+					personId: speaker.person_id,
+					name: speaker.name.trim() || "Speaker",
+					hasHeadshot: speaker.person_id
+						? (headshotByPerson.get(speaker.person_id) ?? false)
+						: false,
+				})),
 			dayKey: dayKeyInTimeZone(slot.starts_at, event.timezone),
 			detailHref: `${basePath}/${event.slug}/sessions/${slot.submission_id}`,
 		});
@@ -323,11 +393,7 @@ export async function PublicSchedule({
 									{slot.track.name}
 								</p>
 								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100"><Link className="hover:underline" href={slot.detailHref}>{slot.title}</Link></h2>
-								{slot.speakers.length > 0 ? (
-									<p className="mt-1 text-sm text-neutral-400">
-										{slot.speakers.join(", ")}
-									</p>
-								) : null}
+								<SpeakerLine speakers={slot.speakers} eventSlug={event.slug} basePath={basePath} />
 							</li>
 						))}
 					</ol>
@@ -366,11 +432,7 @@ export async function PublicSchedule({
 														<p className="text-xs text-neutral-500">
 															{slot.track.name}
 														</p>
-														{slot.speakers.length > 0 ? (
-															<p className="text-neutral-400">
-																{slot.speakers.join(", ")}
-															</p>
-														) : null}
+														<SpeakerLine speakers={slot.speakers} eventSlug={event.slug} basePath={basePath} />
 													</div>
 												</li>
 											))}
@@ -405,6 +467,8 @@ export async function PublicSchedule({
 												<SlotCard
 													slot={slot}
 													timezone={event.timezone}
+													eventSlug={event.slug}
+													basePath={basePath}
 													showRoom
 													showTrack
 												/>
@@ -439,6 +503,8 @@ export async function PublicSchedule({
 												<SlotCard
 													slot={slot}
 													timezone={event.timezone}
+													eventSlug={event.slug}
+													basePath={basePath}
 													showRoom
 												/>
 											</li>
@@ -477,6 +543,8 @@ export async function PublicSchedule({
 												<SlotCard
 													slot={slot}
 													timezone={event.timezone}
+													eventSlug={event.slug}
+													basePath={basePath}
 													showTrack
 												/>
 											</li>
@@ -497,7 +565,15 @@ export async function PublicSchedule({
 				</div>
 			) : null}
 
-			<p className="mt-10 text-sm text-neutral-500">
+			<p className="mt-10 flex flex-wrap gap-4 text-sm text-neutral-500">
+				{basePath === "/e" ? (
+					<Link
+						className="font-medium text-neutral-200 underline underline-offset-2"
+						href={`/e/${event.slug}/speakers`}
+					>
+						Speakers
+					</Link>
+				) : null}
 				<Link
 					className="font-medium text-neutral-200 underline underline-offset-2"
 					href={`/e/${event.slug}/submit/cfp`}

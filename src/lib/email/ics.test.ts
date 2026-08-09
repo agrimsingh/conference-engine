@@ -18,4 +18,24 @@ describe("calendar invite lifecycle", () => {
 		expect(ics).toContain("STATUS:CANCELLED");
 		expect(ics).toContain("SEQUENCE:5");
 	});
+
+	it("emits METHOD:PUBLISH without an ATTENDEE line", () => {
+		const ics = buildIcsInvite({
+			uid: "session@example.test",
+			summary: "Public talk",
+			location: "Main",
+			startsAtMs: Date.UTC(2026, 7, 9, 1),
+			endsAtMs: Date.UTC(2026, 7, 9, 2),
+			organizerEmail: "team@example.test",
+			attendeeEmail: "must-not-leak@example.test",
+			method: "PUBLISH",
+			sequence: 2,
+			dtstampMs: Date.UTC(2026, 7, 1),
+		});
+		expect(ics).toContain("METHOD:PUBLISH\r\n");
+		expect(ics).toContain("STATUS:CONFIRMED");
+		expect(ics).toContain("SEQUENCE:2");
+		expect(ics).not.toContain("ATTENDEE");
+		expect(ics).not.toContain("must-not-leak@example.test");
+	});
 });

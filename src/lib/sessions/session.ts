@@ -1,5 +1,5 @@
 import { getEventBySlug, getSubmissionById, listAgendaTracks, listSpeakersForSubmission } from "@/lib/db/queries";
-import type { SubmissionRow, SubmissionSpeakerRow } from "@/lib/db/types";
+import type { SubmissionRow } from "@/lib/db/types";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { ensureTaskTemplates, materializeAcceptedSpeaker, prepareMaterializationWriteFence, MaterializationClaimLostError, MATERIALIZATION_WRITE_FENCE_PREDICATE, type MaterializationWriteFence, type MaterializedSpeakerResources } from "@/lib/speakers/materialize";
 import { hasFormulaPrefix, parseBoundedCsv, type CsvRecord } from "./csv";
@@ -392,7 +392,20 @@ export async function cloneSession(db: D1Database, args: { targetEventId: string
 	return { id: created.id, source };
 }
 
-export type PublicSession = { event: { id: string; slug: string; name: string; timezone: string }; submission: SubmissionRow; slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null; trackName: string }; speakers: SubmissionSpeakerRow[] };
+export type PublicSessionSpeaker = {
+	id: string;
+	personId: string | null;
+	name: string;
+	bio: string | null;
+	hasHeadshot: boolean;
+};
+
+export type PublicSession = {
+	event: { id: string; slug: string; name: string; timezone: string };
+	submission: SubmissionRow;
+	slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null; trackName: string };
+	speakers: PublicSessionSpeaker[];
+};
 
 export async function loadPublicSession(db: D1Database, eventSlug: string, submissionId: string): Promise<PublicSession | null> {
 	const event = await getEventBySlug(db, eventSlug);
@@ -404,7 +417,50 @@ export async function loadPublicSession(db: D1Database, eventSlug: string, submi
 		listAgendaTracks(db, event.id, { includeRetired: true }),
 	]);
 	const track = publicScheduleTrack(row.agenda_track_id, tracks);
-	return { event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone }, submission: row, slot: { id: row.agenda_slot_id, roomName: row.agenda_room_name, startsAt: row.agenda_starts_at, endsAt: row.agenda_ends_at, trackId: row.agenda_track_id, trackName: track.name }, speakers: speakers.filter((speaker) => speaker.status === "confirmed") };
+	const confirmed = speakers.filter((speaker) => speaker.status === "confirmed");
+	const personIds = [
+		...new Set(
+			confirmed
+				.map((speaker) => speaker.person_id)
+				.filter((personId): personId is string => Boolean(personId)),
+		),
+	];
+	const headshotByPerson = new Map<string, boolean>();
+	if (personIds.length > 0) {
+		const placeholders = personIds.map(() => "?").join(", ");
+		const profiles = await db
+			.prepare(
+				`SELECT person_id, headshot_asset_id
+         FROM speaker_profiles
+         WHERE event_id = ? AND person_id IN (${placeholders})`,
+			)
+			.bind(event.id, ...personIds)
+			.all<{ person_id: string; headshot_asset_id: string | null }>();
+		for (const profile of profiles.results) {
+			headshotByPerson.set(profile.person_id, Boolean(profile.headshot_asset_id));
+		}
+	}
+	return {
+		event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone },
+		submission: row,
+		slot: {
+			id: row.agenda_slot_id,
+			roomName: row.agenda_room_name,
+			startsAt: row.agenda_starts_at,
+			endsAt: row.agenda_ends_at,
+			trackId: row.agenda_track_id,
+			trackName: track.name,
+		},
+		speakers: confirmed.map((speaker) => ({
+			id: speaker.id,
+			personId: speaker.person_id,
+			name: speaker.name.trim() || "Speaker",
+			bio: speaker.bio,
+			hasHeadshot: speaker.person_id
+				? (headshotByPerson.get(speaker.person_id) ?? false)
+				: false,
+		})),
+	};
 }
 
 function parseAnswers(raw: string): Record<string, unknown> {
