@@ -85,10 +85,10 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 - **Review.** Named reviewers score assigned talks against the rubric. Empty assignment list means empty board (fail closed).
 - **Decide ≠ notify.** Stage accept, waitlist, or reject on the submission detail page. Send the email later (one-by-one or bulk). Queues keep pending, to-notify, notified, withdrawn, and drafts apart so the two jobs never blur.
 - **Program cockpit.** The live “who is blocking the programme?” board links into each gap, with a cumulative submissions chart above it so you can see whether intake is on track. It refreshes when the event room updates.
-- **Speaker operations.** Roster, notes, announcements, and task reminders without turning into a CRM. The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific); speakers can withdraw themselves. Gaps stay on the cockpit until they land.
+- **Speaker operations.** Roster, notes, announcements, and task reminders without turning into a CRM. The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific). Speakers can withdraw themselves, including after a talk is placed (the slot clears and calendar invites cancel). Gaps stay on the cockpit until they land.
 - **Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Sessionboard session CSVs import with their column names aliased; publish and content approval stay on the same path.
 - **Public surfaces.** Published schedule (defaults to today or the next session day), speakers, session pages, and an iframe embed. Headshots and `.ics` ship for published sessions.
-- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, copy submissions into Airtable (manual or nightly), and sync speakers/sessions to Accelevents. The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
+- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, or copy submissions into Airtable (manual or nightly). **Accelevents** sync creates or updates speakers and sessions, then attaches speakers on the session itself (preview, manual push, or optional daily at 01:00 UTC). The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
 
 ## Day-to-day use
 
@@ -112,7 +112,7 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
 | `AIRTABLE_*` | Optional: copy submissions into Airtable (manual push or nightly). Airtable edits are not pulled back. |
-| Accelevents | Per event under **Integrations**: sync speakers and sessions out to Accelevents (preview, push, optional daily). |
+| Accelevents | Per event under **Integrations**: sync speakers and sessions out, including speaker-on-session assignment (preview, push, optional daily). |
 
 ```bash
 npx wrangler secret put AUTH_SECRET
@@ -178,6 +178,11 @@ After a behaviour change, click through one real path in `npm run preview` (subm
 | `src/durable-objects/` | schedule serialisation + live updates |
 | `PARITY.md` | brief requirements → live routes |
 | `PRODUCT.md` / `DESIGN.md` / `DECISIONS.md` | product, design, decision log |
+
+
+## Accelevents speaker assignment
+
+Accelevents does not publish a separate “assign speaker to session” API. We learned the real contract by doing the action once in their product with the browser network panel open (a HAR capture): assigning a speaker issues `PUT /session/{id}` with `speakerList` and `speakersAsTag` on the session body. The typed client in `src/lib/integrations/accelevents/` follows that observed shape, with tests. Raw HARs hold auth material, so they stay out of the repo and get deleted after the contract is written down.
 
 ## License
 
