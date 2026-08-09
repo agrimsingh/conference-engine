@@ -136,7 +136,9 @@ describe("public embed widgets", () => {
 
 	it("renders a searchable speaker list with a fallback, biography, affiliation, and rich detail links", async () => {
 		await act(async () => root.render(<SpeakersWidget payload={payload} gallery={false} />));
-		expect(container.textContent).toContain("PR");
+		const fallback = container.querySelector('svg[aria-label="Illustrated speaker portrait"]');
+		expect(fallback).not.toBeNull();
+		expect(fallback?.getAttribute("data-avatar-variant")).toBeTruthy();
 		expect(container.textContent).toContain("Priya builds dependable delivery platforms.");
 		expect(container.textContent).toContain("Staff Engineer");
 		expect(container.querySelector('a[href="/e/devflow/speakers/speaker-1"]')).not.toBeNull();
@@ -149,12 +151,29 @@ describe("public embed widgets", () => {
 
 	it("renders a searchable speaker gallery with headshots, graceful fallback, and details", async () => {
 		await act(async () => root.render(<SpeakersWidget payload={payload} gallery />));
-		expect(container.querySelector('img[src="/headshot"]')).not.toBeNull();
-		expect(container.textContent).toContain("PR");
+		expect(container.querySelector('img[src*="speaker-2"]')).not.toBeNull();
+		expect(container.querySelector('svg[aria-label="Illustrated speaker portrait"]')).not.toBeNull();
 		const search = container.querySelector('input[type="search"]') as HTMLInputElement;
 		await act(async () => setValue(search, "Sam"));
 		expect(container.textContent).toContain("Sam designs agent products.");
 		expect(container.querySelector('a[href="/e/devflow/speakers/speaker-2"]')).not.toBeNull();
+	});
+
+	it("does not render speaker portraits when the headshot field is hidden", async () => {
+		const withoutHeadshots = {
+			...payload,
+			embed: {
+				...payload.embed,
+				config: {
+					...payload.embed.config,
+					visibleFields: payload.embed.config.visibleFields.filter((field) => field !== "headshot"),
+				},
+			},
+		};
+		await act(async () => root.render(<SpeakersWidget payload={withoutHeadshots} gallery />));
+		expect(container.querySelector("img")).toBeNull();
+		expect(container.querySelector('svg[aria-label="Illustrated speaker portrait"]')).toBeNull();
+		expect(container.textContent).toContain("Priya Raman");
 	});
 
 	it("navigates agenda days and opens a rich session detail", async () => {
@@ -170,7 +189,38 @@ describe("public embed widgets", () => {
 		expect(container.textContent).toContain("Practical agent evaluation patterns.");
 		expect(container.textContent).toContain("Workshop");
 		expect(container.textContent).toContain("Applied AI");
+		expect(container.textContent).toContain("Founder");
+		expect(container.textContent).toContain("Build Co");
 		expect(container.textContent).toContain("Close details");
+	});
+
+	it("honors agenda visible fields in cards and details while preserving configured speaker affiliations", async () => {
+		const configuredAgenda = {
+			...payload,
+			embed: {
+				...payload.embed,
+				widgetType: "agenda" as const,
+				config: {
+					...payload.embed.config,
+					visibleFields: ["title", "speakers", "jobTitle"] as PublicEmbedPayload["embed"]["config"]["visibleFields"],
+				},
+			},
+		};
+		await act(async () => root.render(<AgendaWidget payload={configuredAgenda} />));
+		expect(container.textContent).toContain("Taming CI");
+		expect(container.textContent).toContain("Priya Raman");
+		expect(container.textContent).toContain("Staff Engineer");
+		expect(container.textContent).not.toContain("Acme");
+		expect(container.textContent).not.toContain("Hall A");
+		expect(container.textContent).not.toContain("Platform & Infra");
+		expect(container.textContent).not.toContain("Talk");
+		expect(container.textContent).not.toContain("9:00 AM");
+		const session = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("Taming CI"));
+		await act(async () => session?.click());
+		expect(container.textContent).toContain("Close details");
+		expect(container.textContent).toContain("Priya Raman");
+		expect(container.textContent).not.toContain("A sufficiently long description");
+		expect(container.textContent).not.toContain("Room: Hall A");
 	});
 
 	it("renders chronological itinerary day navigation and rich cards linked to the filtered itinerary", async () => {
