@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LandingHero, LandingNav } from "@/components/landing-intro";
 import { LogoMark } from "@/components/logo";
+import { buttonClasses } from "@/components/ui";
 
 const DEMO_EVENT = "demo-cfp-to-stage";
 const REPO_URL = "https://github.com/agrimsingh/conference-engine";
@@ -141,55 +142,82 @@ const UNSCHEDULED: {
 	},
 ];
 
+type PipelineAction =
+	| { kind: "play"; href: string; label: string }
+	| { kind: "own" };
+
 const PIPELINE: {
 	stage: string;
 	description: string;
-	href: string;
-	linkLabel: string;
+	action: PipelineAction;
 }[] = [
 	{
 		stage: "CFP",
 		description:
-			"The form adapts by talk type: a workshop proposal asks different questions than a keynote. Submissions arrive pre-sorted.",
-		href: `/e/${DEMO_EVENT}/submit/cfp`,
-		linkLabel: "Try the demo CFP",
+			"The form adapts by talk type: a workshop proposal asks different questions than a keynote. Open the real demo form and click through the conditionals (writes stay blocked).",
+		action: {
+			kind: "play",
+			href: `/e/${DEMO_EVENT}/submit/cfp`,
+			label: "Open the demo form",
+		},
 	},
 	{
 		stage: "Review",
 		description:
 			"Reviewers score only what they're assigned, 1–5 against the rubric. The board stays empty until you assign; the chair reads scores, not an email chain.",
-		href: "/demo?perspective=reviewer",
-		linkLabel: "How review works",
+		action: { kind: "own" },
 	},
 	{
 		stage: "Accept",
 		description:
 			"Triage into accepted, waitlisted, or rejected without sending a single email. Bulk-notify when the programme is settled.",
-		href: "/admin",
-		linkLabel: "Create your event",
+		action: { kind: "own" },
 	},
 	{
 		stage: "Speaker ops",
 		description:
 			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. Outstanding work stays on the cockpit until it lands.",
-		href: "/demo?perspective=speaker",
-		linkLabel: "How speaker ops work",
+		action: { kind: "own" },
 	},
 	{
 		stage: "Schedule",
 		description:
-			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. Placing a slot sends an .ics invite that shows a Gmail RSVP.",
-		href: `/e/${DEMO_EVENT}/schedule`,
-		linkLabel: "View published schedule",
+			"Published sessions land on a public grid that defaults to today or the next session day. The drag editor and clash checks run in your own event.",
+		action: {
+			kind: "play",
+			href: `/e/${DEMO_EVENT}/schedule`,
+			label: "Open the public schedule",
+		},
 	},
 	{
 		stage: "Publish",
 		description:
-			"The schedule goes live at its own URL, defaults to today or the next session day, and renders in multiple layouts. A JSON API and embeds cover the conference site.",
-		href: `/e/${DEMO_EVENT}/schedule`,
-		linkLabel: "Open live schedule",
+			"Speakers and session pages ship with the schedule. Embeds and a JSON API cover the conference site.",
+		action: {
+			kind: "play",
+			href: `/e/${DEMO_EVENT}/speakers`,
+			label: "Browse speakers",
+		},
 	},
 ];
+
+const PLAY_NOW = [
+	{
+		label: "Demo CFP form",
+		detail: "Real fields and conditionals",
+		href: `/e/${DEMO_EVENT}/submit/cfp`,
+	},
+	{
+		label: "Public schedule",
+		detail: "Published programme grid",
+		href: `/e/${DEMO_EVENT}/schedule`,
+	},
+	{
+		label: "Speaker directory",
+		detail: "Profiles for the demo event",
+		href: `/e/${DEMO_EVENT}/speakers`,
+	},
+] as const;
 
 function yFor(startMin: number): number {
 	return ((startMin - SCENE_START_MIN) / 60) * HOUR_PX;
@@ -465,11 +493,54 @@ export default function Home() {
 			<LandingNav demoEvent={DEMO_EVENT} repoUrl={REPO_URL} />
 
 			<main>
-				<LandingHero />
+				<LandingHero demoEvent={DEMO_EVENT} />
 
 				{/* Schedule scene */}
 				<section className="relative pb-6">
 					<ScheduleScene />
+				</section>
+
+				{/* Playable demo routes */}
+				<section
+					id="try"
+					className="mx-auto max-w-7xl px-4 pb-6 pt-10 sm:px-6 sm:pt-12"
+				>
+					<div className="flex flex-wrap items-end justify-between gap-3">
+						<div>
+							<h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+								Click around the real UI
+							</h2>
+							<p className="mt-2 max-w-xl text-pretty text-sm text-neutral-400">
+								These open seeded demo routes. Submit, review, and the speaker
+								portal stay on an event you create (writable sandbox is local
+								only).
+							</p>
+						</div>
+						<Link
+							href="/demo"
+							className="text-sm font-medium text-neutral-400 underline underline-offset-2 hover:text-neutral-200"
+						>
+							Demo route map
+						</Link>
+					</div>
+					<ul className="mt-8 grid gap-3 sm:grid-cols-3">
+						{PLAY_NOW.map((item) => (
+							<li key={item.href}>
+								<Link
+									href={item.href}
+									className="group flex h-full flex-col rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 transition-colors hover:border-neutral-600 hover:bg-neutral-900"
+								>
+									<span className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-100 group-hover:text-emerald-300">
+										{item.label}
+										<ArrowIcon />
+									</span>
+									<span className="mt-1 text-sm text-neutral-500">
+										{item.detail}
+									</span>
+								</Link>
+							</li>
+						))}
+					</ul>
 				</section>
 
 				{/* Pipeline */}
@@ -481,8 +552,8 @@ export default function Home() {
 						The whole program pipeline, one system
 					</h2>
 					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
-						Six stages that usually live in six tools. Playable links open real
-						demo routes or the launcher; admin and portal need an event you create.
+						Six stages that usually live in six tools. Green links are live demo
+						routes. Everything else needs your own event — no brochure dead ends.
 					</p>
 					<ol className="mt-10 border-t border-neutral-800">
 						{PIPELINE.map((item, index) => (
@@ -490,7 +561,7 @@ export default function Home() {
 								key={item.stage}
 								className="grid gap-2 border-b border-neutral-800 py-6 sm:grid-cols-[56px_200px_1fr_auto] sm:items-baseline sm:gap-6"
 							>
-								<span className="text-sm tabular-nums text-neutral-400">
+								<span className="text-sm tabular-nums text-neutral-500">
 									{String(index + 1).padStart(2, "0")}
 								</span>
 								<h3 className="text-lg font-medium text-neutral-100">
@@ -499,16 +570,32 @@ export default function Home() {
 								<p className="max-w-xl text-pretty text-sm leading-relaxed text-neutral-400">
 									{item.description}
 								</p>
-								<Link
-									href={item.href}
-									className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
-								>
-									{item.linkLabel}
-									<ArrowIcon />
-								</Link>
+								{item.action.kind === "play" ? (
+									<Link
+										href={item.action.href}
+										className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+									>
+										{item.action.label}
+										<ArrowIcon />
+									</Link>
+								) : (
+									<span className="text-sm text-neutral-600">Needs your event</span>
+								)}
 							</li>
 						))}
 					</ol>
+					<div className="mt-8 flex flex-wrap items-center gap-4">
+						<Link
+							href="/admin"
+							className={`inline-flex items-center gap-2 px-4 py-2 ${buttonClasses("primary")}`}
+						>
+							Create an event to run the rest
+							<ArrowIcon />
+						</Link>
+						<p className="text-sm text-neutral-500">
+							Review, accept/notify, speaker portal, and the schedule editor.
+						</p>
+					</div>
 				</section>
 
 				{/* Live dashboard */}
@@ -641,9 +728,15 @@ npm run deploy`}
 						</a>
 						<Link
 							className="hover:text-neutral-100"
+							href={`/e/${DEMO_EVENT}/submit/cfp`}
+						>
+							Demo CFP
+						</Link>
+						<Link
+							className="hover:text-neutral-100"
 							href={`/e/${DEMO_EVENT}/schedule`}
 						>
-							Public schedule
+							Schedule
 						</Link>
 						<Link className="hover:text-neutral-100" href="/admin">
 							Create your event

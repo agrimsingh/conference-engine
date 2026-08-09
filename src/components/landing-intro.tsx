@@ -35,9 +35,15 @@ export function LandingNav({ demoEvent, repoUrl }: Props) {
 					</span>
 				</Link>
 				<div className="ml-auto hidden items-center gap-5 text-sm text-neutral-400 sm:flex">
-					<a className="hover:text-neutral-100" href="#pipeline">
-						Features
+					<a className="hover:text-neutral-100" href="#try">
+						Try
 					</a>
+					<Link
+						className="hover:text-neutral-100"
+						href={`/e/${demoEvent}/submit/cfp`}
+					>
+						Demo CFP
+					</Link>
 					<Link
 						className="hover:text-neutral-100"
 						href={`/e/${demoEvent}/schedule`}
@@ -72,7 +78,7 @@ export function LandingNav({ demoEvent, repoUrl }: Props) {
 	);
 }
 
-export function LandingHero() {
+export function LandingHero({ demoEvent }: { demoEvent: string }) {
 	return (
 		<section className="mx-auto max-w-7xl px-4 pb-10 pt-14 sm:px-6 sm:pt-16">
 			<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
@@ -96,15 +102,16 @@ export function LandingHero() {
 					<ArrowIcon />
 				</Link>
 				<Link
-					href="/demo"
+					href={`/e/${demoEvent}/submit/cfp`}
 					className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
 				>
-					Try the demo
+					Open the demo CFP
 					<ArrowIcon />
 				</Link>
 			</div>
 			<p className="mt-4 text-xs text-neutral-500">
-				Magic-link sign-in · guided event setup · publish when you are ready
+				Public demo is read-only · review and portal need your own event · writable
+				sandbox is local (see README)
 			</p>
 		</section>
 	);
