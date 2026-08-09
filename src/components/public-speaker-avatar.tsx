@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 type PublicSpeakerAvatarProps = {
@@ -18,12 +19,16 @@ export function PublicSpeakerAvatar({
 	size = "md",
 }: PublicSpeakerAvatarProps) {
 	const dim = size === "sm" ? "h-8 w-8" : "h-12 w-12";
+	const px = size === "sm" ? 32 : 48;
 	const initial = name.trim().slice(0, 1).toUpperCase() || "?";
 	const image =
 		personId && hasHeadshot ? (
-			<img
+			<Image
 				src={`/api/e/${eventSlug}/people/${personId}/headshot`}
 				alt=""
+				width={px}
+				height={px}
+				unoptimized
 				className={`${dim} rounded-full object-cover`}
 			/>
 		) : (
