@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { setBulkSubmissionReviewers, setSubmissionReviewers } from "@/lib/evaluation/assignments";
 import { bulkDecideSubmissions } from "@/lib/evaluation/decisions";
+import { bulkLabelSubmissions } from "@/lib/evaluation/labels";
 import { activateEvaluationPlan, createCriterion, createEvaluationPlan, deleteCriterion, listCriteria, updateCriterion } from "@/lib/evaluation/plan";
 import { createReviewer, regenerateReviewerToken, revokeReviewer } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan, resolveReviewIdentity, upsertEvaluationScore } from "@/lib/evaluation/score";
@@ -132,6 +133,59 @@ describe("evaluation workflows", () => {
 			return { ok: true, submissionId, status: "rejected", email: null };
 		} });
 		expect(thrown).toMatchObject({ succeeded: 1, failed: 1, outcomes: [{ submissionId: "eval-accept-submission", ok: true }, { submissionId: "eval-reject-submission", ok: false, status: 500, error: "injected exception" }] });
+		const emailed = await bulkDecideSubmissions(env.DB, {
+			eventId: "eval-decisions-event",
+			submissionIds: ["eval-reject-submission"],
+			action: "reject",
+			email: { send: true, subject: "Shared reject", text: "Bulk body" },
+			decide: async (submissionId, action, email) => {
+				expect(action).toBe("reject");
+				expect(email).toEqual({ send: true, subject: "Shared reject", text: "Bulk body" });
+				return { ok: true, submissionId, status: "rejected", email: { ok: true, status: "sent", providerId: "p", messageId: "m" } };
+			},
+		});
+		expect(emailed).toMatchObject({ succeeded: 1, failed: 0 });
+	});
+
+	it("stores nullable reviewer email and skips invite when email is absent", async () => {
+		await seedEvent("eval-reviewer-email-event");
+		const draft = await createEvaluationPlan(env.DB, { eventId: "eval-reviewer-email-event", name: "Invite plan" });
+		const active = await activateEvaluationPlan(env.DB, { eventId: "eval-reviewer-email-event", planId: draft.id });
+		if (!active.ok) throw new Error(active.error);
+		const withoutEmail = await createReviewer(env.DB, { planId: draft.id, name: "Clipboard only" });
+		expect(withoutEmail.reviewer.email).toBeNull();
+		const withEmail = await createReviewer(env.DB, { planId: draft.id, name: "Mailed reviewer", email: "reviewer@example.test" });
+		expect(withEmail.reviewer.email).toBe("reviewer@example.test");
+		const regenerated = await regenerateReviewerToken(env.DB, { planId: draft.id, reviewerId: withEmail.reviewer.id });
+		expect(regenerated.reviewer.email).toBe("reviewer@example.test");
+		await expect(createReviewer(env.DB, { planId: draft.id, name: "Bad", email: "not-an-email" })).rejects.toMatchObject({ status: 400 });
+	});
+
+	it("applies and removes labels across a selected submission set", async () => {
+		await seedEvent("eval-bulk-labels-event");
+		await seedSubmission("eval-bulk-labels-event", "eval-label-a");
+		await seedSubmission("eval-bulk-labels-event", "eval-label-b");
+		const added = await bulkLabelSubmissions(env.DB, {
+			eventId: "eval-bulk-labels-event",
+			submissionIds: ["eval-label-a", "eval-label-b"],
+			label: "shortlist",
+			action: "add",
+		});
+		expect(added).toEqual({
+			submissionIds: ["eval-label-a", "eval-label-b"],
+			label: "shortlist",
+			action: "add",
+		});
+		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM submission_labels WHERE label = 'shortlist'").first())?.count).toBe(2);
+		await bulkLabelSubmissions(env.DB, {
+			eventId: "eval-bulk-labels-event",
+			submissionIds: ["eval-label-a"],
+			label: "shortlist",
+			action: "remove",
+		});
+		expect((await env.DB.prepare("SELECT submission_id FROM submission_labels WHERE label = 'shortlist'").all()).results).toEqual([
+			{ submission_id: "eval-label-b" },
+		]);
 	});
 
 	it("keeps demo review scoring immutable", async () => {

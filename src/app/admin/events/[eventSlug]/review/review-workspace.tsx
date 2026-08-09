@@ -4,41 +4,510 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
+import { DECISION_REGISTRY, renderDecisionPreviews, type DecisionAction } from "@/lib/domain";
+import { buildScoreComparisonMatrix } from "@/lib/evaluation/score-matrix";
 import { activationReviewPath } from "./activation-result";
 import { parseBulkDecisionResult } from "./bulk-decision-result";
 
 type Plan = { id: string; name: string; status: string };
 type Criterion = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number };
-type Reviewer = { id: string; name: string; revokedAt: number | null; assigned: number; scored: number };
+type Reviewer = { id: string; name: string; email: string | null; revokedAt: number | null; assigned: number; scored: number };
 type Submission = { id: string; title: string; submitter: string; status: string; assignedReviewerIds: string[]; scored: boolean; criterionScoreCount: number };
-type Props = { eventSlug: string; plans: Plan[]; plan: Plan | null; criteria: Criterion[]; reviewers: Reviewer[]; submissions: Submission[]; summary: { total: number; scored: number; accepted: number; rejected: number } };
+type AggregateScore = { submissionId: string; reviewerId: string | null; scoredBy: string; score: number };
+type CriterionScore = { submissionId: string; reviewerId: string | null; criterionId: string; score: number };
+type Props = {
+	eventSlug: string;
+	eventName: string;
+	plans: Plan[];
+	plan: Plan | null;
+	criteria: Criterion[];
+	reviewers: Reviewer[];
+	submissions: Submission[];
+	aggregates: AggregateScore[];
+	criterionScores: CriterionScore[];
+	summary: { total: number; scored: number; accepted: number; rejected: number };
+};
 
-export function ReviewWorkspace({ eventSlug, plans, plan, criteria, reviewers, submissions, summary }: Props) {
+export function ReviewWorkspace({
+	eventSlug,
+	eventName,
+	plans,
+	plan,
+	criteria,
+	reviewers,
+	submissions,
+	aggregates,
+	criterionScores,
+	summary,
+}: Props) {
 	const router = useRouter();
-	const [message, setMessage] = useState<string | null>(null); const [decisionMessage, setDecisionMessage] = useState<string | null>(null); const [error, setError] = useState<string | null>(null); const [pending, setPending] = useState(false); const [issuedReviewPath, setIssuedReviewPath] = useState<string | null>(null); const [committeeReviewPath, setCommitteeReviewPath] = useState<string | null>(null);
-	const [planName, setPlanName] = useState(""); const [editedPlanName, setEditedPlanName] = useState(plan?.name ?? ""); const [reviewerName, setReviewerName] = useState(""); const [criterionLabel, setCriterionLabel] = useState(""); const [criterionWeight, setCriterionWeight] = useState("1");
-	const [selected, setSelected] = useState<Set<string>>(new Set()); const [reviewersForBulk, setReviewersForBulk] = useState<Set<string>>(new Set()); const [query, setQuery] = useState(""); const [status, setStatus] = useState("all");
-	const visible = useMemo(() => submissions.filter((submission) => `${submission.title} ${submission.submitter}`.toLowerCase().includes(query.trim().toLowerCase()) && (status === "all" || submission.status === status)), [query, status, submissions]);
+	const [message, setMessage] = useState<string | null>(null);
+	const [decisionMessage, setDecisionMessage] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [pending, setPending] = useState(false);
+	const [issuedReviewPath, setIssuedReviewPath] = useState<string | null>(null);
+	const [committeeReviewPath, setCommitteeReviewPath] = useState<string | null>(null);
+	const [planName, setPlanName] = useState("");
+	const [editedPlanName, setEditedPlanName] = useState(plan?.name ?? "");
+	const [reviewerName, setReviewerName] = useState("");
+	const [reviewerEmail, setReviewerEmail] = useState("");
+	const [criterionLabel, setCriterionLabel] = useState("");
+	const [criterionWeight, setCriterionWeight] = useState("1");
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [reviewersForBulk, setReviewersForBulk] = useState<Set<string>>(new Set());
+	const [query, setQuery] = useState("");
+	const [status, setStatus] = useState("all");
+	const [bulkLabel, setBulkLabel] = useState("");
+	const [bulkAction, setBulkAction] = useState<DecisionAction | null>(null);
+	const [sendEmail, setSendEmail] = useState(true);
+	const [emailSubject, setEmailSubject] = useState("");
+	const [emailText, setEmailText] = useState("");
+
+	const visible = useMemo(
+		() => submissions.filter((submission) => `${submission.title} ${submission.submitter}`.toLowerCase().includes(query.trim().toLowerCase()) && (status === "all" || submission.status === status)),
+		[query, status, submissions],
+	);
 	const active = plan?.status === "active";
 	const liveReviewers = reviewers.filter((reviewer) => reviewer.revokedAt === null);
+	const previews = useMemo(
+		() => renderDecisionPreviews({ eventName, submitterName: "submitters", title: "selected proposals" }),
+		[eventName],
+	);
+	const matrix = useMemo(
+		() => buildScoreComparisonMatrix({
+			submissions: submissions.map((submission) => ({ id: submission.id, title: submission.title })),
+			reviewers: liveReviewers.map((reviewer) => ({ id: reviewer.id, name: reviewer.name })),
+			criteria: criteria.map((criterion) => ({ id: criterion.id, label: criterion.label, weight: criterion.weight })),
+			aggregates,
+			criterionScores,
+		}),
+		[aggregates, criteria, criterionScores, liveReviewers, submissions],
+	);
 
-	async function request(path: string, method: string, body?: unknown) { setError(null); setMessage(null); setDecisionMessage(null); setPending(true); try { const response = await fetch(path, { method, headers: body === undefined ? undefined : { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); const data = await response.json() as { ok?: boolean; error?: string; reviewer?: { reviewPath?: string } }; const decisions = parseBulkDecisionResult(data); if (!response.ok || (!data.ok && !decisions)) throw new Error(data.error ?? "Request failed"); if (decisions) setDecisionMessage(decisions.message); else setMessage("Saved."); router.refresh(); return data; } catch (cause) { setError(cause instanceof Error ? cause.message : "Network error"); return null; } finally { setPending(false); } }
-	async function copyReviewPath(path: string) { try { await navigator.clipboard.writeText(path); setMessage("Review link copied."); } catch { setError("Copy the review link manually."); } }
-	function toggle(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) { setter((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; }); }
-	function selectVisible() { setSelected(new Set(visible.map((submission) => submission.id))); }
+	async function request(path: string, method: string, body?: unknown) {
+		setError(null);
+		setMessage(null);
+		setDecisionMessage(null);
+		setPending(true);
+		try {
+			const response = await fetch(path, {
+				method,
+				headers: body === undefined ? undefined : { "content-type": "application/json" },
+				body: body === undefined ? undefined : JSON.stringify(body),
+			});
+			const data = await response.json() as {
+				ok?: boolean;
+				error?: string;
+				emailStatus?: string | null;
+				reviewer?: { reviewPath?: string };
+			};
+			const decisions = parseBulkDecisionResult(data);
+			if (!response.ok || (!data.ok && !decisions)) throw new Error(data.error ?? "Request failed");
+			if (decisions) setDecisionMessage(decisions.message);
+			else if (data.emailStatus === "sent" || data.emailStatus === "skipped") setMessage(`Saved. Invite email ${data.emailStatus}.`);
+			else if (data.emailStatus === "failed") setMessage("Saved. Invite email failed; copy the link below.");
+			else setMessage("Saved.");
+			router.refresh();
+			return data;
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : "Network error");
+			return null;
+		} finally {
+			setPending(false);
+		}
+	}
 
-	return <div className="mt-7 space-y-6">
-		{error ? <p className={noticeClasses("negative")}>{error}</p> : null}{message ? <p className={noticeClasses("positive")}>{message}</p> : null}{decisionMessage ? <p className={noticeClasses("warning")}>{decisionMessage}</p> : null}{committeeReviewPath ? <div className={`${noticeClasses("warning")} flex flex-wrap items-center gap-2`}><span>Copy this committee review link now. It is shown only after activation and cannot be recovered from this workspace: <code>{committeeReviewPath}</code></span><Button size="sm" variant="secondary" onClick={() => void copyReviewPath(committeeReviewPath)}>Copy committee link</Button></div> : null}{issuedReviewPath ? <div className={`${noticeClasses("warning")} flex flex-wrap items-center gap-2`}><span>Copy this personal reviewer link now; it will not be shown again: <code>{issuedReviewPath}</code></span><Button size="sm" variant="secondary" onClick={() => void copyReviewPath(issuedReviewPath)}>Copy reviewer link</Button></div> : null}
-		<section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]"><div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"><h2 className="font-medium text-neutral-100">Evaluation plans</h2><div className="mt-3 space-y-2">{plans.map((item) => <Link key={item.id} href={`/admin/events/${eventSlug}/review?plan=${item.id}`} className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm ${item.id === plan?.id ? "border-emerald-500/40 bg-emerald-500/10" : "border-neutral-800 hover:border-neutral-600"}`}><span className="text-neutral-200">{item.name}</span><StatusPill tone={item.status === "active" ? "positive" : "neutral"}>{item.status}</StatusPill></Link>)}</div>{plan ? <div className="mt-3 flex flex-wrap gap-2"><input value={editedPlanName} onChange={(event) => setEditedPlanName(event.target.value)} className={INPUT_CLASSES} aria-label="Selected plan name" /><Button size="sm" variant="secondary" disabled={pending || !editedPlanName.trim()} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { name: editedPlanName })}>Rename</Button>{plan.status === "draft" ? <Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "DELETE")}>Delete draft</Button> : null}</div> : null}<div className="mt-4 flex flex-wrap gap-2"><input value={planName} onChange={(event) => setPlanName(event.target.value)} className={INPUT_CLASSES} placeholder="New plan name" aria-label="New evaluation plan name" /><Button disabled={pending || !planName.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation`, "POST", { name: planName })) setPlanName(""); }}>Create draft</Button>{plan && !active ? <Button variant="secondary" disabled={pending} onClick={async () => { const result = await request(`/api/admin/events/${eventSlug}/evaluation/activate`, "POST", { planId: plan.id }); const link = activationReviewPath(result); if (link) setCommitteeReviewPath(link.reviewPath); else if (result) setMessage("The plan is already active. Its earlier committee link cannot be recovered here; use named reviewer links below."); }}>Activate selected plan</Button> : null}{plan && active ? <Button variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { status: "closed" })}>Close active plan</Button> : null}</div></div>
-			<div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"><h2 className="font-medium text-neutral-100">Decision summary</h2><dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><Summary label="Reviewable" value={summary.total} /><Summary label="Scored" value={summary.scored} /><Summary label="Accepted" value={summary.accepted} /><Summary label="Rejected" value={summary.rejected} /></dl><p className="mt-3 text-xs text-neutral-500">Criterion scores are kept separately from the rounded aggregate, so weighted rubric changes remain visible in review records.</p></div></section>
-		{!plan ? <EmptyState title="No evaluation plan yet" description="Create a draft plan to define the rubric." /> : <><section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-medium text-neutral-100">Weighted rubric</h2><p className="mt-1 text-xs text-neutral-500">Every reviewer sees these criteria and must score each one.</p></div><div className="flex flex-wrap gap-2"><input value={criterionLabel} onChange={(event) => setCriterionLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Criterion label" aria-label="Criterion label" /><input value={criterionWeight} onChange={(event) => setCriterionWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label="Criterion weight" /><Button disabled={pending || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight) })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button></div></div><ul className="mt-4 divide-y divide-neutral-800">{criteria.map((criterion) => <CriterionItem key={criterion.id} criterion={criterion} disabled={pending} canRemove={criteria.length > 1} onSave={(body) => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "PATCH", body)} onRemove={() => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "DELETE")} />)}</ul></section>
-		<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-medium text-neutral-100">Named reviewers</h2><p className="mt-1 text-xs text-neutral-500">Invite links are shown only when issued. Regenerating invalidates the old link; revoking also removes assignments.</p>{active ? <p className="mt-1 text-xs text-neutral-500">The committee link is not recoverable after activation. Regenerate a named reviewer link below when a reviewer needs a deliberate replacement.</p> : null}</div>{active ? <div className="flex gap-2"><input value={reviewerName} onChange={(event) => setReviewerName(event.target.value)} className={INPUT_CLASSES} placeholder="Reviewer name" aria-label="Reviewer name" /><Button disabled={pending || !reviewerName.trim()} onClick={async () => { const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "POST", { name: reviewerName }); if (result) { setReviewerName(""); setIssuedReviewPath(result.reviewer?.reviewPath ?? null); } }}>Generate invite</Button></div> : <p className="text-xs text-amber-300">Activate this plan before issuing review links.</p>}</div><ul className="mt-4 divide-y divide-neutral-800">{reviewers.map((reviewer) => <li key={reviewer.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium text-neutral-200">{reviewer.name}{reviewer.revokedAt ? " · revoked" : ""}</p><p className="mt-0.5 text-xs text-neutral-500">{reviewer.assigned} assigned · {reviewer.scored} submitted reviews</p></div>{active && reviewer.revokedAt === null ? <div className="flex gap-2"><Button size="sm" variant="secondary" disabled={pending} onClick={async () => { const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { reviewerId: reviewer.id, action: "regenerate" }); if (result) setIssuedReviewPath(result.reviewer?.reviewPath ?? null); }}>Regenerate</Button><Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { reviewerId: reviewer.id, action: "revoke" })}>Revoke</Button></div> : null}</li>)}</ul></section>
-		<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-medium text-neutral-100">Assignments and bulk decisions</h2><p className="mt-1 text-xs text-neutral-500">Selected proposals: {selected.size}. Bulk decisions never send email; use individual decisions when a message needs editing.</p></div><div className="flex flex-wrap gap-2"><input value={query} onChange={(event) => setQuery(event.target.value)} className={INPUT_CLASSES} placeholder="Search proposals" aria-label="Search proposals" /><select value={status} onChange={(event) => setStatus(event.target.value)} className={INPUT_CLASSES} aria-label="Filter proposals"><option value="all">All statuses</option>{[...new Set(submissions.map((submission) => submission.status))].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select><Button size="sm" variant="secondary" onClick={selectVisible}>Select visible</Button></div></div>{active ? <div className="mt-4 flex flex-wrap items-center gap-2 border-y border-neutral-800 py-3"><span className="text-xs text-neutral-500">Assign selected to</span>{liveReviewers.map((reviewer) => <button key={reviewer.id} type="button" onClick={() => toggle(setReviewersForBulk, reviewer.id)} className={reviewersForBulk.has(reviewer.id) ? "rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300" : "rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-400"}>{reviewer.name}</button>)}<Button size="sm" disabled={pending || selected.size === 0 || reviewersForBulk.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/assignments`, "POST", { submissionIds: [...selected], reviewerIds: [...reviewersForBulk] })}>Apply assignments</Button><Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/decisions`, "POST", { submissionIds: [...selected], action: "accept" })}>Accept selected</Button><Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/decisions`, "POST", { submissionIds: [...selected], action: "reject" })}>Reject selected</Button></div> : <p className="mt-3 text-xs text-amber-300">Activate this plan before assigning or deciding in bulk.</p>}<ul className="mt-2 divide-y divide-neutral-800">{visible.map((submission) => <li key={submission.id} className="flex items-center gap-3 py-3 text-sm"><input type="checkbox" checked={selected.has(submission.id)} onChange={() => toggle(setSelected, submission.id)} aria-label={`Select ${submission.title}`} /><div className="min-w-0 flex-1"><p className="truncate font-medium text-neutral-200">{submission.title}</p><p className="truncate text-xs text-neutral-500">{submission.submitter} · {submission.assignedReviewerIds.length} assigned · {submission.criterionScoreCount} criterion scores</p></div><StatusPill tone={submissionStatusTone(submission.status)}>{submission.status.replaceAll("_", " ")}</StatusPill></li>)}</ul></section></>}</div>;
+	async function copyReviewPath(path: string) {
+		try {
+			await navigator.clipboard.writeText(path);
+			setMessage("Review link copied.");
+		} catch {
+			setError("Copy the review link manually.");
+		}
+	}
+
+	function toggle(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+		setter((previous) => {
+			const next = new Set(previous);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}
+
+	function selectVisible() {
+		setSelected(new Set(visible.map((submission) => submission.id)));
+	}
+
+	function openBulkDecision(action: DecisionAction) {
+		if (action !== "accept" && action !== "reject") return;
+		setBulkAction(action);
+		setSendEmail(true);
+		setEmailSubject(previews[action].subject);
+		setEmailText(previews[action].text);
+	}
+
+	async function confirmBulkDecision() {
+		if (!bulkAction || (bulkAction !== "accept" && bulkAction !== "reject")) return;
+		const result = await request(`/api/admin/events/${eventSlug}/review/decisions`, "POST", {
+			submissionIds: [...selected],
+			action: bulkAction,
+			email: sendEmail ? { send: true, subject: emailSubject, text: emailText } : { send: false },
+		});
+		if (result) setBulkAction(null);
+	}
+
+	return (
+		<div className="mt-7 space-y-6">
+			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
+			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
+			{decisionMessage ? <p className={noticeClasses("warning")}>{decisionMessage}</p> : null}
+			{committeeReviewPath ? (
+				<div className={`${noticeClasses("warning")} flex flex-wrap items-center gap-2`}>
+					<span>Copy this committee review link now. It is shown only after activation and cannot be recovered from this workspace: <code>{committeeReviewPath}</code></span>
+					<Button size="sm" variant="secondary" onClick={() => void copyReviewPath(committeeReviewPath)}>Copy committee link</Button>
+				</div>
+			) : null}
+			{issuedReviewPath ? (
+				<div className={`${noticeClasses("warning")} flex flex-wrap items-center gap-2`}>
+					<span>Copy this personal reviewer link now; it will not be shown again: <code>{issuedReviewPath}</code></span>
+					<Button size="sm" variant="secondary" onClick={() => void copyReviewPath(issuedReviewPath)}>Copy reviewer link</Button>
+				</div>
+			) : null}
+
+			<section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+				<div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+					<h2 className="font-medium text-neutral-100">Evaluation plans</h2>
+					<div className="mt-3 space-y-2">
+						{plans.map((item) => (
+							<Link
+								key={item.id}
+								href={`/admin/events/${eventSlug}/review?plan=${item.id}`}
+								className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm ${item.id === plan?.id ? "border-emerald-500/40 bg-emerald-500/10" : "border-neutral-800 hover:border-neutral-600"}`}
+							>
+								<span className="text-neutral-200">{item.name}</span>
+								<StatusPill tone={item.status === "active" ? "positive" : "neutral"}>{item.status}</StatusPill>
+							</Link>
+						))}
+					</div>
+					{plan ? (
+						<div className="mt-3 flex flex-wrap gap-2">
+							<input value={editedPlanName} onChange={(event) => setEditedPlanName(event.target.value)} className={INPUT_CLASSES} aria-label="Selected plan name" />
+							<Button size="sm" variant="secondary" disabled={pending || !editedPlanName.trim()} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { name: editedPlanName })}>Rename</Button>
+							{plan.status === "draft" ? <Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "DELETE")}>Delete draft</Button> : null}
+						</div>
+					) : null}
+					<div className="mt-4 flex flex-wrap gap-2">
+						<input value={planName} onChange={(event) => setPlanName(event.target.value)} className={INPUT_CLASSES} placeholder="New plan name" aria-label="New evaluation plan name" />
+						<Button disabled={pending || !planName.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation`, "POST", { name: planName })) setPlanName(""); }}>Create draft</Button>
+						{plan && !active ? (
+							<Button
+								variant="secondary"
+								disabled={pending}
+								onClick={async () => {
+									const result = await request(`/api/admin/events/${eventSlug}/evaluation/activate`, "POST", { planId: plan.id });
+									const link = activationReviewPath(result);
+									if (link) setCommitteeReviewPath(link.reviewPath);
+									else if (result) setMessage("The plan is already active. Its earlier committee link cannot be recovered here; use named reviewer links below.");
+								}}
+							>
+								Activate selected plan
+							</Button>
+						) : null}
+						{plan && active ? <Button variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { status: "closed" })}>Close active plan</Button> : null}
+					</div>
+				</div>
+				<div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+					<h2 className="font-medium text-neutral-100">Decision summary</h2>
+					<dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+						<Summary label="Reviewable" value={summary.total} />
+						<Summary label="Scored" value={summary.scored} />
+						<Summary label="Accepted" value={summary.accepted} />
+						<Summary label="Rejected" value={summary.rejected} />
+					</dl>
+					<p className="mt-3 text-xs text-neutral-500">Criterion scores are kept separately from the rounded aggregate, so weighted rubric changes remain visible in review records.</p>
+				</div>
+			</section>
+
+			{!plan ? (
+				<EmptyState title="No evaluation plan yet" description="Create a draft plan to define the rubric." />
+			) : (
+				<>
+					<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+						<div className="flex flex-wrap items-center justify-between gap-3">
+							<div>
+								<h2 className="font-medium text-neutral-100">Weighted rubric</h2>
+								<p className="mt-1 text-xs text-neutral-500">Every reviewer sees these criteria and must score each one.</p>
+							</div>
+							<div className="flex flex-wrap gap-2">
+								<input value={criterionLabel} onChange={(event) => setCriterionLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Criterion label" aria-label="Criterion label" />
+								<input value={criterionWeight} onChange={(event) => setCriterionWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label="Criterion weight" />
+								<Button disabled={pending || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight) })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button>
+							</div>
+						</div>
+						<ul className="mt-4 divide-y divide-neutral-800">
+							{criteria.map((criterion) => (
+								<CriterionItem
+									key={criterion.id}
+									criterion={criterion}
+									disabled={pending}
+									canRemove={criteria.length > 1}
+									onSave={(body) => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "PATCH", body)}
+									onRemove={() => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "DELETE")}
+								/>
+							))}
+						</ul>
+					</section>
+
+					<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+						<div className="flex flex-wrap items-center justify-between gap-3">
+							<div>
+								<h2 className="font-medium text-neutral-100">Named reviewers</h2>
+								<p className="mt-1 text-xs text-neutral-500">Optional email sends the personal review link on create/regenerate. The plaintext link is still shown once for clipboard copy.</p>
+								{active ? <p className="mt-1 text-xs text-neutral-500">The committee link is not recoverable after activation. Regenerate a named reviewer link below when a reviewer needs a deliberate replacement.</p> : null}
+							</div>
+							{active ? (
+								<div className="flex flex-wrap gap-2">
+									<input value={reviewerName} onChange={(event) => setReviewerName(event.target.value)} className={INPUT_CLASSES} placeholder="Reviewer name" aria-label="Reviewer name" />
+									<input value={reviewerEmail} onChange={(event) => setReviewerEmail(event.target.value)} className={INPUT_CLASSES} placeholder="Email (optional)" aria-label="Reviewer email" type="email" />
+									<Button
+										disabled={pending || !reviewerName.trim()}
+										onClick={async () => {
+											const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "POST", {
+												name: reviewerName,
+												email: reviewerEmail.trim() || null,
+											});
+											if (result) {
+												setReviewerName("");
+												setReviewerEmail("");
+												setIssuedReviewPath(result.reviewer?.reviewPath ?? null);
+											}
+										}}
+									>
+										Generate invite
+									</Button>
+								</div>
+							) : (
+								<p className="text-xs text-amber-300">Activate this plan before issuing review links.</p>
+							)}
+						</div>
+						<ul className="mt-4 divide-y divide-neutral-800">
+							{reviewers.map((reviewer) => (
+								<li key={reviewer.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+									<div>
+										<p className="font-medium text-neutral-200">{reviewer.name}{reviewer.revokedAt ? " · revoked" : ""}</p>
+										<p className="mt-0.5 text-xs text-neutral-500">{reviewer.email ?? "no email"} · {reviewer.assigned} assigned · {reviewer.scored} submitted reviews</p>
+									</div>
+									{active && reviewer.revokedAt === null ? (
+										<div className="flex gap-2">
+											<Button
+												size="sm"
+												variant="secondary"
+												disabled={pending}
+												onClick={async () => {
+													const result = await request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", {
+														reviewerId: reviewer.id,
+														action: "regenerate",
+														email: reviewer.email,
+													});
+													if (result) setIssuedReviewPath(result.reviewer?.reviewPath ?? null);
+												}}
+											>
+												Regenerate
+											</Button>
+											<Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { reviewerId: reviewer.id, action: "revoke" })}>Revoke</Button>
+										</div>
+									) : null}
+								</li>
+							))}
+						</ul>
+					</section>
+
+					<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+						<div className="flex flex-wrap items-end justify-between gap-3">
+							<div>
+								<h2 className="font-medium text-neutral-100">Assignments and bulk decisions</h2>
+								<p className="mt-1 text-xs text-neutral-500">Selected proposals: {selected.size}. Bulk accept/reject can reuse one editable email for the whole selection.</p>
+							</div>
+							<div className="flex flex-wrap gap-2">
+								<input value={query} onChange={(event) => setQuery(event.target.value)} className={INPUT_CLASSES} placeholder="Search proposals" aria-label="Search proposals" />
+								<select value={status} onChange={(event) => setStatus(event.target.value)} className={INPUT_CLASSES} aria-label="Filter proposals">
+									<option value="all">All statuses</option>
+									{[...new Set(submissions.map((submission) => submission.status))].map((value) => (
+										<option key={value} value={value}>{value.replaceAll("_", " ")}</option>
+									))}
+								</select>
+								<Button size="sm" variant="secondary" onClick={selectVisible}>Select visible</Button>
+							</div>
+						</div>
+						{active ? (
+							<div className="mt-4 space-y-3 border-y border-neutral-800 py-3">
+								<div className="flex flex-wrap items-center gap-2">
+									<span className="text-xs text-neutral-500">Assign selected to</span>
+									{liveReviewers.map((reviewer) => (
+										<button
+											key={reviewer.id}
+											type="button"
+											onClick={() => toggle(setReviewersForBulk, reviewer.id)}
+											className={reviewersForBulk.has(reviewer.id) ? "rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300" : "rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-400"}
+										>
+											{reviewer.name}
+										</button>
+									))}
+									<Button size="sm" disabled={pending || selected.size === 0 || reviewersForBulk.size === 0} onClick={() => void request(`/api/admin/events/${eventSlug}/review/assignments`, "POST", { submissionIds: [...selected], reviewerIds: [...reviewersForBulk] })}>Apply assignments</Button>
+									<Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => openBulkDecision("accept")}>Accept selected</Button>
+									<Button size="sm" variant="secondary" disabled={pending || selected.size === 0} onClick={() => openBulkDecision("reject")}>Reject selected</Button>
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									<input value={bulkLabel} onChange={(event) => setBulkLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Label" aria-label="Bulk label" />
+									<Button
+										size="sm"
+										variant="secondary"
+										disabled={pending || selected.size === 0 || !bulkLabel.trim()}
+										onClick={async () => {
+											if (await request(`/api/admin/events/${eventSlug}/review/labels`, "POST", { submissionIds: [...selected], label: bulkLabel, action: "add" })) setBulkLabel("");
+										}}
+									>
+										Add label
+									</Button>
+									<Button
+										size="sm"
+										variant="secondary"
+										disabled={pending || selected.size === 0 || !bulkLabel.trim()}
+										onClick={() => void request(`/api/admin/events/${eventSlug}/review/labels`, "POST", { submissionIds: [...selected], label: bulkLabel, action: "remove" })}
+									>
+										Remove label
+									</Button>
+								</div>
+								{bulkAction ? (
+									<div className="space-y-3 rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-left">
+										<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+											Confirm {DECISION_REGISTRY[bulkAction].label.toLowerCase()} for {selected.size} selected
+										</p>
+										<label className="flex items-center gap-2 text-sm text-neutral-300">
+											<input type="checkbox" checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} className="accent-emerald-500" />
+											Send the same email to each submitter
+										</label>
+										{sendEmail ? (
+											<div className="space-y-2">
+												<label className="block text-xs text-neutral-400">
+													Subject
+													<input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`} />
+												</label>
+												<label className="block text-xs text-neutral-400">
+													Body
+													<textarea value={emailText} onChange={(event) => setEmailText(event.target.value)} rows={7} className={`mt-1 w-full ${INPUT_CLASSES} font-mono text-xs`} />
+												</label>
+											</div>
+										) : (
+											<p className="text-xs text-neutral-500">Status changes without sending email.</p>
+										)}
+										<div className="flex gap-2">
+											<Button
+												size="sm"
+												disabled={pending || (sendEmail && (!emailSubject.trim() || !emailText.trim()))}
+												onClick={() => void confirmBulkDecision()}
+											>
+												{sendEmail
+													? `${DECISION_REGISTRY[bulkAction].label} + send email`
+													: `${DECISION_REGISTRY[bulkAction].label} without email`}
+											</Button>
+											<Button size="sm" variant="secondary" disabled={pending} onClick={() => setBulkAction(null)}>Cancel</Button>
+										</div>
+									</div>
+								) : null}
+							</div>
+						) : (
+							<p className="mt-3 text-xs text-amber-300">Activate this plan before assigning or deciding in bulk.</p>
+						)}
+						<ul className="mt-2 divide-y divide-neutral-800">
+							{visible.map((submission) => (
+								<li key={submission.id} className="flex items-center gap-3 py-3 text-sm">
+									<input type="checkbox" checked={selected.has(submission.id)} onChange={() => toggle(setSelected, submission.id)} aria-label={`Select ${submission.title}`} />
+									<div className="min-w-0 flex-1">
+										<p className="truncate font-medium text-neutral-200">{submission.title}</p>
+										<p className="truncate text-xs text-neutral-500">{submission.submitter} · {submission.assignedReviewerIds.length} assigned · {submission.criterionScoreCount} criterion scores</p>
+									</div>
+									<StatusPill tone={submissionStatusTone(submission.status)}>{submission.status.replaceAll("_", " ")}</StatusPill>
+								</li>
+							))}
+						</ul>
+					</section>
+
+					<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+						<h2 className="font-medium text-neutral-100">Score comparison</h2>
+						<p className="mt-1 text-xs text-neutral-500">Aggregate scores per named reviewer, with per-criterion breakdown on hover.</p>
+						{matrix.submissions.length === 0 || matrix.reviewers.length === 0 ? (
+							<p className="mt-3 text-sm text-neutral-500">Scores appear here once reviewers submit reviews.</p>
+						) : (
+							<div className="mt-4 overflow-x-auto">
+								<table className="min-w-full border-collapse text-left text-xs">
+									<thead>
+										<tr className="border-b border-neutral-800 text-neutral-500">
+											<th className="px-2 py-2 font-medium">Proposal</th>
+											{matrix.reviewers.map((reviewer) => (
+												<th key={reviewer.id} className="px-2 py-2 font-medium">{reviewer.name}</th>
+											))}
+											<th className="px-2 py-2 font-medium">Avg</th>
+										</tr>
+									</thead>
+									<tbody>
+										{matrix.submissions.map((submission) => (
+											<tr key={submission.id} className="border-b border-neutral-900/80">
+												<td className="max-w-[14rem] truncate px-2 py-2 text-neutral-200">{submission.title}</td>
+												{matrix.reviewers.map((reviewer) => {
+													const cell = matrix.cells[submission.id]?.[reviewer.id];
+													const title = cell
+														? matrix.criteria
+															.map((criterion) => `${criterion.label}: ${cell.byCriterion[criterion.id] ?? "—"}`)
+															.join(" · ")
+														: undefined;
+													return (
+														<td key={reviewer.id} className="px-2 py-2 tabular-nums text-neutral-300" title={title}>
+															{cell?.aggregate ?? "—"}
+														</td>
+													);
+												})}
+												<td className="px-2 py-2 tabular-nums text-neutral-200">
+													{matrix.averages[submission.id] === null || matrix.averages[submission.id] === undefined
+														? "—"
+														: matrix.averages[submission.id]!.toFixed(1)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						)}
+					</section>
+				</>
+			)}
+		</div>
+	);
 }
 
-function Summary({ label, value }: { label: string; value: number }) { return <div className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2"><dt className="text-xs text-neutral-500">{label}</dt><dd className="mt-0.5 text-lg font-medium text-neutral-100">{value}</dd></div>; }
+function Summary({ label, value }: { label: string; value: number }) {
+	return (
+		<div className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2">
+			<dt className="text-xs text-neutral-500">{label}</dt>
+			<dd className="mt-0.5 text-lg font-medium text-neutral-100">{value}</dd>
+		</div>
+	);
+}
 
-function CriterionItem({ criterion, disabled, canRemove, onSave, onRemove }: { criterion: Criterion; disabled: boolean; canRemove: boolean; onSave: (body: { label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number }) => Promise<unknown>; onRemove: () => Promise<unknown> }) {
+function CriterionItem({
+	criterion,
+	disabled,
+	canRemove,
+	onSave,
+	onRemove,
+}: {
+	criterion: Criterion;
+	disabled: boolean;
+	canRemove: boolean;
+	onSave: (body: { label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number }) => Promise<unknown>;
+	onRemove: () => Promise<unknown>;
+}) {
 	const [label, setLabel] = useState(criterion.label);
 	const [description, setDescription] = useState(criterion.description ?? "");
 	const [weight, setWeight] = useState(String(criterion.weight));
@@ -48,5 +517,22 @@ function CriterionItem({ criterion, disabled, canRemove, onSave, onRemove }: { c
 	const scaleMaxValue = Number(scaleMax);
 	const weightValue = Number(weight);
 	const canSave = Boolean(label.trim()) && Number.isFinite(weightValue) && Number.isInteger(scaleMinValue) && Number.isInteger(scaleMaxValue) && scaleMinValue < scaleMaxValue;
-	return <li className="space-y-2 py-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-1 flex-wrap items-center gap-2"><input value={label} onChange={(event) => setLabel(event.target.value)} className={`${INPUT_CLASSES} min-w-44 flex-1`} aria-label={`${criterion.label} label`} disabled={disabled} /><input value={weight} onChange={(event) => setWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label={`${criterion.label} weight`} disabled={disabled} /><input value={scaleMin} onChange={(event) => setScaleMin(event.target.value)} className={`${INPUT_CLASSES} w-16`} inputMode="numeric" aria-label={`${criterion.label} scale min`} disabled={disabled} /><span className="text-xs text-neutral-500">to</span><input value={scaleMax} onChange={(event) => setScaleMax(event.target.value)} className={`${INPUT_CLASSES} w-16`} inputMode="numeric" aria-label={`${criterion.label} scale max`} disabled={disabled} /></div><div className="flex gap-2"><Button size="sm" variant="secondary" disabled={disabled || !canSave} onClick={() => void onSave({ label, description: description.trim() || null, weight: weightValue, scaleMin: scaleMinValue, scaleMax: scaleMaxValue })}>Save</Button><Button size="sm" variant="secondary" disabled={disabled || !canRemove} onClick={() => void onRemove()}>Remove</Button></div></div><input value={description} onChange={(event) => setDescription(event.target.value)} className={INPUT_CLASSES} placeholder="Optional description" aria-label={`${criterion.label} description`} disabled={disabled} /></li>;
+	return (
+		<li className="space-y-2 py-3 text-sm">
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+					<input value={label} onChange={(event) => setLabel(event.target.value)} className={`${INPUT_CLASSES} min-w-44 flex-1`} aria-label={`${criterion.label} label`} disabled={disabled} />
+					<input value={weight} onChange={(event) => setWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label={`${criterion.label} weight`} disabled={disabled} />
+					<input value={scaleMin} onChange={(event) => setScaleMin(event.target.value)} className={`${INPUT_CLASSES} w-16`} inputMode="numeric" aria-label={`${criterion.label} scale min`} disabled={disabled} />
+					<span className="text-xs text-neutral-500">to</span>
+					<input value={scaleMax} onChange={(event) => setScaleMax(event.target.value)} className={`${INPUT_CLASSES} w-16`} inputMode="numeric" aria-label={`${criterion.label} scale max`} disabled={disabled} />
+				</div>
+				<div className="flex gap-2">
+					<Button size="sm" variant="secondary" disabled={disabled || !canSave} onClick={() => void onSave({ label, description: description.trim() || null, weight: weightValue, scaleMin: scaleMinValue, scaleMax: scaleMaxValue })}>Save</Button>
+					<Button size="sm" variant="secondary" disabled={disabled || !canRemove} onClick={() => void onRemove()}>Remove</Button>
+				</div>
+			</div>
+			<input value={description} onChange={(event) => setDescription(event.target.value)} className={INPUT_CLASSES} placeholder="Optional description" aria-label={`${criterion.label} description`} disabled={disabled} />
+		</li>
+	);
 }

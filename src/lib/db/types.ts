@@ -194,6 +194,7 @@ export type ReviewerRow = {
 	id: string;
 	plan_id: string;
 	name: string;
+	email: string | null;
 	token: string;
 	created_at: number;
 };
