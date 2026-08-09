@@ -181,6 +181,19 @@ export type SpeakerProfileRow = {
 	updated_at: number;
 };
 
+/** Organizer roster fields; distinct from portal speaker_profiles. */
+export type EventSpeakerProfileRow = {
+	id: string;
+	event_id: string;
+	person_id: string;
+	job_title: string | null;
+	company: string | null;
+	social_json: string | null;
+	workflow_status: "invited" | "confirmed" | "declined" | "withdrawn";
+	created_at: number;
+	updated_at: number;
+};
+
 export type EvaluationPlanRow = {
 	id: string;
 	event_id: string;

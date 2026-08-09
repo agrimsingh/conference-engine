@@ -18,6 +18,7 @@ export const ADMIN_EVENT_LINKS = [
 	{ segment: "schedule", label: "Schedule" },
 	{ segment: "dashboard", label: "Dashboard" },
 	{ segment: "tasks", label: "Tasks" },
+	{ segment: "speakers", label: "Speakers" },
 	{ segment: "communications", label: "Comms" },
 	{ segment: "team", label: "Team" },
 ] as const;
