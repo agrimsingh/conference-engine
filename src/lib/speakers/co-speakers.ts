@@ -393,7 +393,7 @@ export async function removeCoSpeaker(
 }
 
 export type AddCoSpeakerResult =
-	| { ok: true; speaker: SubmissionSpeakerRow; addedAfterAcceptance: boolean }
+	| { ok: true; speaker: SubmissionSpeakerRow; addedAfterAcceptance: boolean; revived: boolean }
 	| { ok: false; error: string; status: number };
 
 /**
@@ -451,7 +451,9 @@ export async function addCoSpeaker(
 		if (!revived) {
 			return { ok: false, error: "Speaker missing after update", status: 500 };
 		}
-		return { ok: true, speaker: revived, addedAfterAcceptance };
+		// Revived rows may carry an already-delivered invitation claim; callers
+		// must invite with mode "resend" so the old bearer link is rotated.
+		return { ok: true, speaker: revived, addedAfterAcceptance, revived: true };
 	}
 
 	const position =
@@ -472,7 +474,7 @@ export async function addCoSpeaker(
 	if (!speaker) {
 		return { ok: false, error: "Speaker missing after insert", status: 500 };
 	}
-	return { ok: true, speaker, addedAfterAcceptance };
+	return { ok: true, speaker, addedAfterAcceptance, revived: false };
 }
 
 /**

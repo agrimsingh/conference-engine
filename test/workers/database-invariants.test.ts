@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createVerifiedDraft, finalizeDraft, issueDraftResumeToken } from "@/lib/cfp/drafts";
 import { consumeFixedWindowRateLimit, pruneExpiredRateLimitBuckets } from "@/lib/security/rate-limit";
 import { completeFileTask } from "@/lib/speakers/complete-task";
-import { addCoSpeaker, inviteCoSpeaker, removeCoSpeaker, sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
+import { addCoSpeaker, getSpeakerByConfirmToken, inviteCoSpeaker, removeCoSpeaker, sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { createAuthChallenge, consumeAuthChallenge } from "@/lib/auth/challenges";
 import { failOneTimeLinkChallengeIfConfirmed } from "@/lib/auth/email-delivery";
 import { acceptEventInvitation, inviteOrganizerToEvent } from "@/lib/events/invite-member";
@@ -149,29 +149,51 @@ describe("D1 runtime invariants", () => {
 		expect(await consume("fresh-principal", now)).toBe(true);
 	});
 
-	it("revives a removed co-speaker instead of violating the per-submission email unique index", async () => {
+	it("revives a removed co-speaker and rotates the previously delivered invite link", async () => {
 		await seedEvent("revive-event", "revive-event");
 		await seedForm("revive-event", "revive-form", "revive-form");
 		await env.DB.batch([
 			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('revive-submission', 'revive-form', 'revive-event', 'submitted', '{}', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('revive-primary', 'revive-submission', 'Primary', 'primary@revive.test', 0, 'confirmed')"),
-			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('revive-co', 'revive-submission', 'Co Speaker', 'co@revive.test', 1, 'confirmed')"),
+			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('revive-co', 'revive-submission', 'Co Speaker', 'co@revive.test', 1, 'pending')"),
 		]);
-		const removal = await removeCoSpeaker(env.DB, "revive-co");
-		expect(removal.ok).toBe(true);
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "revive-provider" }), { status: 200 }));
+		vi.stubGlobal("fetch", fetchMock);
+		try {
+			const runtime = { authSecret: "revive-secret", resendApiKey: "test-key" };
+			const origin = "https://conference.example.test";
+			const first = await inviteCoSpeaker(env.DB, { speakerId: "revive-co", origin, runtime, mode: "initial" });
+			expect(first.ok && first.email.status).toBe("sent");
+			const oldToken = first.ok ? new URL(first.confirmUrl).pathname.split("/").pop() ?? "" : "";
 
-		const readded = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Co Speaker Again", email: "CO@revive.test" });
-		expect(readded.ok).toBe(true);
-		if (readded.ok) {
-			expect(readded.speaker.id).toBe("revive-co");
-			expect(readded.speaker.status).toBe("pending");
-			expect(readded.speaker.name).toBe("Co Speaker Again");
+			const removal = await removeCoSpeaker(env.DB, "revive-co");
+			expect(removal.ok).toBe(true);
+
+			const readded = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Co Speaker Again", email: "CO@revive.test" });
+			expect(readded.ok && readded.revived).toBe(true);
+			if (readded.ok) {
+				expect(readded.speaker.id).toBe("revive-co");
+				expect(readded.speaker.status).toBe("pending");
+				expect(readded.speaker.name).toBe("Co Speaker Again");
+			}
+			expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM submission_speakers WHERE submission_id = 'revive-submission'").first<{ count: number }>())?.count).toBe(2);
+
+			// The route invites revived rows with mode "resend" so the delivered link rotates.
+			const reinvite = await inviteCoSpeaker(env.DB, { speakerId: "revive-co", origin, runtime, mode: "resend" });
+			expect(reinvite.ok && reinvite.email.status).toBe("sent");
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+			expect((await env.DB.prepare("SELECT generation FROM co_speaker_invitation_claims WHERE speaker_id = 'revive-co'").first<{ generation: number }>())?.generation).toBe(2);
+			const newToken = reinvite.ok ? new URL(reinvite.confirmUrl).pathname.split("/").pop() ?? "" : "";
+			expect(newToken).not.toBe(oldToken);
+			expect(await getSpeakerByConfirmToken(env.DB, oldToken)).toBeNull();
+			expect((await getSpeakerByConfirmToken(env.DB, newToken))?.id).toBe("revive-co");
+
+			const duplicate = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Dup", email: "co@revive.test" });
+			expect(duplicate.ok).toBe(false);
+			if (!duplicate.ok) expect(duplicate.status).toBe(409);
+		} finally {
+			vi.unstubAllGlobals();
 		}
-		expect((await env.DB.prepare("SELECT COUNT(*) AS count FROM submission_speakers WHERE submission_id = 'revive-submission'").first<{ count: number }>())?.count).toBe(2);
-
-		const duplicate = await addCoSpeaker(env.DB, { submissionId: "revive-submission", name: "Dup", email: "co@revive.test" });
-		expect(duplicate.ok).toBe(false);
-		if (!duplicate.ok) expect(duplicate.status).toBe(409);
 	});
 
 	it("reserves exactly one durable email send and recovers a provider-success finalization gap", async () => {

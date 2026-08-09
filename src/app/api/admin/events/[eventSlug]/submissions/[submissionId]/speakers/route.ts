@@ -103,7 +103,9 @@ export async function POST(request: Request, context: RouteContext) {
 			const invite = await inviteCoSpeaker(db, {
 				speakerId: added.speaker.id,
 				origin,
-				mode: "initial",
+				// A revived speaker may have a previously delivered link; resend
+				// rotates it so the old bearer token stops working.
+				mode: added.revived ? "resend" : "initial",
 			});
 			return NextResponse.json({
 				ok: true,
