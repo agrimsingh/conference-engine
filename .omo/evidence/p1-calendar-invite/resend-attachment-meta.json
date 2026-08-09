@@ -1,0 +1,12 @@
+{
+  "provider_id": "3146e236-6556-4ae8-83b4-208f3c7c4676",
+  "attachments": [
+    {
+      "id": "7769f985-13c1-433c-9426-275e4fa40879",
+      "filename": "invite.ics",
+      "content_type": "text/calendar; method=REQUEST; charset=utf-8",
+      "content_disposition": "attachment",
+      "size": 701
+    }
+  ]
+}
