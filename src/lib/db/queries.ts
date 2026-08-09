@@ -510,7 +510,10 @@ export type SubmissionFacetCounts = {
 	byLabel: Array<{ value: string; count: number }>;
 };
 
-function adminSubmissionWhere(eventId: string, filters: AdminSubmissionPageFilters): { sql: string; binds: unknown[] } {
+function adminSubmissionWhere(
+	eventId: string,
+	filters: Pick<AdminSubmissionPageFilters, "category" | "label" | "status" | "query">,
+): { sql: string; binds: unknown[] } {
 	const clauses = ["s.event_id = ?"];
 	const binds: unknown[] = [eventId];
 	if (filters.category !== "all") {
@@ -558,6 +561,24 @@ export async function listAdminSubmissionsPage(
 		db.prepare(`SELECT COUNT(*) AS count FROM submissions s WHERE ${sql}`).bind(...binds).first<{ count: number }>(),
 	]);
 	return { rows: rows.results, total: count?.count ?? 0 };
+}
+
+export async function listAdminSubmissionIds(
+	db: D1Database,
+	eventId: string,
+	filters: Omit<AdminSubmissionPageFilters, "page" | "pageSize">,
+): Promise<string[]> {
+	const { sql, binds } = adminSubmissionWhere(eventId, filters);
+	const orderBy = filters.sort === "title"
+		? "json_extract(s.answers_json, '$.title') COLLATE NOCASE ASC, s.created_at DESC"
+		: filters.sort === "status"
+			? "s.status ASC, s.created_at DESC"
+			: "s.created_at DESC";
+	const result = await db
+		.prepare(`SELECT s.id FROM submissions s WHERE ${sql} ORDER BY ${orderBy}`)
+		.bind(...binds)
+		.all<{ id: string }>();
+	return result.results.map((row) => row.id);
 }
 
 export async function getSubmissionFacetCounts(db: D1Database, eventId: string): Promise<SubmissionFacetCounts> {
