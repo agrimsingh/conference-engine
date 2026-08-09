@@ -694,7 +694,7 @@ export async function PublicSchedule({
 						className="font-medium text-neutral-200 underline underline-offset-2"
 						href="/demo?perspective=applicant"
 					>
-						Explore the CFP
+						Try the demo CFP
 					</Link>
 				) : (
 					<Link

@@ -40,7 +40,7 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 						{opensLater
 							? `${loaded.form.title} is not accepting proposals yet. Please return after the announced opening time.`
 							: isDemo
-								? `${loaded.form.title} is closed in this read-only demo. Browse the field structure and lifecycle from the demo walkthrough, or open the public schedule.`
+								? `${loaded.form.title} is not open for browsing right now. Try the demo launcher, create your own event to submit for real, or open the public schedule.`
 								: `${loaded.form.title} is no longer accepting submissions.`}
 					</p>
 					{isDemo ? (
@@ -49,13 +49,19 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 								className="font-medium text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
 								href="/demo?perspective=applicant"
 							>
-								Explore the CFP demo
+								Demo launcher
 							</Link>
 							<Link
 								className="font-medium text-neutral-200 underline underline-offset-2 hover:text-neutral-100"
 								href={`/e/${eventSlug}/schedule`}
 							>
 								Public schedule
+							</Link>
+							<Link
+								className="font-medium text-neutral-200 underline underline-offset-2 hover:text-neutral-100"
+								href="/admin"
+							>
+								Create your event
 							</Link>
 						</p>
 					) : null}
@@ -83,6 +89,7 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 				submissionLimit={loaded.form.submission_limit}
 				fields={loaded.fields}
 				sections={loaded.sections}
+				readOnly={loaded.event.mode === "demo"}
 			/>
 		</main>
 	);

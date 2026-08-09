@@ -53,18 +53,12 @@ npm run preview
 
 | What | Local URL |
 | --- | --- |
-| Writable CFP sandbox (`AI.Engineer Sandbox Event – NYC`) | `/e/aie-sandbox/submit/cfp` (also `lightning`, `workshop`) |
-| Form builder | `/admin/events/aie-sandbox/forms` |
-| Submissions (queues + detail) | `/admin/events/aie-sandbox/submissions` |
-| Program cockpit (+ pacing) | `/admin/events/aie-sandbox/dashboard` |
-| Speaker roster / ops | `/admin/events/aie-sandbox/speakers` |
-| Communications | `/admin/events/aie-sandbox/communications` |
-| Schedule editor | `/admin/events/aie-sandbox/schedule` |
+| **Local-only** writable sandbox (`aie-sandbox`) | `/e/aie-sandbox/submit/cfp` (also `lightning`, `workshop`) |
+| Form builder / admin (sandbox) | `/admin/events/aie-sandbox/…` |
 | Speaker portal | `/portal` |
-| Public schedule | `/e/aie-sandbox/schedule` |
-| Public speakers | `/e/aie-sandbox/speakers` |
-| Embeddable schedule | `/embed/aie-sandbox/schedule` |
-| Read-only product demo | `/demo` |
+| Public demo schedule | `/e/demo-cfp-to-stage/schedule` |
+| Public demo CFP (read-only writes) | `/e/demo-cfp-to-stage/submit/cfp` |
+| Demo launcher | `/demo` |
 | OpenAPI | `/api/v1/openapi.json` |
 
 With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` once for a local organiser cookie. Keep bypass **off** in production.
@@ -75,8 +69,8 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 | | Purpose |
 | --- | --- |
-| **`aie-sandbox`** | Writable local fixture named **AI.Engineer Sandbox Event – NYC**. Three public forms (`cfp`, `lightning`, `workshop`) plus pending and accepted abstracts for screenshot walkthroughs. Submit → review → schedule → publish without creating an event first. |
-| **`/demo`** | Read-only seeded walkthrough. Safe to show publicly; mutations are blocked. |
+| **`aie-sandbox`** | **Local-only** writable fixture (`npm run db:reset:local`). Click through submit → review → schedule without creating an event. Not a production playground; prod forms for this slug should stay closed. |
+| **`/demo` + `demo-cfp-to-stage`** | Public read-only playable surfaces. Launcher at `/demo` deep-links into the real CFP UI (writes blocked), schedule, and speakers. |
 | **Real event** | Primary path in production: **Create your event** on the homepage / `/admin` after magic-link sign-in. Owned by you; never replace with seed scripts. |
 
 ## What you get

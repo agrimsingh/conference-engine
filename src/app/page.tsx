@@ -151,43 +151,43 @@ const PIPELINE: {
 		stage: "CFP",
 		description:
 			"The form adapts by talk type: a workshop proposal asks different questions than a keynote. Submissions arrive pre-sorted.",
-		href: "/demo?perspective=applicant",
-		linkLabel: "Explore applicant view",
+		href: `/e/${DEMO_EVENT}/submit/cfp`,
+		linkLabel: "Try the demo CFP",
 	},
 	{
 		stage: "Review",
 		description:
 			"Reviewers score only what they're assigned, 1–5 against the rubric. The board stays empty until you assign; the chair reads scores, not an email chain.",
 		href: "/demo?perspective=reviewer",
-		linkLabel: "Explore reviewer view",
+		linkLabel: "How review works",
 	},
 	{
 		stage: "Accept",
 		description:
 			"Triage into accepted, waitlisted, or rejected without sending a single email. Bulk-notify when the programme is settled.",
-		href: "/demo?perspective=organizer",
-		linkLabel: "Explore organizer view",
+		href: "/admin",
+		linkLabel: "Create your event",
 	},
 	{
 		stage: "Speaker ops",
 		description:
 			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. Outstanding work stays on the cockpit until it lands.",
 		href: "/demo?perspective=speaker",
-		linkLabel: "Explore speaker view",
+		linkLabel: "How speaker ops work",
 	},
 	{
 		stage: "Schedule",
 		description:
 			"Drag accepted talks onto the grid; room clashes and double-booked speakers flag before you drop. Placing a slot sends an .ics invite that shows a Gmail RSVP.",
-		href: "/demo?perspective=organizer",
-		linkLabel: "See schedule readiness",
+		href: `/e/${DEMO_EVENT}/schedule`,
+		linkLabel: "View published schedule",
 	},
 	{
 		stage: "Publish",
 		description:
 			"The schedule goes live at its own URL, defaults to today or the next session day, and renders in multiple layouts. A JSON API and embeds cover the conference site.",
 		href: `/e/${DEMO_EVENT}/schedule`,
-		linkLabel: "View published schedule",
+		linkLabel: "Open live schedule",
 	},
 ];
 
@@ -481,8 +481,8 @@ export default function Home() {
 						The whole program pipeline, one system
 					</h2>
 					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
-						Six stages that usually live in six tools. Each one below opens a
-						read-only view of the seeded lifecycle.
+						Six stages that usually live in six tools. Playable links open real
+						demo routes or the launcher; admin and portal need an event you create.
 					</p>
 					<ol className="mt-10 border-t border-neutral-800">
 						{PIPELINE.map((item, index) => (
@@ -526,10 +526,10 @@ export default function Home() {
 								on a schedule or on demand.
 							</p>
 							<Link
-								href="/demo?perspective=organizer"
+								href="/admin"
 								className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
 							>
-								Explore the organizer view
+								Create your event
 								<ArrowIcon />
 							</Link>
 						</div>

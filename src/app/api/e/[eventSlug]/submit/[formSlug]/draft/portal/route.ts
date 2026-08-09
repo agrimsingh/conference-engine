@@ -6,6 +6,7 @@ import type { AnswerMap } from "@/lib/domain";
 import { validateCfpPayloadBounds } from "@/lib/cfp/submit";
 import { readBoundedCfpJson } from "@/lib/cfp/request";
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 import { readPortalSession, readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
@@ -32,6 +33,14 @@ export async function POST(request: Request, context: Context) {
 	const loaded = await loadCfpForm(db, eventSlug, formSlug);
 	if (!loaded || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form)) {
 		return NextResponse.json({ ok: false, error: "Drafts unavailable" }, { status: 404 });
+	}
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return NextResponse.json({ ok: false, error: "This form is read-only" }, { status: error.status });
+		}
+		throw error;
 	}
 	if (draftToken) {
 		if (!draft || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id) {

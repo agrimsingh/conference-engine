@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { AnswerMap, FormFieldDef } from "@/lib/domain";
 import { buttonClasses } from "@/components/ui";
 
@@ -10,6 +11,7 @@ type Props = {
 	onConfirm: () => void;
 	busy: boolean;
 	updating?: boolean;
+	readOnly?: boolean;
 };
 
 export function CfpReviewStep({
@@ -21,20 +23,27 @@ export function CfpReviewStep({
 	onConfirm,
 	busy,
 	updating = false,
+	readOnly = false,
 }: Props) {
 	return (
 		<div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
 			<header className="space-y-2 border-b border-neutral-800 pb-5">
 				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-					{updating ? "Review before updating" : "Review before submitting"}
+					{readOnly
+						? "Demo review"
+						: updating
+							? "Review before updating"
+							: "Review before submitting"}
 				</p>
 				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					Check your proposal
 				</h1>
 				<p className="text-pretty text-sm text-neutral-400">
-					{updating
-						? "Confirm your changes below. You can go back to edit anything before you update."
-						: "Confirm your details below. You can go back to edit anything before you submit."}
+					{readOnly
+						? "This is the review step applicants see before submit. Nothing is saved in the demo."
+						: updating
+							? "Confirm your changes below. You can go back to edit anything before you update."
+							: "Confirm your details below. You can go back to edit anything before you submit."}
 				</p>
 			</header>
 
@@ -67,9 +76,15 @@ export function CfpReviewStep({
 				<button type="button" disabled={busy} className={buttonClasses("secondary")} onClick={onBack}>
 					Back to edit
 				</button>
-				<button type="button" disabled={busy} className={buttonClasses("primary")} onClick={onConfirm}>
-					{busy ? (updating ? "Updating…" : "Submitting…") : updating ? "Update proposal" : "Submit proposal"}
-				</button>
+				{readOnly ? (
+					<Link href="/admin" className={buttonClasses("primary")}>
+						Create your event to submit
+					</Link>
+				) : (
+					<button type="button" disabled={busy} className={buttonClasses("primary")} onClick={onConfirm}>
+						{busy ? (updating ? "Updating…" : "Submitting…") : updating ? "Update proposal" : "Submit proposal"}
+					</button>
+				)}
 			</div>
 		</div>
 	);

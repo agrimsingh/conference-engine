@@ -156,6 +156,46 @@ describe("CfpForm progress and review step", () => {
 	});
 });
 
+describe("CfpForm readOnly demo", () => {
+	it("shows the demo banner and replaces submit with create-event on review", async () => {
+		const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+		await act(async () => {
+			root.render(
+				<CfpForm
+					eventSlug="demo-cfp-to-stage"
+					formSlug="cfp"
+					eventName="Demo"
+					formTitle="Demo CFP"
+					formDescription={null}
+					welcomeCopy={null}
+					thankYouCopy={null}
+					draftToken=""
+					draftsEnabled={true}
+					submissionLimit={0}
+					fields={[title]}
+					sections={[]}
+					readOnly
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain("Read-only demo");
+		expect(container.textContent).toContain("Create your event");
+		expect(container.textContent).not.toContain("Save and email a resume link");
+
+		const form = container.querySelector("form");
+		await act(async () => {
+			form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		});
+
+		expect(container.textContent).toContain("Demo review");
+		expect(container.textContent).toContain("Create your event to submit");
+		expect(fetchSpy).not.toHaveBeenCalled();
+		fetchSpy.mockRestore();
+	});
+});
+
 describe("SpeakerPortalRedirect", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();

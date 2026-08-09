@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CfpFieldInput } from "@/components/cfp-field-input";
 import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
@@ -14,6 +15,8 @@ import { CfpReviewStep } from "./cfp-review-step";
 const AUTOSAVE_DELAY_MS = 2_500;
 const SPEAKER_PORTAL_HREF = "/portal";
 const PORTAL_REDIRECT_SECONDS = 10;
+const DEMO_READ_ONLY_MESSAGE =
+	"This is a read-only demo. Fields stay interactive so you can explore conditionals, but submissions, drafts, and uploads are not saved. Create your own event to submit for real.";
 
 type Props = {
 	eventSlug: string;
@@ -28,6 +31,7 @@ type Props = {
 	submissionLimit: number;
 	fields: FormFieldDef[];
 	sections?: FormSection[];
+	readOnly?: boolean;
 };
 
 type FormStep = "edit" | "review";
@@ -125,13 +129,14 @@ export function CfpForm({
 	submissionLimit,
 	fields,
 	sections = [],
+	readOnly = false,
 }: Props) {
 	const [answers, setAnswers] = useState<AnswerMap>(() => initialAnswers(fields));
 	const [submitterName, setSubmitterName] = useState("");
 	const [submitterEmail, setSubmitterEmail] = useState("");
-	const [draftToken, setDraftToken] = useState(initialDraftToken);
+	const [draftToken, setDraftToken] = useState(readOnly ? "" : initialDraftToken);
 	const [draftNotice, setDraftNotice] = useState<string | null>(null);
-	const [resuming, setResuming] = useState(Boolean(initialDraftToken));
+	const [resuming, setResuming] = useState(Boolean(!readOnly && initialDraftToken));
 	const [errors, setErrors] = useState<string[]>([]);
 	const [submissionId, setSubmissionId] = useState<string | null>(null);
 	const [showConfirmation, setShowConfirmation] = useState(false);
@@ -145,8 +150,9 @@ export function CfpForm({
 	const fieldRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
 	const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const autosaveSnapshot = useRef<string>("");
+	const draftsAllowed = draftsEnabled && !readOnly;
 	const busy = submitting || draftPending || resuming || uploadBusyKey !== null;
-	const uploadBaseUrl = `/api/e/${eventSlug}/submit/${formSlug}/upload`;
+	const uploadBaseUrl = readOnly ? undefined : `/api/e/${eventSlug}/submit/${formSlug}/upload`;
 
 	const visibleFields = useMemo(
 		() => fields.filter((f) => evaluateVisibilityRule(f.visibilityRule, answers)),
@@ -183,7 +189,7 @@ export function CfpForm({
 	);
 
 	useEffect(() => {
-		if (!initialDraftToken) return;
+		if (readOnly || !initialDraftToken) return;
 		let active = true;
 		void fetch(`/api/e/${eventSlug}/submit/${formSlug}/draft?token=${encodeURIComponent(initialDraftToken)}`, { cache: "no-store" })
 			.then(async (response) => ({ response, body: await readJson<{ ok?: boolean; error?: string; draft?: { submitterName?: string; submitterEmail?: string; answers?: AnswerMap; submissionId?: string | null; status?: string } }>(response) }))
@@ -208,9 +214,13 @@ export function CfpForm({
 			.catch(() => active && setErrors(["We couldn't restore that draft. Try the link again."]))
 			.finally(() => active && setResuming(false));
 		return () => { active = false; };
-	}, [eventSlug, fields, formSlug, initialDraftToken]);
+	}, [eventSlug, fields, formSlug, initialDraftToken, readOnly]);
 
 	async function requestResumeLink() {
+		if (readOnly) {
+			setErrors([DEMO_READ_ONLY_MESSAGE]);
+			return;
+		}
 		setErrors([]);
 		setDraftNotice(null);
 		if (!isPlausibleEmail(submitterEmail)) {
@@ -229,6 +239,10 @@ export function CfpForm({
 	}
 
 	const persistDraft = useCallback(async (args: { silent?: boolean } = {}) => {
+		if (readOnly) {
+			if (!args.silent) setErrors([DEMO_READ_ONLY_MESSAGE]);
+			return;
+		}
 		if (!draftToken) return;
 		if (!args.silent) setDraftPending(true);
 		else setAutosaveStatus("saving");
@@ -259,10 +273,10 @@ export function CfpForm({
 		} finally {
 			if (!args.silent) setDraftPending(false);
 		}
-	}, [answers, draftToken, eventSlug, formSlug, submitterName]);
+	}, [answers, draftToken, eventSlug, formSlug, readOnly, submitterName]);
 
 	useEffect(() => {
-		if (!draftsEnabled || !draftToken || resuming || step !== "edit" || busy) return;
+		if (!draftsAllowed || !draftToken || resuming || step !== "edit" || busy) return;
 		const payload = draftPayloadKey(submitterName, answers);
 		if (payload === autosaveSnapshot.current) return;
 		if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
@@ -272,9 +286,13 @@ export function CfpForm({
 		return () => {
 			if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
 		};
-	}, [answers, busy, draftToken, draftsEnabled, persistDraft, resuming, step, submitterName]);
+	}, [answers, busy, draftToken, draftsAllowed, persistDraft, resuming, step, submitterName]);
 
 	async function saveDraft() {
+		if (readOnly) {
+			setErrors([DEMO_READ_ONLY_MESSAGE]);
+			return;
+		}
 		if (!draftToken) {
 			await requestResumeLink();
 			return;
@@ -283,6 +301,10 @@ export function CfpForm({
 	}
 
 	async function submit() {
+		if (readOnly) {
+			setErrors([DEMO_READ_ONLY_MESSAGE]);
+			return;
+		}
 		setErrors([]);
 		setInvalidMultiselectKey(null);
 		setSubmitting(true);
@@ -390,6 +412,7 @@ export function CfpForm({
 	if (step === "review") {
 		return (
 			<>
+				{readOnly ? <DemoReadOnlyBanner /> : null}
 				<CfpReviewStep
 					submitterName={submitterName}
 					submitterEmail={submitterEmail}
@@ -399,6 +422,7 @@ export function CfpForm({
 					onConfirm={() => void submit()}
 					busy={submitting}
 					updating={Boolean(submissionId)}
+					readOnly={readOnly}
 				/>
 				{errors.length > 0 ? (
 					<ul className="mx-auto mt-4 w-full max-w-2xl rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -428,6 +452,7 @@ export function CfpForm({
 				setStep("review");
 			}}
 		>
+			{readOnly ? <DemoReadOnlyBanner /> : null}
 			<header className="space-y-2 border-b border-neutral-800 pb-5">
 				<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 					{eventName} · Call for proposals
@@ -546,7 +571,7 @@ export function CfpForm({
 				</ul>
 			) : null}
 			{draftNotice ? <p className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100" role="status">{draftNotice}</p> : null}
-			{draftsEnabled && draftToken ? (
+			{draftsAllowed && draftToken ? (
 				<p className="text-xs text-neutral-500" role="status" aria-live="polite">
 					{autosaveStatus === "saving" ? "Autosaving draft…" : null}
 					{autosaveStatus === "saved" ? "Draft autosaved." : null}
@@ -554,7 +579,7 @@ export function CfpForm({
 				</p>
 			) : null}
 
-			{draftsEnabled ? (
+			{draftsAllowed ? (
 				<div className="flex flex-wrap items-center gap-3 border-t border-neutral-800 pt-4 text-sm">
 					<button type="button" disabled={busy} className={buttonClasses("secondary")} onClick={() => void saveDraft()}>
 						{resuming ? "Restoring…" : draftToken ? "Save draft" : "Save and email a resume link"}
@@ -562,16 +587,33 @@ export function CfpForm({
 					<span className="text-neutral-500">Drafts are tied to this email and can be resumed securely.</span>
 				</div>
 			) : null}
-			{submissionLimit > 0 ? <p className="text-xs text-neutral-500">This call accepts up to {submissionLimit} submitted proposals. Availability is confirmed when you submit.</p> : null}
+			{submissionLimit > 0 && !readOnly ? <p className="text-xs text-neutral-500">This call accepts up to {submissionLimit} submitted proposals. Availability is confirmed when you submit.</p> : null}
 
 			<button
 				type="submit"
 				disabled={busy}
 				className={`self-start ${buttonClasses("primary")}`}
 			>
-				Review proposal
+				{readOnly ? "Review sample answers" : "Review proposal"}
 			</button>
 		</form>
+	);
+}
+
+function DemoReadOnlyBanner() {
+	return (
+		<div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm text-amber-100" role="status">
+			<p className="font-medium text-amber-200">Read-only demo</p>
+			<p className="mt-1 text-pretty text-amber-100/90">{DEMO_READ_ONLY_MESSAGE}</p>
+			<p className="mt-2 flex flex-wrap gap-4">
+				<Link className="font-medium text-emerald-300 underline underline-offset-2 hover:text-emerald-200" href="/admin">
+					Create your event
+				</Link>
+				<Link className="font-medium text-amber-100 underline underline-offset-2 hover:text-white" href="/demo">
+					Demo launcher
+				</Link>
+			</p>
+		</div>
 	);
 }
 

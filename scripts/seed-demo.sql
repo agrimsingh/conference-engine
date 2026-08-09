@@ -31,10 +31,22 @@ INSERT OR IGNORE INTO cfp_forms (
 SELECT
 	'demo-cfp-form', e.id, 'cfp', 'AI Systems Conference CFP',
 	'A realistic conditional form used to show how proposals move from a CFP into review and a published agenda.',
-	'closed', NULL, 1791000000000, NULL, NULL, NULL, 1, 4, 1, 0, 'public', 1790000000000, 1790000000000
+	'open', NULL, NULL, NULL, NULL, NULL, 1, 4, 1, 0, 'public', 1790000000000, 1790000000000
 FROM demo_event e
 WHERE NOT EXISTS (SELECT 1 FROM cfp_forms WHERE id = 'demo-cfp-form')
 	AND NOT EXISTS (SELECT 1 FROM cfp_forms WHERE event_id = e.id AND slug = 'cfp');
+
+-- Idempotent: existing installs keep INSERT OR IGNORE; flip browse status open for interactive demo UI.
+-- Writes stay blocked by events.mode = 'demo' (assertEventWritable), not by form status.
+UPDATE cfp_forms
+SET status = 'open', opens_at = NULL, closes_at = NULL, updated_at = 1790000000000
+WHERE id = 'demo-cfp-form'
+	AND slug = 'cfp'
+	AND event_id = 'demo-cfp-to-stage-2026'
+	AND EXISTS (
+		SELECT 1 FROM events
+		WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
+	);
 
 WITH demo_event AS (
 	SELECT id FROM events

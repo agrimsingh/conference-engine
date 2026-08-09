@@ -99,7 +99,7 @@ export function LandingHero() {
 					href="/demo"
 					className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
 				>
-					Explore the live demo
+					Try the demo
 					<ArrowIcon />
 				</Link>
 			</div>
