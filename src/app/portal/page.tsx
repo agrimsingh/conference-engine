@@ -16,6 +16,7 @@ import { parseSpeakerSocial } from "@/lib/speakers/social";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
 import { TaskChecklist } from "./task-checklist";
+import { parseSavedTaskFormFields } from "@/lib/speakers/task-forms";
 import { ProfileEditor } from "./profile-editor";
 import { ActionTaskList } from "./action-task-list";
 import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
@@ -157,7 +158,8 @@ export default async function PortalPage({ searchParams }: Props) {
 																id: task.id,
 																key: task.template_key,
 																label: task.template_label || meta?.label || task.template_key,
-																kind: task.template_task_kind ?? meta?.kind ?? "file",
+																		kind: task.form_schema_json ? "form" : task.template_task_kind ?? meta?.kind ?? "file",
+																		formFields: parseSavedTaskFormFields(task.form_schema_json),
 																status: task.status,
 																accept: meta?.accept ?? [],
 																textValue: task.text_value,

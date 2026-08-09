@@ -9,12 +9,14 @@ import {
 	StatusPill,
 } from "@/components/ui";
 import { formatUtcTimestamp, isTaskOverdue, taskDueLabel } from "@/lib/speakers/task-display";
+import type { TaskFormField } from "@/lib/speakers/task-forms";
 
 export type TaskView = {
 	id: string;
 	key: string;
 	label: string;
-	kind: "text" | "file";
+	kind: "text" | "file" | "form";
+	formFields?: TaskFormField[] | null;
 	status: "pending" | "completed";
 	accept: readonly string[];
 	textValue: string | null;
@@ -93,6 +95,22 @@ export function TaskChecklist({ tasks, compact = false, readOnly = false, timeZo
 		}
 	}
 
+	async function completeForm(taskId: string, label: string, form: HTMLFormElement, fields: TaskFormField[]) {
+		const data = new FormData(form);
+		const answers: Record<string, unknown> = {};
+		for (const field of fields) {
+			if (field.type === "multiselect") answers[field.key] = data.getAll(field.key).map(String);
+			else answers[field.key] = data.get(field.key) ?? "";
+		}
+		setBusyId(taskId); setError(null); setMessage(null);
+		try {
+			const response = await fetch(`/api/portal/tasks/${taskId}/complete`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) });
+			const result = await response.json() as { ok?: boolean; error?: string };
+			if (!response.ok || !result.ok) setError(result.error ?? `Failed to save ${label}`);
+			else { setMessage(`${label} saved`); router.refresh(); }
+		} catch { setError("Network error"); } finally { setBusyId(null); }
+	}
+
 	async function addComment(taskId: string, body: string) {
 		setBusyId(taskId); setError(null); setMessage(null);
 		try {
@@ -157,6 +175,11 @@ export function TaskChecklist({ tasks, compact = false, readOnly = false, timeZo
 										{busyId === task.id ? "Saving…" : done ? `Update ${task.label}` : `Save ${task.label}`}
 									</button>
 								</form>
+							) : task.kind === "form" && task.formFields ? (
+								<form className="mt-3 space-y-4" onSubmit={(event) => { event.preventDefault(); void completeForm(task.id, task.label, event.currentTarget, task.formFields!); }}>
+									{task.formFields.map((field) => <TaskFormInput key={field.key} field={field} value={savedFormAnswer(task.textValue, field.key)} />)}
+									<button type="submit" disabled={busyId === task.id} className={buttonClasses("secondary")}>{busyId === task.id ? "Saving…" : done ? `Update ${task.label}` : `Save ${task.label}`}</button>
+								</form>
 							) : (
 								<form
 									className="mt-3 space-y-2"
@@ -209,4 +232,20 @@ export function TaskChecklist({ tasks, compact = false, readOnly = false, timeZo
 			</ul>
 		</div>
 	);
+}
+
+function savedFormAnswer(raw: string | null, key: string): unknown {
+	if (!raw) return "";
+	try { const parsed = JSON.parse(raw) as Record<string, unknown>; return parsed[key] ?? ""; } catch { return ""; }
+}
+
+function TaskFormInput({ field, value }: { field: TaskFormField; value: unknown }) {
+	const label = <span className="font-medium text-neutral-200">{field.label}{field.required ? <span className="text-red-300"> *</span> : null}</span>;
+	if (field.type === "textarea") return <label className="block space-y-1.5 text-sm">{label}<textarea name={field.key} required={field.required} rows={4} defaultValue={typeof value === "string" ? value : ""} className={`w-full ${INPUT_CLASSES}`} /></label>;
+	if (field.type === "select") return <label className="block space-y-1.5 text-sm">{label}<select name={field.key} required={field.required} defaultValue={typeof value === "string" ? value : ""} className={`w-full ${INPUT_CLASSES}`}><option value="">Select…</option>{field.options?.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+	if (field.type === "multiselect") {
+		const selected = Array.isArray(value) ? new Set(value.map(String)) : new Set<string>();
+		return <fieldset className="space-y-2"><legend className="text-sm">{label}</legend>{field.options?.map((option) => <label key={option} className="flex items-center gap-2 text-sm text-neutral-300"><input type="checkbox" name={field.key} value={option} defaultChecked={selected.has(option)} />{option}</label>)}</fieldset>;
+	}
+	return <label className="block space-y-1.5 text-sm">{label}<input name={field.key} required={field.required} type={field.type === "number" ? "number" : field.type === "email" ? "email" : field.type === "url" ? "url" : "text"} defaultValue={typeof value === "string" || typeof value === "number" ? String(value) : ""} className={`w-full ${INPUT_CLASSES}`} /></label>;
 }

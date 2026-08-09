@@ -9,7 +9,7 @@ import {
 	getSubmissionById,
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
-import { notifySubmissionLifecycle } from "@/lib/email/notify";
+import { notifyConfirmedSpeakerLifecycle } from "@/lib/email/notify";
 import type { OutboundSendResult } from "@/lib/email/resend";
 import {
 	ensureTaskTemplates,
@@ -25,6 +25,7 @@ export type AcceptResult =
 			spawnedTaskKeys: string[];
 			speakerPersonIds: string[];
 			email: OutboundSendResult | null;
+			emails: OutboundSendResult[];
 	  }
 	| { ok: false; error: string; status?: number };
 
@@ -111,14 +112,14 @@ export async function acceptSubmission(
 		for (const key of result.spawnedTaskKeys) spawnedTaskKeys.add(key);
 	}
 
-	const email = emailChoice.send
-		? await notifySubmissionLifecycle(db, {
+	const emails = emailChoice.send
+		? await notifyConfirmedSpeakerLifecycle(db, {
 				submissionId,
 				templateKey: "acceptance",
 				override: { subject: emailChoice.subject, text: emailChoice.text },
 				force: true,
 			})
-		: null;
+		: [];
 
 	return {
 		ok: true,
@@ -126,6 +127,7 @@ export async function acceptSubmission(
 		status: "accepted",
 		spawnedTaskKeys: [...spawnedTaskKeys],
 		speakerPersonIds,
-		email,
+		email: emails[0] ?? null,
+		emails,
 	};
 }

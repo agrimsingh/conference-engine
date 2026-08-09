@@ -1,5 +1,6 @@
 import { parseTrackConflictPolicy, validateEventSettings, type TrackConflictPolicy } from "./settings";
 import { validateEventScheduleBounds } from "../schedule/date-bounds";
+import { parseSavedTaskFormFields, parseTaskFormFields, type TaskFormField } from "../speakers/task-forms";
 
 export type ConfigurationEvent = {
 	id: string;
@@ -19,11 +20,12 @@ export type ConfigurationTask = {
 	id: string;
 	key: string;
 	label: string;
-	task_kind: "text" | "file";
+	task_kind: "text" | "file" | "form";
 	required: number;
 	position: number;
 	instructions: string | null;
 	due_at: number | null;
+	form_fields?: TaskFormField[] | null;
 };
 
 export type EventConfiguration = {
@@ -51,7 +53,7 @@ export async function loadEventConfiguration(db: D1Database, eventId: string): P
 		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
-		db.prepare(`SELECT id, key, label, task_kind, required, position, instructions, due_at FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<ConfigurationTask>(),
+		db.prepare(`SELECT id, key, label, CASE WHEN form_schema_json IS NOT NULL THEN 'form' ELSE task_kind END AS task_kind, required, position, instructions, due_at, form_schema_json FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<Omit<ConfigurationTask, "form_fields"> & { form_schema_json: string | null }>(),
 		db.prepare(`SELECT id, slug, title, status FROM cfp_forms WHERE event_id = ? AND kind = 'public' ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; slug: string; title: string; status: "draft" | "open" | "closed" }>(),
 		db.prepare(`SELECT id, name, status FROM evaluation_plans WHERE event_id = ? ORDER BY created_at LIMIT 1`).bind(eventId).first<{ id: string; name: string; status: string }>(),
 		db.prepare(`SELECT COUNT(*) AS count FROM event_message_templates WHERE event_id = ?`).bind(eventId).first<{ count: number }>(),
@@ -63,7 +65,7 @@ export async function loadEventConfiguration(db: D1Database, eventId: string): P
 	]);
 	return {
 		event,
-		rooms: activeRows(rooms), tracks: activeRows(tracks), tasks: activeRows(tasks),
+		rooms: activeRows(rooms), tracks: activeRows(tracks), tasks: activeRows(tasks).map((task) => ({ ...task, form_fields: parseSavedTaskFormFields(task.form_schema_json) })),
 		cfp: cfp ? { ...cfp, fieldCount: fieldCount?.count ?? 0 } : null,
 		review: review ? { ...review, criteriaCount: criteriaCount?.count ?? 0 } : null,
 		messageTemplateCount: messageTemplates?.count ?? 0,
@@ -183,19 +185,23 @@ export async function deleteTrack(db: D1Database, eventId: string, id: unknown):
 
 export async function createTaskTemplate(db: D1Database, eventId: string, input: Record<string, unknown>): Promise<void> {
 	const key = taskKey(input.key); const label = trimmed(input.label, "Task label"); const kind = taskKind(input.kind); const required = input.required === true ? 1 : 0;
+	const formSchema = kind === "form" ? JSON.stringify(parseTaskFormFields(input.formFields ?? input.formSchema)) : null;
+	const storageKind = kind === "form" ? "text" : kind;
 	const instructions = optionalInstructions(input.instructions);
 	const dueAt = optionalDueAt(input.dueAt ?? input.due_at);
 	const now = Date.now();
-	await db.prepare(`INSERT INTO task_templates (id, event_id, key, label, task_kind, required, position, instructions, due_at, soft_deleted, created_at, updated_at)
-		SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, ?, ?, 0, ?, ?
+	await db.prepare(`INSERT INTO task_templates (id, event_id, key, label, task_kind, required, position, instructions, due_at, form_schema_json, soft_deleted, created_at, updated_at)
+		SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, ?, ?, ?, 0, ?, ?
 		FROM task_templates WHERE event_id = ? AND soft_deleted = 0`)
-		.bind(crypto.randomUUID(), eventId, key, label, kind, required, instructions, dueAt, now, now, eventId).run();
+		.bind(crypto.randomUUID(), eventId, key, label, storageKind, required, instructions, dueAt, formSchema, now, now, eventId).run();
 }
 export async function updateTaskTemplate(db: D1Database, eventId: string, input: Record<string, unknown>): Promise<void> {
 	const label = trimmed(input.label, "Task label"); const kind = taskKind(input.kind); if (typeof input.id !== "string" || !input.id) throw new Error("Task id is required");
+	const formSchema = kind === "form" ? JSON.stringify(parseTaskFormFields(input.formFields ?? input.formSchema)) : null;
+	const storageKind = kind === "form" ? "text" : kind;
 	const instructions = optionalInstructions(input.instructions);
 	const dueAt = optionalDueAt(input.dueAt ?? input.due_at);
-	const result = await db.prepare("UPDATE task_templates SET label = ?, task_kind = ?, required = ?, instructions = ?, due_at = ?, updated_at = ? WHERE id = ? AND event_id = ? AND soft_deleted = 0").bind(label, kind, input.required === true ? 1 : 0, instructions, dueAt, Date.now(), input.id, eventId).run(); if (!result.meta.changes) throw new Error("Task template not found");
+	const result = await db.prepare("UPDATE task_templates SET label = ?, task_kind = ?, required = ?, instructions = ?, due_at = ?, form_schema_json = ?, updated_at = ? WHERE id = ? AND event_id = ? AND soft_deleted = 0").bind(label, storageKind, input.required === true ? 1 : 0, instructions, dueAt, formSchema, Date.now(), input.id, eventId).run(); if (!result.meta.changes) throw new Error("Task template not found");
 }
 export async function deleteTaskTemplate(db: D1Database, eventId: string, id: unknown): Promise<void> { await softDelete(db, "task_templates", eventId, id, "task template"); }
 
@@ -223,7 +229,7 @@ async function softDelete(db: D1Database, table: "event_rooms" | "agenda_tracks"
 }
 function trackSlug(value: unknown): string { const slug = trimmed(value, "Track slug", 64); if (!/^[a-z0-9-]+$/.test(slug)) throw new Error("Track slug must use lowercase letters, numbers, and hyphens"); return slug; }
 function taskKey(value: unknown): string { const key = trimmed(value, "Task key", 64); if (!/^[a-z0-9-]+$/.test(key)) throw new Error("Task key must use lowercase letters, numbers, and hyphens"); return key; }
-function taskKind(value: unknown): "text" | "file" { if (value === "text" || value === "file") return value; throw new Error("Task kind must be text or file"); }
+function taskKind(value: unknown): "text" | "file" | "form" { if (value === "text" || value === "file" || value === "form") return value; throw new Error("Task kind must be text, file, or form"); }
 function optionalInstructions(value: unknown): string | null {
 	if (value == null || value === "") return null;
 	if (typeof value !== "string") throw new Error("Instructions must be a string");

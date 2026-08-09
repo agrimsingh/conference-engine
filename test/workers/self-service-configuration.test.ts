@@ -14,7 +14,8 @@ import {
 } from "@/lib/events/configuration";
 import { requireWritableEventBySlug } from "@/lib/events/writability";
 import { getEventById, listEventRooms } from "@/lib/db/queries";
-import { completeFileTask, completeTextTask } from "@/lib/speakers/complete-task";
+import { completeFileTask, completeFormTask, completeTextTask } from "@/lib/speakers/complete-task";
+import { acceptSubmission } from "@/lib/speakers/accept";
 import { loadOutstandingTasksSnapshot } from "@/lib/tasks/outstanding";
 import { sendTaskReminders } from "@/lib/email/reminders";
 import type { AccountRow } from "@/lib/db/types";
@@ -99,6 +100,43 @@ describe("self-service configuration", () => {
 		expect(await completeTextTask(env.DB, { taskId: "self-custom-text", personId: "self-custom-person", text: "Yes" })).toMatchObject({ ok: true });
 		expect(await completeFileTask(env.DB, env.FILES, { taskId: "self-custom-file", personId: "self-custom-person", file: new File(["release"], "release.txt", { type: "text/plain" }) })).toMatchObject({ ok: true });
 		expect(await env.DB.prepare("SELECT status FROM speaker_tasks WHERE id IN ('self-custom-text', 'self-custom-file') ORDER BY id").all()).toMatchObject({ results: [{ status: "completed" }, { status: "completed" }] });
+	});
+
+	it("configures, snapshots, validates, and completes a structured speaker form task", async () => {
+		await env.DB.prepare("INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('form-task-owner', 'form-task-owner@test.invalid', 'Form owner', ?, ?)").bind(now, now).run();
+		const created = await createEventWithDefaults(env.DB, { name: "Structured tasks", slug: "structured-tasks", timezone: "UTC", startDay: "2026-11-01", endDay: "2026-11-01" }, { ...owner, id: "form-task-owner", email: "form-task-owner@test.invalid" });
+		await createTaskTemplate(env.DB, created.eventId, {
+			key: "travel-details",
+			label: "Travel details",
+			kind: "form",
+			required: true,
+			instructions: "Share the details the production team needs.",
+			formFields: [
+				{ key: "arrival", label: "Arrival time", type: "text", required: true },
+				{ key: "diet", label: "Dietary needs", type: "select", required: true, options: ["None", "Vegetarian"] },
+				{ key: "notes", label: "Anything else", type: "textarea", required: false },
+			],
+		});
+		const configured = (await loadEventConfiguration(env.DB, created.eventId)).tasks.find((task) => task.key === "travel-details");
+		expect(configured).toMatchObject({ task_kind: "form", form_fields: [{ key: "arrival" }, { key: "diet" }, { key: "notes" }] });
+
+		const form = await env.DB.prepare("SELECT id FROM cfp_forms WHERE event_id = ? LIMIT 1").bind(created.eventId).first<{ id: string }>();
+		if (!form) throw new Error("missing form");
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, submitter_email, submitter_name, answers_json, created_at, updated_at) VALUES ('structured-submission', ?, ?, 'submitted', 'speaker@structured.test', 'Structured Speaker', '{\"title\":\"Structured talk\"}', ?, ?)").bind(form.id, created.eventId, now, now),
+			env.DB.prepare("INSERT INTO submission_speakers (id, submission_id, name, email, position, status) VALUES ('structured-speaker', 'structured-submission', 'Structured Speaker', 'speaker@structured.test', 0, 'confirmed')"),
+		]);
+		const accepted = await acceptSubmission(env.DB, "structured-submission", { send: false });
+		if (!accepted.ok) throw new Error(accepted.error);
+		const task = await env.DB.prepare("SELECT id, form_schema_json FROM speaker_tasks WHERE submission_id = 'structured-submission' AND template_key = 'travel-details'").first<{ id: string; form_schema_json: string }>();
+		expect(JSON.parse(task?.form_schema_json ?? "[]")).toHaveLength(3);
+		if (!task) throw new Error("missing structured task");
+
+		expect(await completeFormTask(env.DB, { taskId: task.id, personId: accepted.speakerPersonIds[0]!, answers: { diet: "Vegetarian" } })).toMatchObject({ ok: false, status: 400, error: "Arrival time is required" });
+		expect(await completeFormTask(env.DB, { taskId: task.id, personId: "someone-else", answers: { arrival: "09:30", diet: "None" } })).toMatchObject({ ok: false, status: 403 });
+		const completed = await completeFormTask(env.DB, { taskId: task.id, personId: accepted.speakerPersonIds[0]!, answers: { arrival: "09:30", diet: "Vegetarian", notes: "Window seat" } });
+		expect(completed).toMatchObject({ ok: true, task: { status: "completed" } });
+		expect(JSON.parse(completed.ok ? completed.task.text_value ?? "{}" : "{}")).toEqual({ arrival: "09:30", diet: "Vegetarian", notes: "Window seat" });
 	});
 
 	it("counts and reminds only required snapshot tasks using their saved labels", async () => {

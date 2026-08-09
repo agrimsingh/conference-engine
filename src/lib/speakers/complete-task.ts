@@ -3,6 +3,7 @@ import { getSpeakerTaskById } from "@/lib/db/queries";
 import type { AssetRow, SpeakerTaskRow } from "@/lib/db/types";
 import { implicitlyConfirmByTaskCompletion } from "./co-speakers";
 import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writability";
+import { parseSavedTaskFormFields, validateTaskFormAnswers } from "./task-forms";
 
 export type CompleteTextResult =
 	| { ok: true; task: SpeakerTaskRow }
@@ -13,6 +14,31 @@ export type CompleteFileResult =
 	| { ok: false; error: string; status: number };
 
 export const MAX_SPEAKER_BIO_LENGTH = 10_000;
+
+export async function completeFormTask(
+	db: D1Database,
+	args: { taskId: string; personId: string; answers: unknown },
+): Promise<CompleteTextResult> {
+	const task = await getSpeakerTaskById(db, args.taskId);
+	if (!task) return { ok: false, error: "Task not found", status: 404 };
+	if (task.person_id !== args.personId) return { ok: false, error: "Forbidden", status: 403 };
+	try {
+		await requireWritableEventById(db, task.event_id);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return { ok: false, error: "This task is read-only", status: 403 };
+		throw error;
+	}
+	const fields = parseSavedTaskFormFields(task.form_schema_json);
+	if (!fields) return { ok: false, error: "Task is not a form task", status: 400 };
+	const validated = validateTaskFormAnswers(fields, args.answers);
+	if (!validated.ok) return { ok: false, error: validated.error, status: 400 };
+	const now = Date.now();
+	await db.prepare("UPDATE speaker_tasks SET status = 'completed', text_value = ?, completed_at = ?, updated_at = ? WHERE id = ?")
+		.bind(JSON.stringify(validated.answers), now, now, task.id).run();
+	await implicitlyConfirmByTaskCompletion(db, { submissionId: task.submission_id, personId: task.person_id });
+	const updated = await getSpeakerTaskById(db, task.id);
+	return updated ? { ok: true, task: updated } : { ok: false, error: "Task missing after update", status: 500 };
+}
 
 export async function completeTextTask(
 	db: D1Database,

@@ -132,6 +132,7 @@ export type TaskTemplateRow = {
 	position: number;
 	instructions?: string | null;
 	due_at?: number | null;
+	form_schema_json?: string | null;
 	soft_deleted?: number;
 	created_at?: number;
 	updated_at?: number;
@@ -148,6 +149,7 @@ export type SpeakerTaskRow = {
 	template_required?: number;
 	instructions?: string | null;
 	due_at?: number | null;
+	form_schema_json?: string | null;
 	status: "pending" | "completed";
 	asset_id: string | null;
 	text_value: string | null;

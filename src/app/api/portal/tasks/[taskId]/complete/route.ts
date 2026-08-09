@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readBoundedJson } from "@/lib/cfp/request";
 import { getDb } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
-import { completeTextTask } from "@/lib/speakers/complete-task";
+import { completeFormTask, completeTextTask } from "@/lib/speakers/complete-task";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 
 type RouteContext = {
@@ -11,6 +11,7 @@ type RouteContext = {
 
 type Body = {
 	text?: unknown;
+	answers?: unknown;
 };
 
 const MAX_PORTAL_TEXT_REQUEST_BYTES = 64 * 1024;
@@ -29,11 +30,9 @@ export async function POST(request: Request, context: RouteContext) {
 	const text = typeof body.text === "string" ? body.text : "";
 
 	const db = await getDb();
-	const result = await completeTextTask(db, {
-		taskId,
-		personId: session.personId,
-		text,
-	});
+	const result = body.answers === undefined
+		? await completeTextTask(db, { taskId, personId: session.personId, text })
+		: await completeFormTask(db, { taskId, personId: session.personId, answers: body.answers });
 
 	if (!result.ok) {
 		return NextResponse.json(
