@@ -17,5 +17,5 @@ export default async function CommunicationsPage({ params }: Props) {
 		listEventDeliveryHistory(db, event.id),
 		listReminderRecipients(db, event.id),
 	]);
-	return <div className="min-h-dvh bg-neutral-950 text-neutral-200"><AdminEventNav eventSlug={event.slug} /><main className="mx-auto max-w-4xl px-4 py-10"><PageHeader eyebrow="Organizer · Communications" title={event.name} description="Edit event-specific transactional copy, send segmented speaker reminders, and inspect durable delivery outcomes." /><CommunicationsConsole eventSlug={event.slug} templates={templates} deliveries={deliveries} reminders={reminders} /></main></div>;
+	return <div className="min-h-dvh bg-neutral-950 text-neutral-200"><AdminEventNav eventSlug={event.slug} /><main className="mx-auto max-w-4xl px-4 py-10"><PageHeader eyebrow="Organizer · Communications" title={event.name} description="Edit email templates, send speaker reminders, and see what was delivered." /><CommunicationsConsole eventSlug={event.slug} templates={templates} deliveries={deliveries} reminders={reminders} /></main></div>;
 }

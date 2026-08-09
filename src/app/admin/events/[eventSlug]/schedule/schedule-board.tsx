@@ -568,7 +568,7 @@ export function ScheduleBoard({
 							{publishConfirm.sessionIds.length === 1 ? "session" : "sessions"}?
 						</h2>
 						<p className="text-sm text-neutral-400">
-							This approves each current session-content revision as the immutable public snapshot, then publishes it to the public schedule. Later edits stay private until you approve and publish them again.
+							This publishes the selected sessions to the public schedule and locks in their current content. Later edits stay private until you publish again.
 						</p>
 						<ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-neutral-300">
 							{publishConfirm.titles.map((title, index) => (

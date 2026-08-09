@@ -598,10 +598,9 @@ export default function Home() {
 								Deploy your own
 							</h2>
 							<p className="mt-3 max-w-lg text-pretty text-neutral-400">
-								One repo, running entirely on your own Cloudflare account: D1
-								for the program data, R2 for speaker uploads, KV for
-								sessions, a Durable Object for realtime. No servers to
-								babysit.
+								One repo on your own Cloudflare account. Programme data,
+								speaker uploads, and live schedule updates ship with the
+								Worker. No servers to babysit.
 							</p>
 							<a
 								href={`${REPO_URL}#readme`}
