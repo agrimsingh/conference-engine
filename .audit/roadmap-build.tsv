@@ -35,3 +35,5 @@ ts	phase	decision	why	evidence	result
 2026-08-09T09:15:48Z	eval	Merged public discover	search facets gallery surname sort	be2c2e6	green
 2026-08-09T09:17:45Z	eval	Merged speaker-task fields after public rebase	0025 + portal profile + task due/instructions	3dcc3a5	green
 2026-08-09T09:18:41Z	eval	Merged CFP edit + review depth + speaker roster	migrations 0026 roster 0027 recusal; all top-5 eval units on main	448f5fb+	182 unit green
+2026-08-09T09:31:48Z	release	Opened fixes for mid70s release blockers	profile sync lint bypass due-reminders public meta then migrate+deploy	2c3ce1a	running
+2026-08-09T09:34:07Z	release	Merged portal lint + bypass cookie fix	client useState now; secure from https protocol	87412cf	lint green
