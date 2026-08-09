@@ -412,21 +412,6 @@ export async function PublicSchedule({
 							);
 						})}
 					</div>
-
-					<ScheduleQuerySelect
-						label="Room"
-						value={roomFilter}
-						options={["all", ...roomsForDay].map((room) => ({
-							value: room,
-							label: room === "all" ? "All rooms" : room,
-							href: hrefFor(basePath, event.slug, {
-								day: dayKey,
-								view,
-								room,
-								embed: itineraryEmbed?.slug,
-							}),
-						}))}
-					/>
 				</div>
 			</header>
 
@@ -501,6 +486,16 @@ export async function PublicSchedule({
 						basePath={basePath}
 						initialDayKey={dayKey}
 						initialRoom={roomFilter}
+						roomOptions={["all", ...roomsForDay].map((room) => ({
+							value: room,
+							label: room === "all" ? "All rooms" : room,
+							href: hrefFor(basePath, event.slug, {
+								day: dayKey,
+								view,
+								room,
+								embed: itineraryEmbed?.slug,
+							}),
+						}))}
 					/>
 				)
 			) : null}
