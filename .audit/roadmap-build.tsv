@@ -41,3 +41,5 @@ ts	phase	decision	why	evidence	result
 2026-08-09T09:35:43Z	release	Merged speaker profile sync	speaker_profiles SoT; esp workflow only; 0028 backfill	e3699fe	unit+workers sync green in agent
 2026-08-09T09:37:35Z	release	Merged due-aware reminders + roster bulk email	cron due_or_overdue; speaker_announcement; tsc cast on fetch mock	ce19114	unit green; tsc fixed post-merge
 2026-08-09T09:39:25Z	release	Prod catch-up: migrations 0025-0028 + deploy HEAD	Worker f852cce0; source d300c55	d300c55	live 200 on home/portal/schedule
+2026-08-09T17:14:02Z	p0	Fan-out P0 poteto-agents on Grok	6 worktrees from 6d3d09e694879d192ef20013cf82327c15fd7158	-	started
+2026-08-09T17:17:45Z	p0	Confirmed submission_received on prod Gmail	agrim.singh@gmail.com; Resend+D1 match	8fe2bac	inbox PASS
