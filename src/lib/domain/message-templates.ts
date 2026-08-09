@@ -9,6 +9,7 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"portal_magic_link",
 	"organizer_magic_link",
 	"organizer_invite",
+	"reviewer_invite",
 ] as const;
 
 export type MessageTemplateKey = (typeof MESSAGE_TEMPLATE_KEYS)[number];
@@ -27,6 +28,7 @@ export type MessageTemplateContext = {
 	confirmUrl?: string;
 	declineUrl?: string;
 	loginUrl?: string;
+	reviewUrl?: string;
 };
 
 export type RenderedMessage = {
@@ -182,6 +184,20 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"— conference-engine",
 		].join("\n"),
 	}),
+	reviewer_invite: (ctx) => ({
+		subject: `Review invitations for ${ctx.eventName}`,
+		text: [
+			`Hi ${ctx.submitterName},`,
+			"",
+			`You've been invited to review proposals for ${ctx.eventName}.`,
+			"Open this personal review link (it replaces any earlier link for you):",
+			ctx.reviewUrl ?? "/review",
+			"",
+			"If you did not expect this invite, you can ignore this email.",
+			"",
+			"— conference-engine",
+		].join("\n"),
+	}),
 };
 
 export function isMessageTemplateKey(value: string): value is MessageTemplateKey {
@@ -203,6 +219,8 @@ export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 		key !== "organizer_magic_link" &&
 		key !== "organizer_invite" &&
 		// Multiple co-speakers per submission + admin resend.
-		key !== "co_speaker_invite"
+		key !== "co_speaker_invite" &&
+		// Token rotation on regenerate must be able to mail a new link.
+		key !== "reviewer_invite"
 	);
 }

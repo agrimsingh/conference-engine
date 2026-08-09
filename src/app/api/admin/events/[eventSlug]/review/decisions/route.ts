@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { getDb } from "@/lib/db/cloudflare";
-import { bulkDecideSubmissions, BulkDecisionValidationError } from "@/lib/evaluation/decisions";
+import { bulkDecideSubmissions, BulkDecisionValidationError, parseBulkDecisionEmail } from "@/lib/evaluation/decisions";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 
 type Context = { params: Promise<{ eventSlug: string }> };
@@ -18,7 +18,13 @@ export async function POST(request: Request, context: Context) {
 		return NextResponse.json({ ok: false, error: "Expected submissionIds and action accept or reject" }, { status: 400 });
 	}
 	try {
-		const result = await bulkDecideSubmissions(db, { eventId: authorization.access.event.id, submissionIds: parsed.value.submissionIds, action: parsed.value.action });
+		const email = parseBulkDecisionEmail(parsed.value.email);
+		const result = await bulkDecideSubmissions(db, {
+			eventId: authorization.access.event.id,
+			submissionIds: parsed.value.submissionIds,
+			action: parsed.value.action,
+			email,
+		});
 		const broadcasted = result.succeeded > 0
 			? await broadcastEventInvalidate(authorization.access.event.id, "tasks.decide")
 			: false;

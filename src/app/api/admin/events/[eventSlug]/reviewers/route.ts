@@ -12,6 +12,7 @@ import {
 	revokeReviewer,
 	ReviewerValidationError,
 	reviewPathForToken,
+	sendReviewerInviteEmail,
 } from "@/lib/evaluation/reviewers";
 
 type RouteContext = {
@@ -20,6 +21,7 @@ type RouteContext = {
 
 type Body = {
 	name?: unknown;
+	email?: unknown;
 	action?: unknown;
 	reviewerId?: unknown;
 };
@@ -27,12 +29,14 @@ type Body = {
 function serializeReviewer(row: {
 	id: string;
 	name: string;
+	email?: string | null;
 	created_at: number;
 	revoked_at?: number | null;
 }) {
 	return {
 		id: row.id,
 		name: row.name,
+		email: row.email ?? null,
 		createdAt: row.created_at,
 		revokedAt: row.revoked_at ?? null,
 	};
@@ -95,11 +99,29 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
-	const issued = await createReviewer(db, { planId: plan.id, name });
-	return NextResponse.json({
-		ok: true,
-		reviewer: { ...serializeReviewer(issued.reviewer), reviewPath: reviewPathForToken(issued.token) },
-	});
+	try {
+		const issued = await createReviewer(db, {
+			planId: plan.id,
+			name,
+			email: typeof body.email === "string" || body.email === null ? body.email : undefined,
+		});
+		const email = await sendReviewerInviteEmail(db, {
+			event,
+			reviewer: issued.reviewer,
+			token: issued.token,
+			origin: new URL(request.url).origin,
+		});
+		return NextResponse.json({
+			ok: true,
+			reviewer: { ...serializeReviewer(issued.reviewer), reviewPath: reviewPathForToken(issued.token) },
+			emailStatus: email ? email.status : null,
+		});
+	} catch (error) {
+		if (error instanceof ReviewerValidationError) {
+			return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+		}
+		throw error;
+	}
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -117,11 +139,26 @@ export async function PATCH(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Expected reviewerId and action regenerate or revoke" }, { status: 400 });
 	}
 	try {
-		const result = body.action === "regenerate"
-			? await regenerateReviewerToken(db, { planId: plan.id, reviewerId: body.reviewerId })
-			: await revokeReviewer(db, { planId: plan.id, reviewerId: body.reviewerId });
-		if ("reviewer" in result) return NextResponse.json({ ok: true, reviewer: { ...serializeReviewer(result.reviewer), reviewPath: reviewPathForToken(result.token) } });
-		return NextResponse.json({ ok: true, reviewer: serializeReviewer(result) });
+		if (body.action === "revoke") {
+			const result = await revokeReviewer(db, { planId: plan.id, reviewerId: body.reviewerId });
+			return NextResponse.json({ ok: true, reviewer: serializeReviewer(result) });
+		}
+		const result = await regenerateReviewerToken(db, {
+			planId: plan.id,
+			reviewerId: body.reviewerId,
+			email: typeof body.email === "string" || body.email === null ? body.email : undefined,
+		});
+		const email = await sendReviewerInviteEmail(db, {
+			event: authorization.access.event,
+			reviewer: result.reviewer,
+			token: result.token,
+			origin: new URL(request.url).origin,
+		});
+		return NextResponse.json({
+			ok: true,
+			reviewer: { ...serializeReviewer(result.reviewer), reviewPath: reviewPathForToken(result.token) },
+			emailStatus: email ? email.status : null,
+		});
 	} catch (error) {
 		if (error instanceof ReviewerValidationError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
 		throw error;

@@ -121,6 +121,7 @@ describe("D1 runtime invariants", () => {
 			"0019_communications_portal.sql",
 			"0020_session_lineage_media.sql",
 			"0021_session_materialization_claims.sql",
+			"0022_reviewer_email.sql",
 		];
 		const appliedMigrationNames = (await env.DB.prepare(
 			"SELECT name FROM d1_migrations ORDER BY id",
