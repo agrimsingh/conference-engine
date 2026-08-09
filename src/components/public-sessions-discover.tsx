@@ -1,0 +1,225 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { ShowMoreText } from "@/components/show-more-text";
+import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
+import { EmptyState } from "@/components/ui";
+import {
+	discoverFacetValues,
+	filterPublicDiscoverSessions,
+	type PublicDiscoverSession,
+} from "@/lib/schedule/public-discover";
+import { formatClock } from "@/lib/schedule/time";
+
+export type DiscoverListSession = PublicDiscoverSession & {
+	detailHref: string;
+	endsAtMs: number;
+	speakers: Array<{
+		personId: string | null;
+		name: string;
+		hasHeadshot: boolean;
+	}>;
+};
+
+export function PublicSessionsDiscover({
+	sessions,
+	timezone,
+	eventSlug,
+	basePath,
+	initialDayKey,
+}: {
+	sessions: DiscoverListSession[];
+	timezone: string;
+	eventSlug: string;
+	basePath: "/e" | "/embed";
+	initialDayKey: string;
+}) {
+	const [q, setQ] = useState("");
+	const [track, setTrack] = useState("all");
+	const [format, setFormat] = useState("all");
+	const [location, setLocation] = useState("all");
+	const [dayScope, setDayScope] = useState<"day" | "all">("day");
+
+	const tracks = useMemo(() => discoverFacetValues(sessions, "trackName"), [sessions]);
+	const formats = useMemo(() => discoverFacetValues(sessions, "format"), [sessions]);
+	const locations = useMemo(() => discoverFacetValues(sessions, "location"), [sessions]);
+
+	const scoped = useMemo(() => {
+		const base =
+			dayScope === "day"
+				? sessions.filter((session) => session.dayKey === initialDayKey)
+				: sessions;
+		return filterPublicDiscoverSessions(base, { q, track, format, location });
+	}, [sessions, dayScope, initialDayKey, q, track, format, location]);
+
+	const showTrackFacet = tracks.length > 1;
+	const showFormatFacet = formats.length > 1;
+	const showLocationFacet = locations.length > 1;
+
+	return (
+		<div className="space-y-5">
+			<div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3">
+				<label className="block text-xs font-medium uppercase tracking-wide text-neutral-500">
+					Search sessions
+					<input
+						type="search"
+						value={q}
+						onChange={(event) => setQ(event.target.value)}
+						placeholder="Title or speaker"
+						className="mt-1.5 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500"
+					/>
+				</label>
+				<div className="flex flex-wrap gap-2">
+					<button
+						type="button"
+						onClick={() => setDayScope("day")}
+						className={
+							dayScope === "day"
+								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
+								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
+						}
+					>
+						This day
+					</button>
+					<button
+						type="button"
+						onClick={() => setDayScope("all")}
+						className={
+							dayScope === "all"
+								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
+								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
+						}
+					>
+						All days
+					</button>
+				</div>
+				{showTrackFacet ? (
+					<FacetRow
+						label="Track"
+						value={track}
+						options={tracks}
+						onChange={setTrack}
+					/>
+				) : null}
+				{showFormatFacet ? (
+					<FacetRow
+						label="Format"
+						value={format}
+						options={formats}
+						onChange={setFormat}
+					/>
+				) : null}
+				{showLocationFacet ? (
+					<FacetRow
+						label="Location"
+						value={location}
+						options={locations}
+						onChange={setLocation}
+					/>
+				) : null}
+			</div>
+
+			{scoped.length === 0 ? (
+				<EmptyState
+					title="No matching sessions"
+					description="Try clearing search or widening filters."
+				/>
+			) : (
+				<ol className="space-y-4">
+					{scoped.map((session) => {
+						const full = sessions.find((item) => item.id === session.id)!;
+						return (
+							<li key={session.id} className="border-l-2 border-neutral-200 pl-4">
+								<p className="font-mono text-xs tabular-nums text-neutral-500">
+									{formatClock(session.startsAtMs, timezone)}–
+									{formatClock(full.endsAtMs, timezone)} · {session.location} ·{" "}
+									{session.trackName}
+									{session.format ? ` · ${session.format}` : ""}
+								</p>
+								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100">
+									<Link className="hover:underline" href={full.detailHref}>
+										{session.title}
+									</Link>
+								</h2>
+								{full.speakers.length > 0 ? (
+									<ul className="mt-1 flex flex-wrap gap-3">
+										{full.speakers.map((speaker, index) => (
+											<li key={`${speaker.personId ?? speaker.name}-${index}`}>
+												<PublicSpeakerAvatar
+													eventSlug={eventSlug}
+													personId={speaker.personId}
+													name={speaker.name}
+													hasHeadshot={speaker.hasHeadshot}
+													size="sm"
+													profileHref={
+														basePath === "/e" && speaker.personId
+															? `/e/${eventSlug}/speakers/${speaker.personId}`
+															: null
+													}
+												/>
+											</li>
+										))}
+									</ul>
+								) : null}
+								{session.abstract ? (
+									<div className="mt-2 max-w-2xl">
+										<ShowMoreText text={session.abstract} maxChars={160} />
+									</div>
+								) : null}
+							</li>
+						);
+					})}
+				</ol>
+			)}
+		</div>
+	);
+}
+
+function FacetRow({
+	label,
+	value,
+	options,
+	onChange,
+}: {
+	label: string;
+	value: string;
+	options: string[];
+	onChange: (next: string) => void;
+}) {
+	return (
+		<div className="flex flex-wrap items-center gap-1.5">
+			<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+				{label}
+			</span>
+			<button
+				type="button"
+				onClick={() => onChange("all")}
+				className={
+					value === "all"
+						? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
+						: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
+				}
+			>
+				All
+			</button>
+			{options.map((option) => {
+				const active = value === option;
+				return (
+					<button
+						key={option}
+						type="button"
+						onClick={() => onChange(option)}
+						className={
+							active
+								? "rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
+								: "rounded-full border border-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-300"
+						}
+					>
+						{option}
+					</button>
+				);
+			})}
+		</div>
+	);
+}

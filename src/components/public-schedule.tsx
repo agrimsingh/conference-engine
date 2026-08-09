@@ -8,7 +8,7 @@ import {
 	listEventRooms,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
-import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { displayCategory, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import {
 	publicScheduleTrack,
 	publicScheduleTrackColumns,
@@ -19,6 +19,7 @@ import {
 	EmptyState,
 } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
+import { PublicSessionsDiscover } from "@/components/public-sessions-discover";
 import {
 	deriveScheduleDays,
 	dayKeyInTimeZone,
@@ -48,6 +49,8 @@ type EnrichedSlot = {
 	id: string;
 	submissionId: string;
 	title: string;
+	abstract: string;
+	format: string;
 	roomName: string;
 	track: PublicScheduleTrack;
 	startsAtMs: number;
@@ -235,10 +238,18 @@ export async function PublicSchedule({
 	for (const slot of publicSlots) {
 		const answers = parseAnswers(slot.answers_json);
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
+		const abstract =
+			typeof answers.abstract === "string"
+				? answers.abstract.trim()
+				: typeof answers.description === "string"
+					? answers.description.trim()
+					: "";
 		enriched.push({
 			id: slot.id,
 			submissionId: slot.submission_id,
 			title: titleFromAnswers(answers),
+			abstract,
+			format: displayCategory(slot.category),
 			roomName: slot.room_name,
 			track: publicScheduleTrack(slot.track_id, tracks),
 			startsAtMs: slot.starts_at,
@@ -375,28 +386,33 @@ export async function PublicSchedule({
 			</header>
 
 			{view === "list" ? (
-				daySlots.length === 0 ? (
+				enriched.length === 0 ? (
 					<EmptyState
-						title="Nothing scheduled for this day"
+						title="Nothing scheduled yet"
 						description="Check back once organizers publish the program, or try another view."
 					/>
 				) : (
-					<ol className="space-y-4">
-						{daySlots.map((slot) => (
-							<li
-								key={slot.id}
-								className="border-l-2 border-neutral-200 pl-4"
-							>
-								<p className="font-mono text-xs tabular-nums text-neutral-500">
-									{formatClock(slot.startsAtMs, event.timezone)}–
-									{formatClock(slot.endsAtMs, event.timezone)} · {slot.roomName} ·{" "}
-									{slot.track.name}
-								</p>
-								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100"><Link className="hover:underline" href={slot.detailHref}>{slot.title}</Link></h2>
-								<SpeakerLine speakers={slot.speakers} eventSlug={event.slug} basePath={basePath} />
-							</li>
-						))}
-					</ol>
+					<PublicSessionsDiscover
+						sessions={enriched.map((slot) => ({
+							id: slot.id,
+							title: slot.title,
+							abstract: slot.abstract,
+							trackId: slot.track.id,
+							trackName: slot.track.name,
+							format: slot.format,
+							location: slot.roomName,
+							speakerNames: slot.speakers.map((speaker) => speaker.name),
+							startsAtMs: slot.startsAtMs,
+							endsAtMs: slot.endsAtMs,
+							dayKey: slot.dayKey,
+							detailHref: slot.detailHref,
+							speakers: slot.speakers,
+						}))}
+						timezone={event.timezone}
+						eventSlug={event.slug}
+						basePath={basePath}
+						initialDayKey={dayKey}
+					/>
 				)
 			) : null}
 
