@@ -11,7 +11,12 @@ import {
 	listSpeakersForSubmissions,
 	listTasksForPerson,
 } from "@/lib/db/queries";
-import { SPEAKER_TASK_TYPE_REGISTRY, isSpeakerTaskKey } from "@/lib/domain";
+import {
+	SPEAKER_TASK_TYPE_REGISTRY,
+	canTransitionSubmission,
+	isSpeakerTaskKey,
+	isSubmissionStatus,
+} from "@/lib/domain";
 import { parseSpeakerSocial } from "@/lib/speakers/social";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
@@ -22,6 +27,7 @@ import { ActionTaskList } from "./action-task-list";
 import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
 import { listPublishedPortalResourcesForSpeaker } from "@/lib/resources/resources";
 import { PortalResourceList } from "./portal-resource-list";
+import { WithdrawButton } from "./withdraw-button";
 
 type Props = {
 	searchParams: Promise<{ email?: string; error?: string }>;
@@ -184,6 +190,11 @@ export default async function PortalPage({ searchParams }: Props) {
 														/>
 												)}
 											</div>
+										) : null}
+										{isSubmissionStatus(row.status) &&
+										canTransitionSubmission(row.status, "withdrawn") &&
+										events.get(row.event_id)?.mode !== "demo" ? (
+											<WithdrawButton submissionId={row.id} />
 										) : null}
 										</li>
 							);

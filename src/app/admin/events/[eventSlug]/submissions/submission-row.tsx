@@ -11,6 +11,7 @@ type Props = {
 	speakers: Array<{ id: string; name: string }>;
 	taskSummary: { completed: number; required: number } | null;
 	assignedReviewerCount: number;
+	notifiedLabel: "Notified" | "Unnotified" | null;
 };
 
 export function SubmissionRow({
@@ -20,6 +21,7 @@ export function SubmissionRow({
 	speakers,
 	taskSummary,
 	assignedReviewerCount,
+	notifiedLabel,
 }: Props) {
 	const answers = parseAnswers(row.answers_json);
 	const title = typeof answers.title === "string" ? answers.title : "(untitled)";
@@ -46,6 +48,11 @@ export function SubmissionRow({
 					<StatusPill tone={submissionStatusTone(row.status)}>
 						{row.status.replaceAll("_", " ")}
 					</StatusPill>
+					{notifiedLabel ? (
+						<StatusPill tone={notifiedLabel === "Notified" ? "positive" : "warning"}>
+							{notifiedLabel}
+						</StatusPill>
+					) : null}
 				</div>
 			</div>
 			<p className="mt-1 text-neutral-400">
