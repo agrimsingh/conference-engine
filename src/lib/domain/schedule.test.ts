@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	detectConflicts,
 	isPublicScheduleStatus,
 	PUBLIC_SCHEDULE_STATUSES,
 	resolveRoom,
@@ -62,5 +63,15 @@ describe("resolveRoom", () => {
 			expect(result.error).toContain('Unknown room "Basement"');
 			expect(result.error).toContain("Main Stage");
 		}
+	});
+});
+
+describe("detectConflicts", () => {
+	it("uses configured room identity even when a denormalized display cache is stale", () => {
+		const conflicts = detectConflicts(
+			{ submissionId: "next", roomId: "main", roomName: "Grand Hall", startsAtMs: 100, endsAtMs: 200, speakerKeys: [] },
+			[{ submissionId: "current", roomId: "main", roomName: "Main", startsAtMs: 100, endsAtMs: 200, speakerKeys: [] }],
+		);
+		expect(conflicts).toMatchObject([{ kind: "room", roomName: "Grand Hall", submissionIdA: "next", submissionIdB: "current" }]);
 	});
 });

@@ -8,6 +8,9 @@ export type IcsEventInput = {
 	organizerEmail: string;
 	attendeeEmail: string;
 	method?: "REQUEST" | "CANCEL";
+	/** RFC 5545 sequence increases when an existing meeting is revised. */
+	sequence?: number;
+	dtstampMs?: number;
 };
 
 function pad(n: number): string {
@@ -44,7 +47,8 @@ function escapeText(value: string): string {
 
 export function buildIcsInvite(input: IcsEventInput): string {
 	const method = input.method ?? "REQUEST";
-	const now = toIcsUtc(Date.now());
+	const now = toIcsUtc(input.dtstampMs ?? Date.now());
+	const cancelled = method === "CANCEL";
 	const lines = [
 		"BEGIN:VCALENDAR",
 		"PRODID:-//conference-engine//EN",
@@ -62,9 +66,10 @@ export function buildIcsInvite(input: IcsEventInput): string {
 			? `DESCRIPTION:${escapeText(input.description)}`
 			: null,
 		`ORGANIZER;CN=conference-engine:mailto:${input.organizerEmail}`,
-		`ATTENDEE;CN=${escapeText(input.attendeeEmail)};RSVP=TRUE:mailto:${input.attendeeEmail}`,
-		"STATUS:CONFIRMED",
-		"SEQUENCE:0",
+		`ATTENDEE;CN=${escapeText(input.attendeeEmail)};CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${input.attendeeEmail}`,
+		`STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
+		`SEQUENCE:${Math.max(0, Math.floor(input.sequence ?? 0))}`,
+		"TRANSP:OPAQUE",
 		"END:VEVENT",
 		"END:VCALENDAR",
 	].filter((line): line is string => line !== null);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import {
 	authorizeEventAdminApi,
+	authorizeWritableEventAdminApi,
 	isAdminBypass,
 	shouldExposeDevLoginUrl,
 } from "@/lib/auth/admin";
@@ -50,10 +51,9 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	const parsed = await readBoundedJson(request, 16 * 1024);
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
@@ -112,10 +112,9 @@ export async function POST(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	const bypass = await isAdminBypass();
 	if (access.membership?.role !== "owner" && !bypass) {

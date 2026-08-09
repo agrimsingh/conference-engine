@@ -1,6 +1,9 @@
 import {
 	FIELD_TYPE_REGISTRY,
+	isCategoryRoute,
+	isFieldConfig,
 	isFieldType,
+	type CategoryRoute,
 	type FieldConfig,
 	type FieldType,
 	type FormFieldDef,
@@ -98,7 +101,9 @@ export async function updateFormMeta(
 		title?: string;
 		description?: string | null;
 		status?: "draft" | "open" | "closed";
+		opensAt?: number | null;
 		closesAt?: number | null;
+		categoryRoute?: CategoryRoute | null;
 		minSpeakers?: number;
 		maxSpeakers?: number;
 		draftsEnabled?: boolean;
@@ -106,6 +111,7 @@ export async function updateFormMeta(
 		welcomeCopy?: string | null;
 		confirmationCopy?: string | null;
 		reminderCopy?: string | null;
+		thankYouCopy?: string | null;
 	},
 ): Promise<void> {
 	const existing = await db
@@ -118,8 +124,31 @@ export async function updateFormMeta(
 	const description =
 		args.description === undefined ? existing.description : args.description;
 	const status = args.status ?? (existing.status as "draft" | "open" | "closed");
+	const opensAt = args.opensAt === undefined ? existing.opens_at : args.opensAt;
 	const closesAt =
 		args.closesAt === undefined ? existing.closes_at : args.closesAt;
+	const categoryRoute = args.categoryRoute === undefined
+		? existing.category_routing_json ?? null
+		: args.categoryRoute === null
+			? null
+			: JSON.stringify(args.categoryRoute);
+	if ((opensAt !== null && (!Number.isSafeInteger(opensAt) || opensAt < 0)) || (closesAt !== null && (!Number.isSafeInteger(closesAt) || closesAt < 0))) {
+		throw new Error("Open and close times must be valid timestamps");
+	}
+	if (opensAt !== null && closesAt !== null && opensAt >= closesAt) {
+		throw new Error("Open time must be before close time");
+	}
+	if (args.categoryRoute !== undefined && args.categoryRoute !== null && !isCategoryRoute(args.categoryRoute)) {
+		throw new Error("Category routing is invalid");
+	}
+	if (args.categoryRoute !== undefined && args.categoryRoute !== null) {
+		const source = await db.prepare(
+			"SELECT field_type FROM form_fields WHERE form_id = ? AND key = ? AND soft_deleted = 0",
+		).bind(args.formId, args.categoryRoute.fieldKey).first<{ field_type: string }>();
+		if (!source || source.field_type !== "select") {
+			throw new Error("Category routing field must be a select field on this form");
+		}
+	}
 	const minSpeakers = args.minSpeakers ?? existing.min_speakers;
 	const maxSpeakers = args.maxSpeakers ?? existing.max_speakers;
 	const submissionLimit = args.submissionLimit ?? existing.submission_limit;
@@ -137,16 +166,18 @@ export async function updateFormMeta(
 	await db
 		.prepare(
 		`UPDATE cfp_forms
-       SET title = ?, description = ?, status = ?, closes_at = ?,
+       SET title = ?, description = ?, status = ?, opens_at = ?, closes_at = ?, category_routing_json = ?,
            min_speakers = ?, max_speakers = ?, drafts_enabled = ?, submission_limit = ?,
-           welcome_copy = ?, confirmation_copy = ?, reminder_copy = ?, updated_at = ?
+           welcome_copy = ?, confirmation_copy = ?, reminder_copy = ?, thank_you_copy = ?, updated_at = ?
        WHERE id = ?`,
 		)
 		.bind(
 			title,
 			description,
 			status,
+			opensAt,
 			closesAt,
+			categoryRoute,
 			minSpeakers,
 			maxSpeakers,
 			args.draftsEnabled === undefined ? existing.drafts_enabled : args.draftsEnabled ? 1 : 0,
@@ -154,6 +185,7 @@ export async function updateFormMeta(
 			args.welcomeCopy === undefined ? existing.welcome_copy : args.welcomeCopy,
 			args.confirmationCopy === undefined ? existing.confirmation_copy : args.confirmationCopy,
 			args.reminderCopy === undefined ? existing.reminder_copy : args.reminderCopy,
+			args.thankYouCopy === undefined ? existing.thank_you_copy : args.thankYouCopy,
 			now,
 			args.formId,
 		)
@@ -229,21 +261,23 @@ function parseVisibilityInput(raw: unknown): VisibilityRule | string {
 	if (op === "always") return { op: "always" };
 	if (op === "eq") {
 		const r = raw as { fieldKey?: unknown; value?: unknown };
-		if (typeof r.fieldKey !== "string" || typeof r.value !== "string") {
+		if (typeof r.fieldKey !== "string" || !r.fieldKey.trim() || typeof r.value !== "string" || !r.value.trim()) {
 			return "eq rule needs fieldKey and value";
 		}
-		return { op: "eq", fieldKey: r.fieldKey, value: r.value };
+		return { op: "eq", fieldKey: r.fieldKey.trim(), value: r.value.trim() };
 	}
 	if (op === "in") {
 		const r = raw as { fieldKey?: unknown; values?: unknown };
 		if (
 			typeof r.fieldKey !== "string" ||
 			!Array.isArray(r.values) ||
-			!r.values.every((v) => typeof v === "string")
+			!r.values.every((v) => typeof v === "string" && v.trim()) ||
+			r.values.length === 0
 		) {
 			return "in rule needs fieldKey and string values";
 		}
-		return { op: "in", fieldKey: r.fieldKey, values: r.values };
+		const values = [...new Set(r.values.map((value) => value.trim()))];
+		return { op: "in", fieldKey: r.fieldKey.trim(), values };
 	}
 	return "unsupported visibilityRule.op";
 }
@@ -257,7 +291,8 @@ function parseConfigInput(
 	}
 	const kind = (raw as { kind: unknown }).kind;
 	if (kind !== fieldType) return "config.kind must match fieldType";
-	return raw as FieldConfig;
+	if (!isFieldConfig(raw)) return "config is invalid for this field type";
+	return raw;
 }
 
 export async function insertFormField(
@@ -265,6 +300,7 @@ export async function insertFormField(
 	formId: string,
 	input: FieldWriteInput,
 ): Promise<FormFieldRow> {
+	await assertVisibilityDependency(db, formId, input.key, input.visibilityRule);
 	const id = newId("field");
 	const now = Date.now();
 	await db
@@ -313,6 +349,7 @@ export async function updateFormField(
 	if (input.key !== existing.key) {
 		throw new Error("Field key is immutable after create");
 	}
+	await assertVisibilityDependency(db, formId, input.key, input.visibilityRule);
 
 	await db
 		.prepare(
@@ -355,6 +392,16 @@ export async function softDeleteFormField(
 		.bind(fieldId, formId)
 		.first<FormFieldRow>();
 	if (!existing) throw new Error("Field not found");
+	const dependent = await db.prepare(
+		`SELECT key FROM form_fields
+		 WHERE form_id = ? AND soft_deleted = 0 AND id != ?
+			 AND json_extract(visibility_rule, '$.fieldKey') = ? LIMIT 1`,
+	).bind(formId, fieldId, existing.key).first<{ key: string }>();
+	if (dependent) throw new Error(`Field is used by visibility rule on ${dependent.key}`);
+	const categoryDependent = await db.prepare(
+		"SELECT id FROM cfp_forms WHERE id = ? AND json_extract(category_routing_json, '$.fieldKey') = ?",
+	).bind(formId, existing.key).first<{ id: string }>();
+	if (categoryDependent) throw new Error("Field is used by category routing");
 	// Free the UNIQUE(form_id, key) slot so the key can be re-added later.
 	const tombstoneKey = `${existing.key}__deleted__${existing.id}`;
 	await db
@@ -367,6 +414,26 @@ export async function softDeleteFormField(
 		.prepare("UPDATE cfp_forms SET updated_at = ? WHERE id = ?")
 		.bind(Date.now(), formId)
 		.run();
+}
+
+async function assertVisibilityDependency(
+	db: D1Database,
+	formId: string,
+	fieldKey: string,
+	rule: VisibilityRule,
+): Promise<void> {
+	if (rule.op === "always") return;
+	if (rule.op !== "eq" && rule.op !== "in") {
+		throw new Error("Only always, eq, and in visibility rules are supported");
+	}
+	if (rule.fieldKey === fieldKey) throw new Error("A field cannot control its own visibility");
+	const source = await db.prepare(
+		"SELECT field_type FROM form_fields WHERE form_id = ? AND key = ? AND soft_deleted = 0",
+	).bind(formId, rule.fieldKey).first<{ field_type: string }>();
+	if (!source) throw new Error("Visibility field must exist on this form");
+	if (source.field_type !== "select") {
+		throw new Error("Visibility field must be a select field");
+	}
 }
 
 export async function reorderFormFields(

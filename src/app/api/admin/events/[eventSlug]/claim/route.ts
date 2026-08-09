@@ -6,6 +6,7 @@ import {
 	getEventBySlug,
 	getEventMembership,
 } from "@/lib/db/queries";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -26,6 +27,14 @@ export async function POST(_request: Request, context: RouteContext) {
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) {
 		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
+	}
+	try {
+		assertEventWritable(event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return NextResponse.json({ ok: false, error: "This demo event is read-only" }, { status: 403 });
+		}
+		throw error;
 	}
 
 	const existing = await getEventMembership(db, event.id, account.id);

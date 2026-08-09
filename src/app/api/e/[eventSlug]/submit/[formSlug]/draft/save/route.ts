@@ -6,6 +6,8 @@ import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { validateCfpPayloadBounds } from "@/lib/cfp/submit";
 import { readBoundedCfpJson } from "@/lib/cfp/request";
 import type { AnswerMap } from "@/lib/domain";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
+import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function PUT(request: Request, context: Context) {
@@ -24,7 +26,13 @@ export async function PUT(request: Request, context: Context) {
 	const draft = await loadDraftForResume(db, { secret, token });
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadCfpForm(db, eventSlug, formSlug);
-	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id) return NextResponse.json({ ok: false, error: "Draft link is invalid or expired" }, { status: 404 });
+	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form)) return NextResponse.json({ ok: false, error: "Draft link is invalid, expired, or this CFP is unavailable" }, { status: 404 });
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return NextResponse.json({ ok: false, error: "This form is read-only" }, { status: 403 });
+		throw error;
+	}
 	const saved = await saveDraftForResume(db, { secret, token, submitterName, answers });
 	if (!saved) return NextResponse.json({ ok: false, error: "Draft link is invalid or expired" }, { status: 404 });
 	return NextResponse.json({ ok: true, draftId: saved.draftId, token: saved.token });

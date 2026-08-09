@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
 import {
 	evaluateVisibilityRule,
@@ -8,6 +8,8 @@ import {
 	type FormFieldDef,
 	type SpeakerAnswer,
 } from "@/lib/domain";
+import { renderFormCopy } from "@/lib/cfp/form-copy";
+import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";
 
 type Props = {
 	eventSlug: string;
@@ -16,6 +18,7 @@ type Props = {
 	formTitle: string;
 	formDescription: string | null;
 	welcomeCopy: string | null;
+	thankYouCopy: string | null;
 	draftToken: string;
 	draftsEnabled: boolean;
 	submissionLimit: number;
@@ -29,6 +32,7 @@ export function CfpForm({
 	formTitle,
 	formDescription,
 	welcomeCopy,
+	thankYouCopy,
 	draftToken: initialDraftToken,
 	draftsEnabled,
 	submissionLimit,
@@ -44,6 +48,8 @@ export function CfpForm({
 	const [submissionId, setSubmissionId] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [draftPending, setDraftPending] = useState(false);
+	const [invalidMultiselectKey, setInvalidMultiselectKey] = useState<string | null>(null);
+	const fieldRefs = useRef<Record<string, HTMLFieldSetElement | null>>({});
 	const busy = submitting || draftPending || resuming;
 
 	const visibleFields = useMemo(
@@ -107,6 +113,7 @@ export function CfpForm({
 
 	async function submit() {
 		setErrors([]);
+		setInvalidMultiselectKey(null);
 		setSubmitting(true);
 		try {
 		if (draftToken) {
@@ -131,23 +138,26 @@ export function CfpForm({
 	}
 
 	if (submissionId) {
+		const renderedThankYou = thankYouCopy?.trim()
+			? renderFormCopy(thankYouCopy, { eventName, submitterName: submitterName.trim() || "there", title: formTitle })
+			: null;
 		return (
 			<div className="mx-auto w-full max-w-2xl space-y-5 rounded-lg border border-neutral-800 bg-neutral-900 px-5 py-8">
 				<p className="text-xs font-medium uppercase tracking-wide text-emerald-400">
 					{eventName}
 				</p>
 				<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
-					Thanks — your talk is in
+					Proposal submitted
 				</h1>
 				<div className="space-y-3 text-pretty text-sm text-neutral-400">
-					<p>
+					{renderedThankYou ? <p className="whitespace-pre-wrap text-neutral-300">{renderedThankYou}</p> : <p>
 						We received your proposal for{" "}
 						<span className="font-medium text-neutral-200">{formTitle}</span>.
 						The program committee will review it over the next few weeks.
-					</p>
+					</p>}
 					<p>
-						If your talk is accepted, you&apos;ll get an email with a speaker portal
-						link to finish your bio, headshot, slides, and docs.
+						Check your email for the confirmation and sign in to the proposal portal
+						with this email whenever you need to review your submitted proposal or its status.
 					</p>
 					<p className="text-neutral-500">
 						Reference:{" "}
@@ -165,6 +175,14 @@ export function CfpForm({
 			className="mx-auto flex w-full max-w-2xl flex-col gap-6"
 			onSubmit={(e) => {
 				e.preventDefault();
+				const missingField = missingRequiredVisibleMultiselect(visibleFields, answers);
+				if (missingField) {
+					setErrors([]);
+					setInvalidMultiselectKey(missingField.key);
+					fieldRefs.current[missingField.key]?.focus();
+					return;
+				}
+				setInvalidMultiselectKey(null);
 				void submit();
 			}}
 		>
@@ -184,6 +202,7 @@ export function CfpForm({
 					</p>
 				)}
 				{welcomeCopy ? <p className="text-pretty text-sm text-neutral-300">{welcomeCopy}</p> : null}
+				<p className="text-xs text-neutral-500">Submit in English. There is no fee to submit a proposal.</p>
 			</header>
 
 			<section className="grid gap-4 sm:grid-cols-2">
@@ -215,12 +234,15 @@ export function CfpForm({
 					key={field.key}
 					field={field}
 					value={answers[field.key]}
-					onChange={(value) =>
+					fieldsetRef={(element) => { fieldRefs.current[field.key] = element; }}
+					errorMessage={invalidMultiselectKey === field.key ? `${field.label} is required` : undefined}
+					onChange={(value) => {
 						setAnswers((prev) => ({
 							...prev,
 							[field.key]: value,
-						}))
-					}
+						}));
+						if (invalidMultiselectKey === field.key) setInvalidMultiselectKey(null);
+					}}
 				/>
 			))}
 
@@ -291,10 +313,14 @@ function FieldInput({
 	field,
 	value,
 	onChange,
+	fieldsetRef,
+	errorMessage,
 }: {
 	field: FormFieldDef;
 	value: unknown;
 	onChange: (value: unknown) => void;
+	fieldsetRef?: (element: HTMLFieldSetElement | null) => void;
+	errorMessage?: string;
 }) {
 	const label = (
 		<span className="font-medium">
@@ -306,6 +332,7 @@ function FieldInput({
 	switch (field.config.kind) {
 		case "text":
 		case "url":
+		case "video":
 		case "email":
 			return (
 				<label className="flex flex-col gap-1 text-sm">
@@ -319,7 +346,7 @@ function FieldInput({
 						type={
 							field.config.kind === "email"
 								? "email"
-								: field.config.kind === "url"
+								: field.config.kind === "url" || field.config.kind === "video"
 									? "url"
 									: "text"
 						}
@@ -393,8 +420,20 @@ function FieldInput({
 			);
 		case "multiselect":
 			return (
-				<fieldset className="flex flex-col gap-2 text-sm" aria-required={field.required || undefined}>
+				<fieldset
+					ref={fieldsetRef}
+					tabIndex={-1}
+					className="flex flex-col gap-2 text-sm"
+					aria-required={field.required || undefined}
+					aria-invalid={errorMessage ? true : undefined}
+					aria-describedby={errorMessage ? `cfp-field-error-${field.key}` : undefined}
+				>
 					<legend className="font-medium">{field.label}</legend>
+					{errorMessage ? (
+						<p id={`cfp-field-error-${field.key}`} role="alert" aria-live="assertive" className="text-sm text-red-300">
+							{errorMessage}
+						</p>
+					) : null}
 					{field.config.options.map((opt) => {
 						const selected = Array.isArray(value) ? (value as string[]) : [];
 						const checked = selected.includes(opt.value);

@@ -20,7 +20,13 @@ describe("durable drafts", () => {
 	it("prepares draft and hashed token together before email delivery", async () => {
 		const statements: Array<{ sql: string; values: unknown[] }> = [];
 		const db = {
-			prepare: (sql: string) => ({ bind: (...values: unknown[]) => ({ sql, values }) }),
+			prepare: (sql: string) => ({ bind: (...values: unknown[]) => ({
+				sql,
+				values,
+				first: async () => sql.includes("SELECT * FROM events")
+					? { id: "event-1", slug: "event", name: "Event", timezone: "UTC", mode: "live", created_at: 0, updated_at: 0 }
+					: null,
+			}) }),
 			batch: async (batch: Array<{ sql: string; values: unknown[] }>) => { statements.push(...batch); return []; },
 		} as unknown as D1Database;
 		const prepared = await prepareDraftResumeDelivery(db, {

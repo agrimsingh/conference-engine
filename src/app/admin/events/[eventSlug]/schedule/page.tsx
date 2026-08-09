@@ -5,6 +5,7 @@ import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	listAgendaSlotsForEvent,
+	listAgendaTracks,
 	listEventRooms,
 	listSchedulableSubmissions,
 	listSpeakersForSubmissions,
@@ -49,10 +50,11 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
 
-	const [rooms, submissions, slots] = await Promise.all([
+	const [rooms, submissions, slots, tracks] = await Promise.all([
 		listEventRooms(db, event.id),
 		listSchedulableSubmissions(db, event.id),
 		listAgendaSlotsForEvent(db, event.id),
+		listAgendaTracks(db, event.id),
 	]);
 	const days = deriveScheduleDays({
 		startDay: event.start_day,
@@ -65,6 +67,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 	const slotsBySubmission = new Map(
 		slots.map((slot) => [slot.submission_id, slot] as const),
 	);
+	const trackNames = new Map(tracks.map((track) => [track.id, track.name]));
 
 	const sessions: ScheduleSession[] = [];
 	const speakersBySubmission = await listSpeakersForSubmissions(db, submissions.map((submission) => submission.id));
@@ -95,7 +98,10 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			),
 			slot: slot
 				? {
+						roomId: slot.room_id,
 						roomName: slot.room_name,
+						trackId: slot.track_id ?? null,
+						trackName: slot.track_id ? trackNames.get(slot.track_id) ?? "Retired track" : "Unassigned",
 						startsAtMs: slot.starts_at,
 						endsAtMs: slot.ends_at,
 					}
@@ -103,10 +109,8 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 		});
 	}
 
-	const roomNames =
-		rooms.length > 0
-			? rooms.map((room) => room.name)
-			: ["Main Stage", "Room B", "Workshop Lab"];
+	const roomNames = rooms.map((room) => room.name);
+	const roomIds = Object.fromEntries(rooms.map((room) => [room.name, room.id]));
 
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -115,7 +119,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 				<PageHeader
 					eyebrow="Organizer · Schedule"
 					title={event.name}
-					description="Drag accepted talks onto room/time slots. Room and speaker overlaps are blocked and shown loudly."
+					description="Place or drag accepted talks onto the grid. Room, speaker, and configured track conflicts are blocked and shown loudly."
 				/>
 
 				{sessions.length === 0 ? (
@@ -130,6 +134,11 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 						dayKey={dayKey}
 						days={days}
 						rooms={roomNames}
+						roomIds={roomIds}
+						tracks={tracks.map((track) => ({ id: track.id, name: track.name }))}
+						dayStartMinutes={event.day_start_minutes ?? 9 * 60}
+						dayEndMinutes={event.day_end_minutes ?? 18 * 60}
+						slotDurationMinutes={event.slot_duration_minutes ?? 30}
 						sessions={sessions}
 					/>
 				)}

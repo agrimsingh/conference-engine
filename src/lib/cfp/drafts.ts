@@ -1,5 +1,6 @@
 import type { AnswerMap, SpeakerAnswer } from "@/lib/domain";
 import { hmacHash, randomToken } from "@/lib/security/crypto";
+import { requireWritableEventById } from "@/lib/events/writability";
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60_000;
 const PREVIOUS_TOKEN_GRACE_MS = 10 * 60_000;
@@ -9,6 +10,7 @@ export async function createVerifiedDraft(
 	db: D1Database,
 	args: { id?: string; eventId: string; formId: string; verifiedEmail: string; submitterName?: string; answers?: AnswerMap },
 ): Promise<string> {
+	await requireWritableEventById(db, args.eventId);
 	const id = args.id ?? crypto.randomUUID();
 	const now = Date.now();
 	await db.prepare(
@@ -27,6 +29,7 @@ export async function prepareDraftResumeDelivery(
 	db: D1Database,
 	args: { secret: string; eventId: string; formId: string; verifiedEmail: string; submitterName?: string; answers?: AnswerMap; draftId?: string; token?: string; now?: number },
 ): Promise<{ draftId: string; token: string }> {
+	await requireWritableEventById(db, args.eventId);
 	const draftId = args.draftId ?? crypto.randomUUID();
 	const token = args.token ?? randomToken(32);
 	const now = args.now ?? Date.now();
@@ -50,6 +53,9 @@ export async function issueDraftResumeToken(
 	args: { secret: string; draftId: string; deliveryVerified: boolean; token?: string; now?: number },
 ): Promise<string> {
 	if (!args.deliveryVerified) throw new Error("Draft tokens require verified delivery or portal identity");
+	const draft = await db.prepare("SELECT event_id FROM submission_drafts WHERE id = ?").bind(args.draftId).first<{ event_id: string }>();
+	if (!draft) throw new Error("Draft not found");
+	await requireWritableEventById(db, draft.event_id);
 	const now = args.now ?? Date.now();
 	const token = args.token ?? randomToken(32);
 	const hash = await hmacHash(args.secret, token);
@@ -95,11 +101,12 @@ export async function saveDraftForResume(
 	const now = args.now ?? Date.now();
 	const oldHash = await hmacHash(args.secret, args.token);
 	const draft = await db.prepare(
-		`SELECT d.id, d.verified_email
+		`SELECT d.id, d.event_id, d.verified_email
      FROM submission_drafts d JOIN submission_draft_tokens t ON t.draft_id = d.id
      WHERE t.token_hash = ? AND t.expires_at >= ? AND d.status = 'draft'`,
-	).bind(oldHash, now).first<{ id: string; verified_email: string }>();
+	).bind(oldHash, now).first<{ id: string; event_id: string; verified_email: string }>();
 	if (!draft || (args.verifiedEmail && draft.verified_email.toLowerCase() !== args.verifiedEmail.trim().toLowerCase())) return null;
+	await requireWritableEventById(db, draft.event_id);
 	const token = randomToken(32);
 	const hash = await hmacHash(args.secret, token);
 	await db.batch([
@@ -123,6 +130,7 @@ export async function finalizeDraft(
      WHERE d.id = ? AND t.token_hash = ? AND t.expires_at >= ?`,
 	).bind(args.draftId, hash, now).first<{ id: string; event_id: string; form_id: string; verified_email: string; status: "draft" | "submitted"; submission_id: string | null }>();
 	if (!draft) throw new Error("Draft token is invalid or expired");
+	await requireWritableEventById(db, draft.event_id);
 	if (draft.status === "submitted" && draft.submission_id) return { submissionId: draft.submission_id, replay: true };
 	const submissionId = draft.id; // deterministic, so a concurrent finalizer cannot create a second submission.
 	const principals = new Map<string, string>();

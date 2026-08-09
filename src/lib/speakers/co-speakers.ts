@@ -6,13 +6,14 @@ import {
 	getSubmissionSpeakerById,
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
-import type { SubmissionSpeakerRow } from "@/lib/db/types";
+import type { EventRow, SubmissionRow, SubmissionSpeakerRow } from "@/lib/db/types";
 import { isPostAcceptance, MAX_CO_SPEAKERS } from "@/lib/domain";
 import { renderMessageTemplate } from "@/lib/domain/message-templates";
 import { titleFromAnswersJson } from "@/lib/email/notify";
 import { deterministicDeliveryKey, sendTemplatedEmail, type EmailDeliveryRuntime, type OutboundSendResult } from "@/lib/email/resend";
 import { getAuthSecret } from "@/lib/db/cloudflare";
 import { hmacHash } from "@/lib/security/crypto";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 import {
 	ensureTaskTemplates,
 	MissingTaskTemplatesError,
@@ -41,6 +42,31 @@ export type InviteResult =
 			email: OutboundSendResult;
 	  }
 	| { ok: false; error: string; status: number };
+
+type WritableSpeakerSubmission =
+	| { ok: true; submission: SubmissionRow; event: EventRow }
+	| { ok: false; error: string; status: number };
+
+/** Bearer-link actions must resolve the submission's real event before they
+ * mutate the speaker row, materialize tasks, or create an invitation claim. */
+async function resolveWritableSpeakerSubmission(
+	db: D1Database,
+	speaker: SubmissionSpeakerRow,
+): Promise<WritableSpeakerSubmission> {
+	const submission = await getSubmissionById(db, speaker.submission_id);
+	if (!submission) return { ok: false, error: "Submission not found", status: 404 };
+	const event = await getEventById(db, submission.event_id);
+	if (!event) return { ok: false, error: "Event not found", status: 404 };
+	try {
+		assertEventWritable(event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return { ok: false, error: "This demo event is read-only", status: 403 };
+		}
+		throw error;
+	}
+	return { ok: true, submission, event };
+}
 
 function bufferToBase64Url(bytes: Uint8Array): string {
 	let binary = "";
@@ -92,14 +118,9 @@ export async function inviteCoSpeaker(
 		if (!claimed) return { ok: false, error: "Existing invitation is already active", status: 409 };
 	}
 
-	const submission = await getSubmissionById(db, speaker.submission_id);
-	if (!submission) {
-		return { ok: false, error: "Submission not found", status: 404 };
-	}
-	const event = await getEventById(db, submission.event_id);
-	if (!event) {
-		return { ok: false, error: "Event not found", status: 404 };
-	}
+	const resolved = await resolveWritableSpeakerSubmission(db, speaker);
+	if (!resolved.ok) return resolved;
+	const { submission, event } = resolved;
 
 	const authSecret = args.runtime?.authSecret ?? await getAuthSecret();
 	if (!authSecret) {
@@ -222,6 +243,11 @@ async function claimCoSpeakerInvitation(
 						     WHERE speaker_id = submission_speakers.id AND generation = ? AND delivery_key = ?
 						   )`,
 					).bind(tokenHash, Date.now(), args.speaker.id, next.generation, next.deliveryKey),
+					db.prepare(
+						`INSERT OR IGNORE INTO co_speaker_invitation_history (speaker_id, generation, delivery_key, created_at)
+						 SELECT ?, ?, ?, ?
+						 WHERE EXISTS (SELECT 1 FROM co_speaker_invitation_claims WHERE speaker_id = ? AND generation = ? AND delivery_key = ?)`,
+					).bind(args.speaker.id, next.generation, next.deliveryKey, Date.now(), args.speaker.id, next.generation, next.deliveryKey),
 				]);
 				if ((changed[0]?.meta.changes ?? 0) === 1) return next;
 				continue;
@@ -234,7 +260,13 @@ async function claimCoSpeakerInvitation(
 			`INSERT INTO co_speaker_invitation_claims (speaker_id, generation, delivery_key, created_at, updated_at)
 			 VALUES (?, ?, ?, ?, ?) ON CONFLICT(speaker_id) DO NOTHING`,
 		).bind(args.speaker.id, first.generation, first.deliveryKey, Date.now(), Date.now()).run();
-		if ((inserted.meta.changes ?? 0) === 1) return first;
+		if ((inserted.meta.changes ?? 0) === 1) {
+			await db.prepare(
+				`INSERT OR IGNORE INTO co_speaker_invitation_history (speaker_id, generation, delivery_key, created_at)
+				 VALUES (?, ?, ?, ?)`,
+			).bind(args.speaker.id, first.generation, first.deliveryKey, Date.now()).run();
+			return first;
+		}
 	}
 	return null;
 }
@@ -281,6 +313,29 @@ export async function getSpeakerByConfirmToken(
 	return getSpeakerByConfirmTokenHash(db, tokenHash);
 }
 
+export type CoSpeakerInviteHistoryRow = {
+	generation: number;
+	delivery_key: string;
+	created_at: number;
+	status: "reserved" | "sending" | "provider_accepted" | "sent" | "failed" | null;
+	provider_id: string | null;
+	error: string | null;
+};
+
+/** The bearer page may inspect only the history of the speaker proved by its token. */
+export async function listCoSpeakerInviteHistory(
+	db: D1Database,
+	speakerId: string,
+): Promise<CoSpeakerInviteHistoryRow[]> {
+	const result = await db.prepare(
+		`SELECT h.generation, h.delivery_key, h.created_at, d.status, d.provider_id, d.error
+		 FROM co_speaker_invitation_history h
+		 LEFT JOIN email_deliveries d ON d.delivery_key = h.delivery_key
+		 WHERE h.speaker_id = ? ORDER BY h.generation DESC`,
+	).bind(speakerId).all<CoSpeakerInviteHistoryRow>();
+	return result.results;
+}
+
 /**
  * Confirm a co-speaker. If the submission is already accepted, materialize
  * the person and spawn their onboarding tasks now.
@@ -296,9 +351,11 @@ export async function confirmCoSpeaker(
 	if (speaker.status === "removed") {
 		return { ok: false, error: "Speaker was removed by organizers", status: 409 };
 	}
-	const submission = await getSubmissionById(db, speaker.submission_id);
+	const resolved = await resolveWritableSpeakerSubmission(db, speaker);
+	if (!resolved.ok) return resolved;
+	const { submission } = resolved;
 	let templates;
-	if (submission && isPostAcceptance(submission.status)) {
+	if (isPostAcceptance(submission.status)) {
 		try {
 			templates = await ensureTaskTemplates(db, submission.event_id);
 		} catch (error) {
@@ -310,7 +367,7 @@ export async function confirmCoSpeaker(
 	}
 
 	if (speaker.status === "confirmed") {
-		if (!submission || !isPostAcceptance(submission.status)) {
+		if (!isPostAcceptance(submission.status)) {
 			return { ok: true, speaker, spawnedTaskKeys: [] };
 		}
 		const materialized = await materializeAcceptedSpeaker(
@@ -339,7 +396,7 @@ export async function confirmCoSpeaker(
 		.run();
 
 	let spawnedTaskKeys: string[] = [];
-	if (submission && isPostAcceptance(submission.status)) {
+	if (isPostAcceptance(submission.status)) {
 		const materialized = await materializeAcceptedSpeaker(
 			db,
 			{
@@ -371,6 +428,8 @@ export async function declineCoSpeaker(
 	if (speaker.status === "removed") {
 		return { ok: false, error: "Speaker was removed by organizers", status: 409 };
 	}
+	const resolved = await resolveWritableSpeakerSubmission(db, speaker);
+	if (!resolved.ok) return resolved;
 	if (speaker.status === "declined") {
 		return { ok: true, speaker, spawnedTaskKeys: [] };
 	}

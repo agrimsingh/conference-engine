@@ -260,9 +260,9 @@ export function OutstandingDashboard({ eventSlug, initialSnapshot }: Props) {
 										className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
 									>
 										<span className="font-medium text-neutral-200">
-											{task.templateKey}
+											{task.templateLabel}
 										</span>
-										<StatusPill tone="warning">{task.status}</StatusPill>
+										<span className="flex items-center gap-2"><span className="text-xs text-neutral-500">{task.templateKind} · required</span><StatusPill tone="warning">{task.status}</StatusPill></span>
 									</li>
 								))}
 							</ul>

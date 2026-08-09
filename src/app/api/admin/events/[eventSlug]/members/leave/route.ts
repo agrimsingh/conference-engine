@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { removeEventMembership } from "@/lib/db/queries";
 
@@ -10,10 +10,9 @@ type RouteContext = {
 export async function POST(_request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	if (!access.account || !access.membership) {
 		return NextResponse.json(

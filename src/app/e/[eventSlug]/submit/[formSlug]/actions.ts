@@ -1,12 +1,13 @@
 "use server";
 
 import { headers } from "next/headers";
-import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
+import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { insertSubmission, isSubmissionLimitReachedError, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 
 async function requestOrigin(): Promise<string> {
 	const headerList = await headers();
@@ -35,9 +36,15 @@ export async function submitCfpAction(input: {
 	if (!loaded) {
 		return { ok: false, errors: ["CFP form not found or closed"] };
 	}
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return { ok: false, errors: ["This form is read-only"] };
+		throw error;
+	}
 
-	if (isCfpPastClosesAt(loaded.form, Date.now())) {
-		return { ok: false, errors: ["CFP closed"] };
+	if (!isCfpOpenNow(loaded.form, Date.now())) {
+		return { ok: false, errors: ["CFP is not accepting submissions right now"] };
 	}
 
 	const name = input.submitterName.trim();
@@ -48,10 +55,7 @@ export async function submitCfpAction(input: {
 	const validated = validateSubmissionAnswers(loaded.fields, input.answers);
 	if (!validated.ok) return validated;
 
-	const category = resolveSubmissionCategory(
-		input.formSlug,
-		validated.visibleAnswers,
-	);
+	const category = resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers);
 
 	let submissionId: string;
 	try {

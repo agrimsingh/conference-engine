@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readBoundedJson } from "@/lib/cfp/request";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
 import {
@@ -48,11 +48,9 @@ function parseBody(raw: unknown): ParsedBody | null {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, submissionId } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
-	const event = access.event;
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const event = authorization.access.event;
 	const json = await readBoundedJson(request, 64 * 1024);
 	if (!json.ok) return NextResponse.json({ ok: false, error: json.error }, { status: json.status });
 	const parsed = parseBody(json.value);

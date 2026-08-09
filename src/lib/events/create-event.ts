@@ -1,6 +1,7 @@
 import type { FormFieldDef } from "@/lib/domain/form-fields";
 import type { AccountRow } from "@/lib/db/types";
 import { DEFAULT_TASK_TEMPLATES } from "@/lib/domain/task-templates";
+import { digestReviewToken, newReviewToken, storedTokenMarker } from "@/lib/evaluation/tokens";
 import { validateEventSettings } from "./settings";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
@@ -48,15 +49,6 @@ function defaultCfpFields(): FormFieldDef[] {
 	];
 }
 
-function mintReviewerToken(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(18));
-	let binary = "";
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
 export type CreateEventInput = {
 	name: string;
 	slug: string;
@@ -84,6 +76,11 @@ export async function createEventWithDefaults(
 	const eventId = crypto.randomUUID();
 	const formId = crypto.randomUUID();
 	const systemFormId = crypto.randomUUID();
+	const planId = crypto.randomUUID();
+	const criterionId = crypto.randomUUID();
+	// A draft cannot issue a committee link. Store a non-secret marker and a
+	// random digest in the creation batch so no raw bearer ever reaches D1.
+	const reviewerTokenDigest = await digestReviewToken(newReviewToken());
 	const statements: D1PreparedStatement[] = [
 		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, now, now),
@@ -91,8 +88,10 @@ export async function createEventWithDefaults(
       VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, "Call for proposals", "Submit a session proposal.", now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, kind, opens_at, closes_at, created_at, updated_at)
       VALUES (?, ?, ?, 'System form', NULL, 'draft', 'system', NULL, NULL, ?, ?)`).bind(systemFormId, eventId, SYSTEM_CFP_FORM_SLUG, now, now),
-		db.prepare(`INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at)
-      VALUES (?, ?, ?, 'draft', ?, ?, ?)`).bind(crypto.randomUUID(), eventId, "Default review", mintReviewerToken(), now, now),
+		db.prepare(`INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, reviewer_token_digest, created_at, updated_at)
+	      VALUES (?, ?, ?, 'draft', ?, ?, ?, ?)`).bind(planId, eventId, "Default review", storedTokenMarker(planId), reviewerTokenDigest, now, now),
+		db.prepare(`INSERT INTO evaluation_criteria (id, plan_id, label, description, weight, scale_min, scale_max, position, soft_deleted, created_at, updated_at)
+	      VALUES (?, ?, 'Overall', NULL, 1, 1, 5, 0, 0, ?, ?)`).bind(criterionId, planId, now, now),
 	];
 	for (const field of defaultCfpFields()) {
 		statements.push(db.prepare(`INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted)
@@ -102,9 +101,11 @@ export async function createEventWithDefaults(
 		));
 	}
 	for (const [position, roomName] of ["Main Stage", "Room B"].entries()) {
-		statements.push(db.prepare(`INSERT INTO event_rooms (id, event_id, name, position, created_at)
-      VALUES (?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), eventId, roomName, position, now));
+		statements.push(db.prepare(`INSERT INTO event_rooms (id, event_id, name, position, created_at, updated_at)
+	      VALUES (?, ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), eventId, roomName, position, now, now));
 	}
+	statements.push(db.prepare(`INSERT INTO agenda_tracks (id, event_id, name, slug, position, soft_deleted, created_at, updated_at)
+      VALUES (?, ?, 'General', 'general', 0, 0, ?, ?)`).bind(crypto.randomUUID(), eventId, now, now));
 	for (const template of DEFAULT_TASK_TEMPLATES) {
 		statements.push(db.prepare(`INSERT INTO task_templates (
       id, event_id, key, label, task_kind, required, position, soft_deleted, created_at, updated_at

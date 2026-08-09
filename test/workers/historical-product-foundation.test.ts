@@ -15,6 +15,10 @@ import migration0012 from "../../migrations/0012_production_hardening.sql?raw";
 import migration0013 from "../../migrations/0013_final_gate_security.sql?raw";
 import migration0014 from "../../migrations/0014_delivery_claim_hardening.sql?raw";
 import migration0015 from "../../migrations/0015_product_foundation.sql?raw";
+import migration0018 from "../../migrations/0018_evaluation_workflows.sql?raw";
+import migration0019 from "../../migrations/0019_communications_portal.sql?raw";
+import migration0017 from "../../migrations/0017_cfp_lifecycle.sql?raw";
+import { backfillEvaluationTokenDigests } from "@/lib/evaluation/tokens";
 
 const historicalMigrations = [
 	migration0001,
@@ -36,6 +40,10 @@ const historicalMigrations = [
 const resetToEmptyDatabase = `
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS co_speaker_invitation_claims;
+DROP TABLE IF EXISTS email_delivery_envelopes;
+DROP TABLE IF EXISTS agenda_calendar_lifecycles;
+DROP TABLE IF EXISTS co_speaker_invitation_history;
+DROP TABLE IF EXISTS event_message_templates;
 DROP TABLE IF EXISTS event_invitations;
 DROP TABLE IF EXISTS auth_challenges;
 DROP TABLE IF EXISTS email_deliveries;
@@ -47,6 +55,7 @@ DROP TABLE IF EXISTS event_ownership;
 DROP TABLE IF EXISTS event_memberships;
 DROP TABLE IF EXISTS accounts;
 DROP TABLE IF EXISTS review_assignments;
+DROP TABLE IF EXISTS evaluation_criterion_scores;
 DROP TABLE IF EXISTS reviewers;
 DROP TABLE IF EXISTS submission_labels;
 DROP TABLE IF EXISTS event_rooms;
@@ -147,5 +156,83 @@ describe("0014 to 0015 historical product-foundation upgrade", () => {
 			template_task_kind: "text",
 			template_required: 1,
 		});
+	});
+
+	it("upgrades a populated pre-0019 agenda without losing its calendar identity", async () => {
+		await exec(resetToEmptyDatabase);
+		for (const migration of [...historicalMigrations, migration0015]) await exec(migration);
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('pre19-event', 'pre19-event', 'Pre 19', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, kind, created_at, updated_at) VALUES ('pre19-form', 'pre19-event', 'cfp', 'CFP', 'open', 'public', 1, 1)"),
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, answers_json, created_at, updated_at) VALUES ('pre19-submission', 'pre19-form', 'pre19-event', 'scheduled', '{}', 1, 1)"),
+			env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('pre19-slot', 'pre19-event', 'pre19-submission', 'Main', 1, 2, 'pre19@example.test', 1, 1)"),
+		]);
+		await exec(migration0019);
+		expect(await env.DB.prepare("SELECT event_id, submission_id, ics_uid, sequence FROM agenda_calendar_lifecycles WHERE submission_id = 'pre19-submission'").first()).toEqual({ event_id: "pre19-event", submission_id: "pre19-submission", ics_uid: "pre19@example.test", sequence: 0 });
+	});
+
+	it("backfills completion copy and routes only the full legacy AIE format config", async () => {
+		await exec(resetToEmptyDatabase);
+		for (const migration of historicalMigrations) await exec(migration);
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-event', 'routing-history', 'Routing history', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-missing-event', 'routing-history-missing', 'Missing format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-custom-event', 'routing-history-custom', 'Custom format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-superset-event', 'routing-history-superset', 'Superset format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-malformed-event', 'routing-history-malformed', 'Malformed format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-scalar-event', 'routing-history-scalar', 'Scalar format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('routing-history-mixed-event', 'routing-history-mixed', 'Mixed format', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-active', 'routing-history-event', 'cfp', 'Active route', 'open', 'Active completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-missing', 'routing-history-missing-event', 'cfp', 'Missing format', 'open', 'Missing format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-custom', 'routing-history-custom-event', 'cfp', 'Custom format', 'open', 'Custom format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-superset', 'routing-history-superset-event', 'cfp', 'Superset format', 'open', 'Superset format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-malformed', 'routing-history-malformed-event', 'cfp', 'Malformed format', 'open', 'Malformed format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-scalar', 'routing-history-scalar-event', 'cfp', 'Scalar format', 'open', 'Scalar format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-mixed', 'routing-history-mixed-event', 'cfp', 'Mixed format', 'open', 'Mixed format completion copy', 1, 1)"),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, confirmation_copy, created_at, updated_at) VALUES ('routing-history-retired', 'routing-history-event', 'cfp-legacy', 'Retired format', 'open', '', 1, 1)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-format', 'routing-history-active', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[{\"value\":\"stage\",\"label\":\"Stage talk\"},{\"value\":\"lightning\",\"label\":\"Lightning talk\"},{\"value\":\"workshop\",\"label\":\"Workshop\"},{\"value\":\"online\",\"label\":\"Online session\"}]}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-custom-format', 'routing-history-custom', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[{\"value\":\"talk\",\"label\":\"Talk\"},{\"value\":\"panel\",\"label\":\"Panel\"}]}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-superset-format', 'routing-history-superset', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[{\"value\":\"stage\",\"label\":\"Stage talk\"},{\"value\":\"lightning\",\"label\":\"Lightning talk\"},{\"value\":\"workshop\",\"label\":\"Workshop\"},{\"value\":\"online\",\"label\":\"Online session\"},{\"value\":\"panel\",\"label\":\"Panel\"}]}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-malformed-format', 'routing-history-malformed', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{ malformed config', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-scalar-format', 'routing-history-scalar', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[\"stage\",\"lightning\",\"workshop\",\"online\"]}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-mixed-format', 'routing-history-mixed', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[{\"value\":\"stage\",\"label\":\"Stage talk\"},\"lightning\",{\"value\":\"workshop\",\"label\":\"Workshop\"},{\"value\":\"online\",\"label\":\"Online session\"}]}', 0)"),
+			env.DB.prepare("INSERT INTO form_fields (id, form_id, key, label, field_type, required, position, visibility_rule, config, soft_deleted) VALUES ('routing-history-retired-format', 'routing-history-retired', 'format', 'Format', 'select', 1, 0, '{\"op\":\"always\"}', '{\"kind\":\"select\",\"options\":[]}', 1)"),
+		]);
+		await exec(migration0015);
+		await exec(migration0017);
+		expect((await env.DB.prepare("SELECT id, category_routing_json, thank_you_copy FROM cfp_forms WHERE id IN ('routing-history-active', 'routing-history-missing', 'routing-history-custom', 'routing-history-superset', 'routing-history-malformed', 'routing-history-scalar', 'routing-history-mixed', 'routing-history-retired') ORDER BY id").all()).results).toEqual([
+			{ id: "routing-history-active", category_routing_json: '{"fieldKey":"format","map":{"stage":"Stage","lightning":"Lightning","workshop":"Workshop","online":"Online"}}', thank_you_copy: "Active completion copy" },
+			{ id: "routing-history-custom", category_routing_json: null, thank_you_copy: "Custom format completion copy" },
+			{ id: "routing-history-malformed", category_routing_json: null, thank_you_copy: "Malformed format completion copy" },
+			{ id: "routing-history-missing", category_routing_json: null, thank_you_copy: "Missing format completion copy" },
+			{ id: "routing-history-mixed", category_routing_json: null, thank_you_copy: "Mixed format completion copy" },
+			{ id: "routing-history-retired", category_routing_json: null, thank_you_copy: null },
+			{ id: "routing-history-scalar", category_routing_json: null, thank_you_copy: "Scalar format completion copy" },
+			{ id: "routing-history-superset", category_routing_json: null, thank_you_copy: "Superset format completion copy" },
+		]);
+	});
+
+	it("upgrades populated review plans without retaining raw bearer tokens or multiple active plans", async () => {
+		await exec(resetToEmptyDatabase);
+		for (const migration of [...historicalMigrations, migration0015]) await exec(migration);
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES ('evaluation-history-event', 'evaluation-history', 'Evaluation history', 'UTC', 1, 1)"),
+			env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at) VALUES ('evaluation-history-old', 'evaluation-history-event', 'Old active', 'active', 'old-committee-token', 1, 2)"),
+			env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at) VALUES ('evaluation-history-new', 'evaluation-history-event', 'New active', 'active', 'new-committee-token', 1, 3)"),
+			env.DB.prepare("INSERT INTO reviewers (id, plan_id, name, token, created_at) VALUES ('evaluation-history-reviewer', 'evaluation-history-new', 'Legacy reviewer', 'legacy-reviewer-token', 1)"),
+		]);
+
+		await exec(migration0018);
+		expect((await env.DB.prepare("SELECT id, status FROM evaluation_plans WHERE event_id = 'evaluation-history-event' ORDER BY id").all()).results).toEqual([
+			{ id: "evaluation-history-new", status: "active" },
+			{ id: "evaluation-history-old", status: "closed" },
+		]);
+		await backfillEvaluationTokenDigests(env.DB);
+		expect(await env.DB.prepare("SELECT reviewer_token, reviewer_token_digest FROM evaluation_plans WHERE id = 'evaluation-history-new'").first())
+			.toMatchObject({ reviewer_token: "digest:evaluation-history-new" });
+		expect(await env.DB.prepare("SELECT token, token_digest FROM reviewers WHERE id = 'evaluation-history-reviewer'").first())
+			.toMatchObject({ token: "digest:evaluation-history-reviewer" });
+		await expect(env.DB.prepare("INSERT INTO evaluation_plans (id, event_id, name, status, reviewer_token, created_at, updated_at) VALUES ('evaluation-history-third', 'evaluation-history-event', 'Third active', 'active', 'third-committee-token', 1, 4)").run())
+			.rejects.toThrow();
 	});
 });

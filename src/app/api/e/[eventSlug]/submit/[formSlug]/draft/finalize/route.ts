@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { finalizeDraft, loadDraftForResume } from "@/lib/cfp/drafts";
-import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
+import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
@@ -10,6 +10,7 @@ import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { repairSubmissionDelivery } from "@/lib/cfp/delivery";
 import { readBoundedCfpJson } from "@/lib/cfp/request";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function POST(request: Request, context: Context) {
@@ -28,12 +29,18 @@ export async function POST(request: Request, context: Context) {
 	const secret = await getAuthSecret();
 	const draft = await loadDraftForResume(db, { secret, token });
 	const loaded = await loadCfpForm(db, eventSlug, formSlug, { requireOpen: true });
-	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || isCfpPastClosesAt(loaded.form, Date.now())) return NextResponse.json({ ok: false, errors: ["CFP form not found or closed"] }, { status: 404 });
+	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form, Date.now())) return NextResponse.json({ ok: false, errors: ["CFP form not found or unavailable"] }, { status: 404 });
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return NextResponse.json({ ok: false, errors: ["This form is read-only"] }, { status: 403 });
+		throw error;
+	}
 	const validated = validateSubmissionAnswers(loaded.fields, answers);
 	if (!validated.ok) return NextResponse.json(validated, { status: 400 });
 	let result: Awaited<ReturnType<typeof finalizeDraft>>;
 	try {
-		result = await finalizeDraft(db, { secret, draftId: draft.id, token, submitterName: name, answers: validated.visibleAnswers, speakers: validated.speakers, category: resolveSubmissionCategory(formSlug, validated.visibleAnswers) });
+		result = await finalizeDraft(db, { secret, draftId: draft.id, token, submitterName: name, answers: validated.visibleAnswers, speakers: validated.speakers, category: resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers) });
 	} catch (error) {
 		if (isSubmissionLimitReachedError(error)) {
 			return NextResponse.json({ ok: false, errors: ["This CFP has reached its submission limit."] }, { status: 409 });

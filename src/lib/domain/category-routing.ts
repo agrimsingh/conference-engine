@@ -5,15 +5,12 @@ export type CategoryLabel = string;
 
 export const UNCATEGORIZED_CATEGORY = "Uncategorized" as const;
 
-/**
- * Maps a form answer field onto a category label.
- * AIE CFP routes by the `format` select.
- */
+/** Maps a form answer field onto a category label. */
 export type CategoryRoute = {
 	fieldKey: string;
 	/** Answer value → category label */
 	map: Readonly<Record<string, CategoryLabel>>;
-	fallback: CategoryLabel;
+	fallback?: CategoryLabel;
 };
 
 export const AIE_FORMAT_CATEGORY_ROUTE: CategoryRoute = {
@@ -41,12 +38,29 @@ export function isAieCategoryLabel(value: string): value is AieCategoryLabel {
 	return (AIE_CATEGORY_LABELS as readonly string[]).includes(value);
 }
 
-export function categoryRouteForForm(formSlug: string): CategoryRoute | null {
-	switch (formSlug) {
-		case "cfp":
-			return AIE_FORMAT_CATEGORY_ROUTE;
-		default:
-			return null;
+export function isCategoryRoute(value: unknown): value is CategoryRoute {
+	if (typeof value !== "object" || value === null) return false;
+	const route = value as { fieldKey?: unknown; map?: unknown; fallback?: unknown };
+	if (typeof route.fieldKey !== "string" || !route.fieldKey.trim()) return false;
+	if (typeof route.map !== "object" || route.map === null || Array.isArray(route.map)) return false;
+	if (route.fallback !== undefined && (typeof route.fallback !== "string" || !route.fallback.trim())) return false;
+	return Object.entries(route.map).every(([value, label]) => value.trim() !== "" && typeof label === "string" && label.trim() !== "");
+}
+
+/** Parses the per-form route without allowing malformed database JSON to break a public CFP. */
+export function parseCategoryRoute(raw: string | null | undefined): CategoryRoute | null {
+	if (!raw?.trim()) return null;
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		return isCategoryRoute(parsed)
+			? {
+				fieldKey: parsed.fieldKey.trim(),
+				map: Object.fromEntries(Object.entries(parsed.map).map(([value, label]) => [value.trim(), label.trim()])),
+				fallback: parsed.fallback?.trim() || undefined,
+			}
+			: null;
+	} catch {
+		return null;
 	}
 }
 
@@ -55,24 +69,20 @@ export function resolveCategory(
 	answers: AnswerMap,
 ): CategoryLabel {
 	const raw = answers[route.fieldKey];
-	if (typeof raw !== "string") return route.fallback;
+	if (typeof raw !== "string") return route.fallback ?? UNCATEGORIZED_CATEGORY;
 	const mapped = route.map[raw];
-	return mapped ?? route.fallback;
+	return mapped ?? route.fallback ?? UNCATEGORIZED_CATEGORY;
 }
 
 /**
  * Category to persist at submit time. Returns null when no route applies
  * or the answer doesn't map (UI treats NULL as Uncategorized).
  */
-export function resolveSubmissionCategory(
-	formSlug: string,
-	answers: AnswerMap,
-): CategoryLabel | null {
-	const route = categoryRouteForForm(formSlug);
+export function resolveSubmissionCategory(route: CategoryRoute | null, answers: AnswerMap): CategoryLabel | null {
 	if (!route) return null;
 	const raw = answers[route.fieldKey];
 	if (typeof raw !== "string") return null;
-	return route.map[raw] ?? null;
+	return route.map[raw] ?? route.fallback ?? null;
 }
 
 /** Normalize DB null/empty to Uncategorized for display & filtering. */

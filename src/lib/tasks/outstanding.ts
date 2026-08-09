@@ -30,7 +30,7 @@ export async function loadOutstandingTasksSnapshot(
 	event: EventRow,
 ): Promise<OutstandingTasksSnapshot> {
 	const tasks = await listTasksForEvent(db, event.id);
-	const pending = tasks.filter((task) => task.status === "pending");
+	const pending = tasks.filter((task) => task.status === "pending" && task.template_required !== 0);
 
 	const personCache = new Map<
 		string,
@@ -59,6 +59,9 @@ export async function loadOutstandingTasksSnapshot(
 		rows.push({
 			id: task.id,
 			templateKey: task.template_key,
+			templateLabel: task.template_label || task.template_key,
+			templateKind: task.template_task_kind === "text" ? "text" : "file",
+			required: true,
 			status: "pending" as const,
 			personId: task.person_id,
 			personEmail: person.email,

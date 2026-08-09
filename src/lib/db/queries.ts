@@ -394,12 +394,15 @@ export async function getOpenForm(
 	eventId: string,
 	formSlug: string,
 ): Promise<CfpFormRow | null> {
+	const now = Date.now();
 	return db
 		.prepare(
 			`SELECT * FROM cfp_forms
-       WHERE event_id = ? AND slug = ? AND status = 'open' AND kind = 'public'`,
+			 WHERE event_id = ? AND slug = ? AND status = 'open' AND kind = 'public'
+				 AND (opens_at IS NULL OR opens_at <= ?)
+				 AND (closes_at IS NULL OR closes_at > ?)`,
 		)
-		.bind(eventId, formSlug)
+		.bind(eventId, formSlug, now, now)
 		.first<CfpFormRow>();
 }
 
@@ -793,11 +796,13 @@ export async function listTaskTemplatesForEvent(
 export async function listAgendaTracks(
 	db: D1Database,
 	eventId: string,
+	options?: { includeRetired?: boolean },
 ): Promise<AgendaTrackRow[]> {
+	const includeRetired = options?.includeRetired === true;
 	const result = await db
 		.prepare(
 			`SELECT * FROM agenda_tracks
-       WHERE event_id = ? AND soft_deleted = 0
+       WHERE event_id = ?${includeRetired ? "" : " AND soft_deleted = 0"}
        ORDER BY position ASC, name ASC`,
 		)
 		.bind(eventId)
@@ -995,7 +1000,10 @@ export async function listAgendaSlotsWithSubmissions(
          s.answers_json AS answers_json,
          s.category AS category,
          s.submitter_name AS submitter_name,
-         s.submitter_email AS submitter_email
+         s.submitter_email AS submitter_email,
+         s.video_url AS video_url,
+         s.google_doc_url AS google_doc_url,
+         s.supporting_url AS supporting_url
        FROM agenda_slots a
        INNER JOIN submissions s ON s.id = a.submission_id
        WHERE a.event_id = ?
@@ -1013,7 +1021,7 @@ export async function listEventRooms(
 	const result = await db
 		.prepare(
 			`SELECT * FROM event_rooms
-       WHERE event_id = ?
+       WHERE event_id = ? AND soft_deleted = 0
        ORDER BY position ASC, name ASC`,
 		)
 		.bind(eventId)

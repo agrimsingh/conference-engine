@@ -7,6 +7,7 @@ import {
 	type SpeakerAnswer,
 } from "@/lib/domain";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
+import { requireWritableEventById } from "@/lib/events/writability";
 
 export type SubmitInput = {
 	answers: AnswerMap;
@@ -95,6 +96,7 @@ export async function insertSubmission(
 		category?: CategoryLabel | null;
 	},
 ): Promise<string> {
+	await requireWritableEventById(db, args.eventId);
 	const now = Date.now();
 	const submissionId = crypto.randomUUID();
 	const submitterEmail = args.submitterEmail.trim().toLowerCase();

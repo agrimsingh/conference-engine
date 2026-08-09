@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
 import {
@@ -11,6 +12,8 @@ import {
 	getOrganizerAccount,
 	readOrganizerSessionFromCookie,
 } from "@/lib/auth/organizer-session";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
+export { ADMIN_EVENT_MUTATION_FAMILIES } from "@/lib/events/admin-mutation-families";
 
 export const ADMIN_BYPASS_COOKIE = "ce_admin_bypass";
 
@@ -55,6 +58,10 @@ export type EventAdminAccess = {
 	account: AccountRow | null;
 	membership: EventMembershipRow | null;
 };
+
+export type WritableEventAdminApiAccess =
+	| { ok: true; access: EventAdminAccess }
+	| { ok: false; response: NextResponse };
 
 export async function resolveEventAdminAccess(
 	db: D1Database,
@@ -113,6 +120,35 @@ export async function authorizeEventAdminApi(
 ): Promise<EventAdminAccess | null> {
 	const access = await resolveEventAdminAccess(db, eventSlug);
 	return access;
+}
+
+/**
+ * Tenant authorization comes first so a local bypass can still inspect demo
+ * data, but no authorized principal can mutate an event marked as a demo.
+ */
+export async function authorizeWritableEventAdminApi(
+	db: D1Database,
+	eventSlug: string,
+): Promise<WritableEventAdminApiAccess> {
+	const access = await authorizeEventAdminApi(db, eventSlug);
+	if (!access) {
+		return {
+			ok: false,
+			response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
+		};
+	}
+	try {
+		assertEventWritable(access.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return {
+				ok: false,
+				response: NextResponse.json({ ok: false, error: "This demo event is read-only" }, { status: 403 }),
+			};
+		}
+		throw error;
+	}
+	return { ok: true, access };
 }
 
 export async function requireEventOrganizer(

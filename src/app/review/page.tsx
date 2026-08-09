@@ -17,6 +17,8 @@ import {
 	listReviewerAssignments,
 } from "@/lib/evaluation/assignments";
 import { resolveReviewIdentity } from "@/lib/evaluation/score";
+import { listCriteria } from "@/lib/evaluation/plan";
+import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
 
 type Props = {
@@ -39,7 +41,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 			const plan = await getActiveEvaluationPlan(db, event.id);
 			if (plan) {
 				identity = { mode: "committee", plan, reviewer: null };
-				accessToken = plan.reviewer_token;
+				accessToken = "";
 			}
 		}
 	}
@@ -98,7 +100,11 @@ export default async function ReviewPage({ searchParams }: Props) {
 		mode: identity.mode,
 		assignments: reviewerAssignments,
 	});
-	const scores = await listEvaluationScoresForPlan(db, plan.id);
+	const [scores, criteria, criterionScores] = await Promise.all([
+		listEvaluationScoresForPlan(db, plan.id),
+		listCriteria(db, plan.id),
+		listCriterionScoresForPlan(db, plan.id),
+	]);
 	const scoresBySubmission = new Map<string, typeof scores>();
 	for (const score of scores) {
 		const list = scoresBySubmission.get(score.submission_id) ?? [];
@@ -147,6 +153,13 @@ export default async function ReviewPage({ searchParams }: Props) {
 				comment: s.comment,
 				scoredBy: s.scored_by,
 			})),
+			criterionScores: (criterionScores.filter((score) => score.submission_id === row.id)).map((score) => ({
+				id: score.id,
+				criterionId: score.criterion_id,
+				score: score.score,
+				comment: score.comment,
+				reviewerId: score.reviewer_id,
+			})),
 		};
 	});
 
@@ -166,7 +179,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 					Reviewing as {reviewingAs}
 				</p>
 				<p className="text-pretty text-sm text-neutral-400">
-					Tap 1–5 to score. Optional comment, then save. Organizers can accept or
+					Score every rubric criterion and save the review. Organizers can accept or
 					reject from here when signed in.
 				</p>
 			</header>
@@ -175,6 +188,15 @@ export default async function ReviewPage({ searchParams }: Props) {
 				eventSlug={event.slug}
 				token={accessToken}
 				canDecide={admin}
+				reviewerId={identity.reviewer?.id ?? null}
+				criteria={criteria.map((criterion) => ({
+					id: criterion.id,
+					label: criterion.label,
+					description: criterion.description,
+					weight: criterion.weight,
+					scaleMin: criterion.scale_min,
+					scaleMax: criterion.scale_max,
+				}))}
 				submissions={rows}
 			/>
 		</main>

@@ -211,6 +211,8 @@ describe("D1 runtime invariants", () => {
 			expect(reinvite.ok && reinvite.email.status).toBe("sent");
 			expect(fetchMock).toHaveBeenCalledTimes(2);
 			expect((await env.DB.prepare("SELECT generation FROM co_speaker_invitation_claims WHERE speaker_id = 'revive-co'").first<{ generation: number }>())?.generation).toBe(2);
+			const history = await env.DB.prepare("SELECT generation FROM co_speaker_invitation_history WHERE speaker_id = 'revive-co' ORDER BY generation").all<{ generation: number }>();
+			expect(history.results).toEqual([{ generation: 1 }, { generation: 2 }]);
 			const newToken = reinvite.ok ? new URL(reinvite.confirmUrl).pathname.split("/").pop() ?? "" : "";
 			expect(newToken).not.toBe(oldToken);
 			expect(await getSpeakerByConfirmToken(env.DB, oldToken)).toBeNull();

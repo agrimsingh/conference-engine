@@ -6,6 +6,7 @@ import { assertCanManageEvent } from "@/lib/auth/admin";
 import { rowToFieldDef } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug, listFormFields } from "@/lib/db/queries";
+import { parseCategoryRoute } from "@/lib/domain";
 import { FormBuilder } from "./form-builder";
 
 type Props = {
@@ -60,7 +61,9 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 						initialTitle={form.title}
 						initialDescription={form.description ?? ""}
 						initialStatus={form.status}
+						initialOpensAt={form.opens_at}
 						initialClosesAt={form.closes_at}
+						initialCategoryRoute={parseCategoryRoute(form.category_routing_json)}
 						initialMinSpeakers={form.min_speakers}
 						initialMaxSpeakers={form.max_speakers}
 						initialDraftsEnabled={form.drafts_enabled === 1}
@@ -68,6 +71,7 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 						initialWelcomeCopy={form.welcome_copy ?? ""}
 						initialConfirmationCopy={form.confirmation_copy ?? ""}
 						initialReminderCopy={form.reminder_copy ?? ""}
+						initialThankYouCopy={form.thank_you_copy ?? ""}
 						initialFields={fields}
 					/>
 				</div>

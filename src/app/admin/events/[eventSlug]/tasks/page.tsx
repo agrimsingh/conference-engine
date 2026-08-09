@@ -42,7 +42,8 @@ export default async function AdminTasksPage({ params }: Props) {
 		}
 	}
 
-	const completed = tasks.filter((t) => t.status === "completed").length;
+	const requiredTasks = tasks.filter((task) => task.template_required !== 0);
+	const completed = requiredTasks.filter((task) => task.status === "completed").length;
 	const pendingCoSpeakers = await listPendingCoSpeakersForEvent(db, event.id);
 
 	return (
@@ -55,7 +56,7 @@ export default async function AdminTasksPage({ params }: Props) {
 					description={
 						tasks.length === 0
 							? "Speaker onboarding checklist across accepted talks."
-							: `${completed}/${tasks.length} tasks complete.`
+							: `${completed}/${requiredTasks.length} required tasks complete.`
 					}
 				/>
 
@@ -113,16 +114,17 @@ export default async function AdminTasksPage({ params }: Props) {
 								<div className="flex flex-wrap items-baseline justify-between gap-2">
 									<p className="font-medium text-neutral-100">
 										{labels.get(task.submission_id) ?? task.submission_id} ·{" "}
-										{task.template_key}
+									{task.template_label || task.template_key}
 									</p>
 									<StatusPill
-										tone={task.status === "completed" ? "positive" : "warning"}
+									tone={task.status === "completed" ? "positive" : task.template_required === 0 ? "neutral" : "warning"}
 									>
-										{task.status}
+										{task.status === "completed" ? task.status : task.template_required === 0 ? "optional" : task.status}
 									</StatusPill>
 								</div>
 								<p className="mt-1 text-neutral-400">
 									{labels.get(task.person_id) ?? task.person_id}
+									{` · ${task.template_task_kind ?? "file"}`}
 									{task.asset_id ? ` · file uploaded` : ""}
 									{task.text_value
 										? ` · ${task.text_value.slice(0, 80)}${task.text_value.length > 80 ? "…" : ""}`

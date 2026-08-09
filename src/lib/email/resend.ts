@@ -1,4 +1,6 @@
 import { getAuthSecret, getCloudflareEnv } from "@/lib/db/cloudflare";
+import { getEventById } from "@/lib/db/queries";
+import { renderEventMessageTemplate } from "./templates";
 import { hmacHash } from "@/lib/security/crypto";
 import { fetchWithBoundedRetry } from "@/lib/security/fetch";
 import {
@@ -38,6 +40,17 @@ type DeliveryRow = {
 	status: DeliveryState;
 	provider_id: string | null;
 	lease_expires_at: number | null;
+};
+
+type DeliveryEnvelopeRow = {
+	delivery_key: string;
+	event_id: string;
+	submission_id: string | null;
+	template_key: MessageTemplateKey;
+	to_email: string;
+	subject: string;
+	text_body: string;
+	attachments_json: string;
 };
 
 const SEND_LEASE_MS = 2 * 60_000;
@@ -215,7 +228,19 @@ export async function sendTemplatedEmail(
 	},
 ): Promise<OutboundSendResult> {
 	const toEmail = args.toEmail.trim().toLowerCase();
-	const rendered = args.override ?? renderMessageTemplate(args.templateKey, args.context);
+	// A demo must remain completely inert. This guard lives at the shared
+	// outbound boundary so a newly-added caller cannot accidentally reserve a
+	// delivery row or contact the provider for sample data.
+	const event = await getEventById(db, args.eventId);
+	if (event?.mode === "demo") {
+		return { ok: true, status: "skipped", providerId: null, messageId: `demo:${args.eventId}:${args.templateKey}` };
+	}
+	const rendered = args.override ?? await renderEventMessageTemplate(
+		db,
+		args.eventId,
+		args.templateKey,
+		args.context,
+	);
 	// Preserve the pre-migration one-shot history. New sends use the durable
 	// reservation below; old audit rows cannot be assigned a payload hash safely.
 	if (!args.force && args.submissionId && isOneShotTemplate(args.templateKey)) {
@@ -239,7 +264,6 @@ export async function sendTemplatedEmail(
 		attachments: args.attachments,
 		deliveryScope: args.deliveryScope,
 	});
-
 	const reservation = await reserveEmailDelivery(db, {
 		deliveryKey,
 		eventId: args.eventId,
@@ -251,22 +275,51 @@ export async function sendTemplatedEmail(
 	if (reservation.action !== "send") {
 		return { ok: true, status: "skipped", providerId: reservation.providerId, messageId: deliveryKey };
 	}
+	try {
+		await persistDeliveryEnvelope(db, {
+			deliveryKey,
+			eventId: args.eventId,
+			submissionId: args.submissionId,
+			templateKey: args.templateKey,
+			toEmail,
+			subject: rendered.subject,
+			text: rendered.text,
+			attachments: args.attachments ?? [],
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Could not persist delivery envelope";
+		await markEmailDeliveryFailed(db, { deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "confirmed" };
+	}
+	return sendReservedEnvelope(db, {
+		deliveryKey,
+		toEmail,
+		subject: rendered.subject,
+		text: rendered.text,
+		attachments: args.attachments ?? [],
+		runtime,
+	});
+}
 
-	const apiKey = runtime.resendApiKey;
-	const fromEmail = runtime.resendFromEmail || "team@65labs.org";
+async function sendReservedEnvelope(
+	db: D1Database,
+	args: { deliveryKey: string; toEmail: string; subject: string; text: string; attachments: Attachment[]; runtime: EmailDeliveryRuntime },
+): Promise<OutboundSendResult> {
+	const apiKey = args.runtime.resendApiKey;
+	const fromEmail = args.runtime.resendFromEmail || "team@65labs.org";
 	if (!apiKey) {
 		const error = "RESEND_API_KEY missing";
-		await markEmailDeliveryFailed(db, { deliveryKey, error });
-		return { ok: false, status: "failed", error, messageId: deliveryKey, failureKind: "confirmed" };
+		await markEmailDeliveryFailed(db, { deliveryKey: args.deliveryKey, error });
+		return { ok: false, status: "failed", error, messageId: args.deliveryKey, failureKind: "confirmed" };
 	}
 
 	const payload: Record<string, unknown> = {
 		from: fromEmail,
-		to: [toEmail],
-		subject: rendered.subject,
-		text: rendered.text,
+		to: [args.toEmail],
+		subject: args.subject,
+		text: args.text,
 	};
-	if (args.attachments?.length) {
+	if (args.attachments.length) {
 		payload.attachments = args.attachments.map((file) => ({
 			filename: file.filename,
 			content: utf8ToBase64(file.content),
@@ -281,30 +334,65 @@ export async function sendTemplatedEmail(
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
-				"Idempotency-Key": deliveryKey,
+				"Idempotency-Key": args.deliveryKey,
 			},
 			body: JSON.stringify(payload),
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "send failed";
-		await markEmailDeliveryAmbiguous(db, { deliveryKey, error: message });
-		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "ambiguous" };
+		await markEmailDeliveryAmbiguous(db, { deliveryKey: args.deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: args.deliveryKey, failureKind: "ambiguous" };
 	}
 	try {
 		const bodyText = await response.text();
 		const parsed = parseProviderResponse(bodyText, response.status);
 		if (!response.ok) {
-			await markEmailDeliveryFailed(db, { deliveryKey, error: parsed.error });
-			return { ok: false, status: "failed", error: parsed.error, messageId: deliveryKey, failureKind: "confirmed" };
+			await markEmailDeliveryFailed(db, { deliveryKey: args.deliveryKey, error: parsed.error });
+			return { ok: false, status: "failed", error: parsed.error, messageId: args.deliveryKey, failureKind: "confirmed" };
 		}
-		await markEmailDeliveryAccepted(db, { deliveryKey, providerId: parsed.providerId });
-		await finalizeEmailDelivery(db, { deliveryKey });
-		return { ok: true, status: "sent", providerId: parsed.providerId, messageId: deliveryKey };
+		await markEmailDeliveryAccepted(db, { deliveryKey: args.deliveryKey, providerId: parsed.providerId });
+		await finalizeEmailDelivery(db, { deliveryKey: args.deliveryKey });
+		return { ok: true, status: "sent", providerId: parsed.providerId, messageId: args.deliveryKey };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "delivery finalization failed";
-		await markEmailDeliveryAmbiguous(db, { deliveryKey, error: message });
-		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "ambiguous" };
+		await markEmailDeliveryAmbiguous(db, { deliveryKey: args.deliveryKey, error: message });
+		return { ok: false, status: "failed", error: message, messageId: args.deliveryKey, failureKind: "ambiguous" };
 	}
+}
+
+async function persistDeliveryEnvelope(
+	db: D1Database,
+	args: { deliveryKey: string; eventId: string; submissionId: string | null; templateKey: MessageTemplateKey; toEmail: string; subject: string; text: string; attachments: Attachment[] },
+): Promise<void> {
+	await db.prepare(
+		`INSERT OR IGNORE INTO email_delivery_envelopes (
+			delivery_key, event_id, submission_id, template_key, to_email, subject, text_body, attachments_json, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	).bind(args.deliveryKey, args.eventId, args.submissionId, args.templateKey, args.toEmail, args.subject, args.text, JSON.stringify(args.attachments), Date.now()).run();
+}
+
+/** Replays the persisted envelope using the original Resend idempotency key. */
+export async function retryEmailDelivery(
+	db: D1Database,
+	args: { eventId: string; deliveryKey: string; runtime?: EmailDeliveryRuntime },
+): Promise<OutboundSendResult | null> {
+	const envelope = await db.prepare(
+		`SELECT * FROM email_delivery_envelopes WHERE delivery_key = ? AND event_id = ?`,
+	).bind(args.deliveryKey, args.eventId).first<DeliveryEnvelopeRow>();
+	if (!envelope) return null;
+	let attachments: Attachment[];
+	try {
+		const parsed: unknown = JSON.parse(envelope.attachments_json);
+		attachments = Array.isArray(parsed) ? parsed.filter((value): value is Attachment => typeof value === "object" && value !== null && typeof (value as Attachment).filename === "string" && typeof (value as Attachment).content === "string" && typeof (value as Attachment).contentType === "string") : [];
+	} catch { return { ok: false, status: "failed", error: "Stored attachment metadata is invalid", messageId: envelope.delivery_key, failureKind: "confirmed" }; }
+	const reservation = await reserveEmailDelivery(db, {
+		deliveryKey: envelope.delivery_key, eventId: envelope.event_id, submissionId: envelope.submission_id,
+		templateKey: envelope.template_key, toEmail: envelope.to_email, subject: envelope.subject,
+	});
+	if (reservation.action !== "send") return { ok: true, status: "skipped", providerId: reservation.providerId, messageId: envelope.delivery_key };
+	const runtime = args.runtime ?? await loadDeliveryRuntime();
+	if (!runtime.authSecret) return { ok: false, status: "failed", error: "AUTH_SECRET missing", messageId: envelope.delivery_key, failureKind: "confirmed" };
+	return sendReservedEnvelope(db, { deliveryKey: envelope.delivery_key, toEmail: envelope.to_email, subject: envelope.subject, text: envelope.text_body, attachments, runtime });
 }
 
 async function loadDeliveryRuntime(): Promise<EmailDeliveryRuntime> {

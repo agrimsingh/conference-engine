@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readBoundedJson } from "@/lib/cfp/request";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	addSubmissionLabel,
@@ -26,12 +26,15 @@ function normalizeLabel(raw: unknown): string | null {
 async function resolveSubmission(
 	eventSlug: string,
 	submissionId: string,
+	writable = false,
 ): Promise<
 	| { ok: true; db: D1Database }
 	| { ok: false; response: NextResponse }
 > {
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
+	const authorization = writable ? await authorizeWritableEventAdminApi(db, eventSlug) : null;
+	if (authorization && !authorization.ok) return { ok: false, response: authorization.response };
+	const access = authorization?.access ?? await authorizeEventAdminApi(db, eventSlug);
 	if (!access) {
 		return {
 			ok: false,
@@ -59,7 +62,7 @@ async function resolveSubmission(
 
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, submissionId } = await context.params;
-	const resolved = await resolveSubmission(eventSlug, submissionId);
+	const resolved = await resolveSubmission(eventSlug, submissionId, true);
 	if (!resolved.ok) return resolved.response;
 
 	const parsed = await readBoundedJson(request, 16 * 1024);
@@ -80,7 +83,7 @@ export async function POST(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
 	const { eventSlug, submissionId } = await context.params;
-	const resolved = await resolveSubmission(eventSlug, submissionId);
+	const resolved = await resolveSubmission(eventSlug, submissionId, true);
 	if (!resolved.ok) return resolved.response;
 
 	const parsed = await readBoundedJson(request, 16 * 1024);

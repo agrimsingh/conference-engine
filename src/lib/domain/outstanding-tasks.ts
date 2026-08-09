@@ -1,6 +1,9 @@
 export type OutstandingTaskRow = {
 	id: string;
 	templateKey: string;
+	templateLabel: string;
+	templateKind: "text" | "file";
+	required: true;
 	status: "pending";
 	personId: string;
 	personEmail: string;

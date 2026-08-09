@@ -21,6 +21,11 @@ describe("isVisibilityRule", () => {
 		);
 		expect(isVisibilityRule(null)).toBe(false);
 	});
+
+	it("keeps in rules exact and non-empty", () => {
+		expect(isVisibilityRule({ op: "in", fieldKey: "format", values: [] })).toBe(false);
+		expect(evaluateVisibilityRule({ op: "in", fieldKey: "format", values: ["stage", "workshop"] }, { format: "workshop" })).toBe(true);
+	});
 });
 
 describe("evaluateVisibilityRule", () => {

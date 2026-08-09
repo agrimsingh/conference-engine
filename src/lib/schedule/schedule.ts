@@ -37,12 +37,13 @@ export type ScheduleResult =
 
 async function loadInterval(
 	db: D1Database,
-	slot: Pick<AgendaSlotRow, "submission_id" | "room_name" | "starts_at" | "ends_at">,
+	slot: Pick<AgendaSlotRow, "submission_id" | "room_id" | "room_name" | "starts_at" | "ends_at">,
 ): Promise<ScheduleInterval> {
 	const speakers = await listSpeakersForSubmission(db, slot.submission_id);
 	// Pending co-speakers still count for double-booking; declined/removed don't.
 	return {
 		submissionId: slot.submission_id,
+		roomId: slot.room_id,
 		roomName: slot.room_name,
 		startsAtMs: slot.starts_at,
 		endsAtMs: slot.ends_at,
@@ -62,6 +63,7 @@ export async function scheduleSubmission(
 		startsAtMs: number;
 		endsAtMs: number;
 		roomName: string;
+		trackId?: string | null;
 	},
 ): Promise<ScheduleResult> {
 	const roomName = args.roomName.trim();
@@ -102,10 +104,16 @@ export async function scheduleSubmission(
 		};
 	}
 	const roomId = matchedRoom?.id ?? null;
+	const existing = await getAgendaSlotBySubmission(db, submission.id);
+	const tracks = await db.prepare("SELECT id, name FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position").bind(submission.event_id).all<{ id: string; name: string }>();
+	const trackId = args.trackId === undefined ? existing?.track_id ?? null : args.trackId;
+	const track = trackId ? tracks.results.find((row) => row.id === trackId) : null;
+	if (tracks.results.length > 0 && !track && !(args.trackId === undefined && existing?.track_id === trackId)) return { ok: false, error: "Choose an active agenda track", status: 400 };
 
 	const candidateSpeakers = await listSpeakersForSubmission(db, submission.id);
 	const candidate: ScheduleInterval = {
 		submissionId: submission.id,
+		roomId,
 		roomName,
 		startsAtMs: args.startsAtMs,
 		endsAtMs: args.endsAtMs,
@@ -115,6 +123,10 @@ export async function scheduleSubmission(
 	};
 
 	const existingSlots = await listAgendaSlotsForEvent(db, submission.event_id);
+	if (event.track_conflict_policy === "hard" && track) {
+		const trackConflict = existingSlots.find((slot) => slot.submission_id !== submission.id && slot.track_id === track.id && slot.starts_at < args.endsAtMs && args.startsAtMs < slot.ends_at);
+		if (trackConflict) return { ok: false, error: `Track conflict: "${track.name}" overlaps (${submission.id} vs ${trackConflict.submission_id})`, status: 409 };
+	}
 	const existingIntervals = await Promise.all(
 		existingSlots.map((slot) => loadInterval(db, slot)),
 	);
@@ -148,21 +160,21 @@ export async function scheduleSubmission(
 	}
 
 	const icsUid = stableAgendaUid(submission.event_id, submission.id);
-	const existing = await getAgendaSlotBySubmission(db, submission.id);
 	let slot: AgendaSlotRow;
 
 	if (existing) {
 		await db
 			.prepare(
-				`UPDATE agenda_slots
-         SET room_id = ?, room_name = ?, starts_at = ?, ends_at = ?, updated_at = ?
+			`UPDATE agenda_slots
+         SET room_id = ?, room_name = ?, track_id = ?, starts_at = ?, ends_at = ?, updated_at = ?
          WHERE id = ?`,
-			)
-			.bind(roomId, roomName, args.startsAtMs, args.endsAtMs, now, existing.id)
+		)
+			.bind(roomId, roomName, trackId, args.startsAtMs, args.endsAtMs, now, existing.id)
 			.run();
 		slot = {
 			...existing,
 			room_id: roomId,
+			track_id: trackId,
 			room_name: roomName,
 			starts_at: args.startsAtMs,
 			ends_at: args.endsAtMs,
@@ -172,16 +184,17 @@ export async function scheduleSubmission(
 		const id = crypto.randomUUID();
 		await db
 			.prepare(
-				`INSERT INTO agenda_slots (
-          id, event_id, submission_id, room_id, room_name, starts_at, ends_at, ics_uid,
+			`INSERT INTO agenda_slots (
+          id, event_id, submission_id, room_id, track_id, room_name, starts_at, ends_at, ics_uid,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
 				submission.event_id,
 				submission.id,
 				roomId,
+				trackId,
 				roomName,
 				args.startsAtMs,
 				args.endsAtMs,
@@ -195,6 +208,7 @@ export async function scheduleSubmission(
 			event_id: submission.event_id,
 			submission_id: submission.id,
 			room_id: roomId,
+			track_id: trackId,
 			room_name: roomName,
 			starts_at: args.startsAtMs,
 			ends_at: args.endsAtMs,

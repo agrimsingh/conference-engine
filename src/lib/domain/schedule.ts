@@ -1,5 +1,7 @@
 export type ScheduleInterval = {
 	submissionId: string;
+	/** Stable room identity when the slot belongs to a configured room. */
+	roomId: string | null;
 	roomName: string;
 	startsAtMs: number;
 	endsAtMs: number;
@@ -45,10 +47,10 @@ export function detectConflicts(
 		if (other.submissionId === candidate.submissionId) continue;
 		if (!intervalsOverlap(candidate, other)) continue;
 
-		if (
-			candidateRoom.length > 0 &&
-			candidateRoom === other.roomName.trim()
-		) {
+		const sameRoom = candidate.roomId && other.roomId
+			? candidate.roomId === other.roomId
+			: candidateRoom.length > 0 && candidateRoom === other.roomName.trim();
+		if (sameRoom) {
 			conflicts.push({
 				kind: "room",
 				roomName: candidateRoom,

@@ -1,13 +1,7 @@
-import {
-	isSpeakerTaskKey,
-	SPEAKER_TASK_TYPE_REGISTRY,
-} from "../domain/speaker-tasks";
-import {
-	renderMessageTemplate,
-} from "../domain/message-templates";
 import { renderFormCopy } from "../cfp/form-copy";
 import { validatedAppOrigin } from "../security/origin";
 import { sendTemplatedEmail } from "./resend";
+import { renderEventMessageTemplate } from "./templates";
 
 const REMINDER_KV_TTL_SECONDS = 20 * 60 * 60;
 export const REMINDER_DELIVERY_WINDOW_MS = 20 * 60 * 60_000;
@@ -31,6 +25,9 @@ type PendingTaskRow = {
 	person_id: string;
 	event_id: string;
 	template_key: string;
+	template_label: string;
+	template_task_kind: "text" | "file";
+	template_required: number;
 	email: string;
 	person_name: string | null;
 	event_name: string;
@@ -45,19 +42,12 @@ type PersonEventGroup = {
 	personName: string | null;
 	eventName: string;
 	eventSlug: string;
-	templateKeys: string[];
+	taskLabels: string[];
 	reminderCopy: string | null;
 };
 
 function reminderKvKey(personId: string, eventId: string): string {
 	return `reminder:${personId}:${eventId}`;
-}
-
-function taskLabel(templateKey: string): string {
-	if (isSpeakerTaskKey(templateKey)) {
-		return SPEAKER_TASK_TYPE_REGISTRY[templateKey].label;
-	}
-	return templateKey;
 }
 
 /**
@@ -69,10 +59,12 @@ export async function sendTaskReminders(
 	env: ReminderEnv,
 	options?: {
 		eventId?: string;
+		/** A manual retry must remain inside the event selected by the organizer. */
+		personIds?: string[];
 		now?: number;
 	},
 ): Promise<ReminderRunResult> {
-	const rows = await loadPendingTaskRows(env.DB, options?.eventId);
+	const rows = await loadPendingTaskRows(env.DB, options?.eventId, options?.personIds);
 	const groups = groupByPersonEvent(rows);
 	const portalOrigin = validatedAppOrigin(env.APP_ORIGIN);
 	if (!portalOrigin) {
@@ -87,17 +79,18 @@ export async function sendTaskReminders(
 	let skipped = 0;
 
 	for (const group of groups) {
-		const labels = group.templateKeys.map(taskLabel);
+		const labels = group.taskLabels;
 		const count = labels.length;
 		const portalHint = `Sign in at ${portalOrigin}/portal to complete them.`;
-		const rendered = renderMessageTemplate("task_reminder", {
+		const context = {
 			eventName: group.eventName,
 			submitterName: group.personName?.trim() || "there",
 			title: `${count} outstanding tasks`,
 			outstandingCount: count,
 			taskLabels: labels,
 			portalHint,
-		});
+		};
+		const rendered = await renderEventMessageTemplate(env.DB, group.eventId, "task_reminder", context);
 
 		const text = composeReminderText(rendered.text, group.reminderCopy, {
 			eventName: group.eventName,
@@ -110,7 +103,7 @@ export async function sendTaskReminders(
 			submissionId: null,
 			toEmail: group.email,
 			templateKey: "task_reminder",
-			context: { eventName: group.eventName, submitterName: group.personName?.trim() || "there", title: `${count} outstanding tasks`, outstandingCount: count, taskLabels: labels, portalHint },
+			context,
 			override: { subject: rendered.subject, text },
 			deliveryScope: `reminder-window:${reminderWindow}`,
 			runtime: { authSecret: env.AUTH_SECRET, resendApiKey: env.RESEND_API_KEY, resendFromEmail: env.RESEND_FROM_EMAIL },
@@ -140,7 +133,14 @@ export async function sendTaskReminders(
 async function loadPendingTaskRows(
 	db: D1Database,
 	eventId?: string,
+	personIds?: string[],
 ): Promise<PendingTaskRow[]> {
+	const selectedPeople = [...new Set(personIds?.filter(Boolean) ?? [])];
+	// An explicit empty segment is never an alias for every speaker.
+	if (personIds !== undefined && selectedPeople.length === 0) return [];
+	const personClause = selectedPeople.length
+		? ` AND st.person_id IN (${selectedPeople.map(() => "?").join(", ")})`
+		: "";
 	if (eventId) {
 		const result = await db
 			.prepare(
@@ -148,6 +148,9 @@ async function loadPendingTaskRows(
 					st.person_id AS person_id,
 					st.event_id AS event_id,
 					st.template_key AS template_key,
+					st.template_label AS template_label,
+					st.template_task_kind AS template_task_kind,
+					st.template_required AS template_required,
 					p.email AS email,
 					p.name AS person_name,
 					e.name AS event_name,
@@ -158,10 +161,10 @@ async function loadPendingTaskRows(
 				INNER JOIN events e ON e.id = st.event_id
 				INNER JOIN submissions s ON s.id = st.submission_id
 				INNER JOIN cfp_forms f ON f.id = s.form_id
-				WHERE st.status = 'pending' AND st.event_id = ?
-				ORDER BY st.person_id, st.event_id, st.created_at ASC`,
+					WHERE st.status = 'pending' AND st.template_required = 1 AND st.event_id = ? AND e.mode <> 'demo'${personClause}
+					ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 			)
-			.bind(eventId)
+			.bind(eventId, ...selectedPeople)
 			.all<PendingTaskRow>();
 		return result.results;
 	}
@@ -172,6 +175,9 @@ async function loadPendingTaskRows(
 				st.person_id AS person_id,
 				st.event_id AS event_id,
 				st.template_key AS template_key,
+				st.template_label AS template_label,
+				st.template_task_kind AS template_task_kind,
+				st.template_required AS template_required,
 				p.email AS email,
 				p.name AS person_name,
 				e.name AS event_name,
@@ -182,9 +188,10 @@ async function loadPendingTaskRows(
 			INNER JOIN events e ON e.id = st.event_id
 			INNER JOIN submissions s ON s.id = st.submission_id
 			INNER JOIN cfp_forms f ON f.id = s.form_id
-			WHERE st.status = 'pending'
+			WHERE st.status = 'pending' AND st.template_required = 1 AND e.mode <> 'demo'${personClause}
 			ORDER BY st.person_id, st.event_id, st.created_at ASC`,
 		)
+		.bind(...selectedPeople)
 		.all<PendingTaskRow>();
 	return result.results;
 }
@@ -195,7 +202,7 @@ function groupByPersonEvent(rows: PendingTaskRow[]): PersonEventGroup[] {
 		const key = `${row.person_id}:${row.event_id}`;
 		const existing = map.get(key);
 		if (existing) {
-			existing.templateKeys.push(row.template_key);
+			existing.taskLabels.push(row.template_label || row.template_key);
 			if (!existing.reminderCopy && row.reminder_copy?.trim()) {
 				existing.reminderCopy = row.reminder_copy;
 			}
@@ -208,7 +215,7 @@ function groupByPersonEvent(rows: PendingTaskRow[]): PersonEventGroup[] {
 			personName: row.person_name,
 			eventName: row.event_name,
 			eventSlug: row.event_slug,
-			templateKeys: [row.template_key],
+			taskLabels: [row.template_label || row.template_key],
 			reminderCopy: row.reminder_copy?.trim() || null,
 		});
 	}

@@ -19,4 +19,10 @@ describe("renderFormCopy", () => {
 		expect(confirmationCopyOverride(null, context)).toBeUndefined();
 		expect(confirmationCopyOverride("Hi {{submitter_name}}", context)).toEqual({ subject: "We received your proposal for Event", text: "Hi Ada" });
 	});
+
+	it("renders thank-you copy with the final submitter context", () => {
+		expect(renderFormCopy("Thanks {{submitter_name}} for {{title}} at {{event_name}}", {
+			submitterName: "Ada", title: "Reliable agents", eventName: "AI Engineer",
+		})).toBe("Thanks Ada for Reliable agents at AI Engineer");
+	});
 });

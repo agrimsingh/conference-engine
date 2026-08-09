@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
@@ -22,9 +22,11 @@ type Body = {
 	reviewerIds?: unknown;
 };
 
-async function resolveContext(eventSlug: string, submissionId: string) {
+async function resolveContext(eventSlug: string, submissionId: string, writable = false) {
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
+	const authorization = writable ? await authorizeWritableEventAdminApi(db, eventSlug) : null;
+	if (authorization && !authorization.ok) return { ok: false as const, response: authorization.response };
+	const access = authorization?.access ?? await authorizeEventAdminApi(db, eventSlug);
 	if (!access) {
 		return {
 			ok: false as const,
@@ -93,7 +95,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
 	const { eventSlug, submissionId } = await context.params;
-	const resolved = await resolveContext(eventSlug, submissionId);
+	const resolved = await resolveContext(eventSlug, submissionId, true);
 	if (!resolved.ok) return resolved.response;
 
 	const parsed = await readBoundedJson(request, 16 * 1024);

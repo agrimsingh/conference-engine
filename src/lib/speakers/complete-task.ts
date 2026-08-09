@@ -1,11 +1,8 @@
-import {
-	isSpeakerTaskKey,
-	SPEAKER_TASK_TYPE_REGISTRY,
-	type SpeakerTaskKey,
-} from "@/lib/domain";
+import { isSpeakerTaskKey, SPEAKER_TASK_TYPE_REGISTRY } from "@/lib/domain";
 import { getSpeakerTaskById } from "@/lib/db/queries";
 import type { AssetRow, SpeakerTaskRow } from "@/lib/db/types";
 import { implicitlyConfirmByTaskCompletion } from "./co-speakers";
+import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writability";
 
 export type CompleteTextResult =
 	| { ok: true; task: SpeakerTaskRow }
@@ -26,46 +23,52 @@ export async function completeTextTask(
 	if (task.person_id !== args.personId) {
 		return { ok: false, error: "Forbidden", status: 403 };
 	}
-	if (!isSpeakerTaskKey(task.template_key)) {
-		return { ok: false, error: "Unknown task key", status: 500 };
+	try {
+		await requireWritableEventById(db, task.event_id);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return { ok: false, error: "This task is read-only", status: 403 };
+		throw error;
 	}
-
-	const meta = SPEAKER_TASK_TYPE_REGISTRY[task.template_key];
-	if (meta.kind !== "text") {
+	if (taskKind(task) !== "text") {
 		return { ok: false, error: "Task is not a text task", status: 400 };
 	}
 
 	const text = args.text.trim();
 	if (text.length > MAX_SPEAKER_BIO_LENGTH) {
-		return { ok: false, error: "Bio is too long (max 10000 characters)", status: 400 };
+		return {
+			ok: false,
+			error: task.template_key === "bio"
+				? "Bio is too long (max 10000 characters)"
+				: "Response is too long (max 10000 characters)",
+			status: 400,
+		};
 	}
-	if (text.length < 20) {
+	if (task.template_key === "bio" && text.length < 20) {
 		return { ok: false, error: "Bio must be at least 20 characters", status: 400 };
 	}
+	if (!text) return { ok: false, error: "Response is required", status: 400 };
 
 	const now = Date.now();
-	await db.batch([
+	const statements: D1PreparedStatement[] = [
 		db.prepare(
 			`UPDATE speaker_tasks
        SET status = 'completed', text_value = ?, completed_at = ?, updated_at = ?
        WHERE id = ?`,
-		)
-		.bind(text, now, now, task.id)
-		,
+		).bind(text, now, now, task.id),
+	];
+	if (task.template_key === "bio") statements.push(
 		db.prepare(
 			`UPDATE speaker_profiles
        SET bio = ?, updated_at = ?
        WHERE event_id = ? AND person_id = ?`,
-		)
-		.bind(text, now, task.event_id, task.person_id)
-		,
+		).bind(text, now, task.event_id, task.person_id),
 		db.prepare(
 			`UPDATE submission_speakers
        SET bio = ?
        WHERE submission_id = ? AND person_id = ?`,
-		)
-		.bind(text, task.submission_id, task.person_id)
-	]);
+		).bind(text, task.submission_id, task.person_id),
+	);
+	await db.batch(statements);
 
 	// Completing a task proves the person is real → implicit confirmation.
 	await implicitlyConfirmByTaskCompletion(db, {
@@ -92,21 +95,23 @@ export async function completeFileTask(
 	if (task.person_id !== args.personId) {
 		return { ok: false, error: "Forbidden", status: 403 };
 	}
-	if (!isSpeakerTaskKey(task.template_key)) {
-		return { ok: false, error: "Unknown task key", status: 500 };
+	try {
+		await requireWritableEventById(db, task.event_id);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) return { ok: false, error: "This task is read-only", status: 403 };
+		throw error;
 	}
-
-	const key = task.template_key as SpeakerTaskKey;
-	const meta = SPEAKER_TASK_TYPE_REGISTRY[key];
-	if (meta.kind !== "file") {
+	const key = task.template_key;
+	if (taskKind(task) !== "file") {
 		return { ok: false, error: "Task is not a file task", status: 400 };
 	}
 
 	const contentType = args.file.type || "application/octet-stream";
-	if (!meta.accept.includes(contentType)) {
+	const accept = acceptedFileTypes(task);
+	if (accept.length > 0 && !accept.includes(contentType)) {
 		return {
 			ok: false,
-			error: `Unsupported content type ${contentType}. Allowed: ${meta.accept.join(", ")}`,
+			error: `Unsupported content type ${contentType}. Allowed: ${accept.join(", ")}`,
 			status: 400,
 		};
 	}
@@ -225,6 +230,15 @@ export async function completeFileTask(
 			created_at: now,
 		},
 	};
+}
+
+function taskKind(task: SpeakerTaskRow): "text" | "file" {
+	if (task.template_task_kind === "text" || task.template_task_kind === "file") return task.template_task_kind;
+	return isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key].kind : "file";
+}
+
+function acceptedFileTypes(task: SpeakerTaskRow): readonly string[] {
+	return isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key].accept : [];
 }
 
 function sanitizeFilename(name: string): string {

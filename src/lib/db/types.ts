@@ -24,6 +24,10 @@ export type EventRow = {
 	end_day: string | null;
 	mode?: "live" | "demo";
 	track_conflict_policy?: "hard" | "allow";
+	day_start_minutes?: number;
+	day_end_minutes?: number;
+	slot_duration_minutes?: number;
+	archived_at?: number | null;
 	created_at: number;
 	updated_at: number;
 };
@@ -37,9 +41,12 @@ export type CfpFormRow = {
 	status: "draft" | "open" | "closed";
 	opens_at: number | null;
 	closes_at: number | null;
+	/** Optional JSON category route, configured per form by an organizer. */
+	category_routing_json?: string | null;
 	welcome_copy: string | null;
 	confirmation_copy: string | null;
 	reminder_copy: string | null;
+	thank_you_copy?: string | null;
 	min_speakers: number;
 	max_speakers: number;
 	drafts_enabled: number;
@@ -74,6 +81,15 @@ export type SubmissionRow = {
 	submitter_name: string | null;
 	submitter_person_id: string | null;
 	origin?: "cfp" | "manual" | "invited" | "imported" | "cloned";
+	/** Explicit source chain for an organizer-created copy. */
+	lineage_parent_submission_id?: string | null;
+	lineage_root_submission_id?: string | null;
+	lineage_source_event_id?: string | null;
+	/** Stable CSV-row fingerprint; unique only inside its event. */
+	import_key?: string | null;
+	video_url?: string | null;
+	google_doc_url?: string | null;
+	supporting_url?: string | null;
 	created_at: number;
 	updated_at: number;
 	submitted_at: number | null;
@@ -221,7 +237,9 @@ export type EventRoomRow = {
 	event_id: string;
 	name: string;
 	position: number;
+	soft_deleted?: number;
 	created_at: number;
+	updated_at?: number;
 };
 
 export type AgendaTrackRow = {
@@ -255,6 +273,9 @@ export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
 	category: string | null;
 	submitter_name: string | null;
 	submitter_email: string | null;
+	video_url?: string | null;
+	google_doc_url?: string | null;
+	supporting_url?: string | null;
 };
 
 export type ReviewAssignmentRow = {

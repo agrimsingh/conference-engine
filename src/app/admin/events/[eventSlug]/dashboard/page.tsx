@@ -24,7 +24,7 @@ export default async function AdminDashboardPage({ params }: Props) {
 				<PageHeader
 					eyebrow="Organizer · Dashboard"
 					title={event.name}
-					description="Live view of incomplete speaker tasks — bio, headshot, slides, and docs still outstanding."
+					description="Live view of required speaker tasks still awaiting completion."
 				/>
 
 				<OutstandingDashboard eventSlug={event.slug} initialSnapshot={snapshot} />

@@ -2,6 +2,8 @@ import {
 	isFieldType,
 	parseFieldConfig,
 	parseVisibilityRule,
+	parseCategoryRoute,
+	type CategoryRoute,
 	type FormFieldDef,
 } from "@/lib/domain";
 import {
@@ -17,6 +19,7 @@ export type LoadedCfpForm = {
 	event: EventRow;
 	form: CfpFormRow;
 	fields: FormFieldDef[];
+	categoryRoute: CategoryRoute | null;
 };
 
 export async function loadCfpForm(
@@ -56,5 +59,5 @@ export async function loadCfpForm(
 		};
 	});
 
-	return { event, form, fields };
+	return { event, form, fields, categoryRoute: parseCategoryRoute(form.category_routing_json) };
 }

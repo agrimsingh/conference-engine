@@ -1,10 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import { detectConflicts, formatScheduleConflicts, isSubmissionStatus, normalizeSpeakerKey, transitionSubmission, type ScheduleInterval } from "@/lib/domain";
 import { stableAgendaUid } from "@/lib/email/ics";
+import { deleteRoom, updateEventConfiguration, updateRoom } from "@/lib/events/configuration";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 
-type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string };
+type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string; trackId?: string | null };
+type BulkPublicationInput = { eventId: string; submissionIds: string[]; action: "publish" | "unpublish" };
+type ConfigurationMutation =
+	| { action: "event-settings"; input: Record<string, unknown> }
+	| { action: "room-update"; id: unknown; name: unknown }
+	| { action: "room-delete"; id: unknown };
 
 export class EventRoom extends DurableObject<CloudflareEnv> {
 	private queue: Promise<void> = Promise.resolve();
@@ -19,6 +25,13 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
+		if (request.method === "POST" && url.pathname === "/configuration") {
+			const eventId = request.headers.get("x-ce-event-id") ?? "";
+			const mutation = await parseConfigurationMutation(request);
+			if (!eventId || !mutation) return Response.json({ ok: false, error: "Invalid configuration request" }, { status: 400 });
+			const result = await this.serialized(() => this.configure(eventId, mutation));
+			return Response.json(result, { status: result.ok ? 200 : result.status });
+		}
 		if (request.method === "POST" && url.pathname === "/broadcast") {
 			const body = await request.text();
 			this.broadcast(body || JSON.stringify({ type: "invalidate" }));
@@ -28,6 +41,12 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			const input = await parseScheduleRequest(request);
 			if (!input) return Response.json({ ok: false, error: "Invalid schedule request" }, { status: 400 });
 			const result = await this.serialized(() => this.schedule(input));
+			return Response.json(result, { status: result.ok ? 200 : result.status });
+		}
+		if (request.method === "POST" && url.pathname === "/bulk-publication") {
+			const input = await parseBulkPublicationRequest(request);
+			if (!input) return Response.json({ ok: false, error: "Invalid bulk publication request" }, { status: 400 });
+			const result = await this.serialized(() => this.bulkPublication(input));
 			return Response.json(result, { status: result.ok ? 200 : result.status });
 		}
 		if ((request.method === "DELETE" || request.method === "PATCH") && url.pathname === "/schedule") {
@@ -88,20 +107,31 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		}>();
 		if (!submission) return { ok: false, error: "Submission not found", status: 404 };
 		if (submission.event_id !== input.eventId) return { ok: false, error: "Submission does not belong to this event room", status: 404 };
-		const event = await this.env.DB.prepare("SELECT timezone, start_day, end_day FROM events WHERE id = ?").bind(submission.event_id).first<{ timezone: string; start_day: string | null; end_day: string | null }>();
+		const event = await this.env.DB.prepare("SELECT timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy, mode FROM events WHERE id = ?").bind(submission.event_id).first<{ timezone: string; start_day: string | null; end_day: string | null; day_start_minutes: number; day_end_minutes: number; slot_duration_minutes: number; track_conflict_policy: "hard" | "allow"; mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
 		const boundsError = validateEventScheduleBounds(event, input.startsAtMs, input.endsAtMs);
 		if (boundsError) return { ok: false, error: boundsError, status: 400 };
 		if (!isSubmissionStatus(submission.status)) return { ok: false, error: "Unknown submission status", status: 500 };
-		const room = await this.env.DB.prepare("SELECT id, name FROM event_rooms WHERE event_id = ? AND trim(name) = ?").bind(submission.event_id, roomName).first<{ id: string; name: string }>();
-		const roomCount = await this.env.DB.prepare("SELECT COUNT(*) AS count FROM event_rooms WHERE event_id = ?").bind(submission.event_id).first<{ count: number }>();
+		const current = await this.env.DB.prepare("SELECT id, ics_uid, created_at, track_id FROM agenda_slots WHERE submission_id = ?").bind(submission.id).first<{ id: string; ics_uid: string; created_at: number; track_id: string | null }>();
+		const lifecycle = await this.env.DB.prepare("SELECT ics_uid, sequence FROM agenda_calendar_lifecycles WHERE event_id = ? AND submission_id = ?").bind(submission.event_id, submission.id).first<{ ics_uid: string; sequence: number }>();
+		const room = await this.env.DB.prepare("SELECT id, name FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 AND trim(name) = ?").bind(submission.event_id, roomName).first<{ id: string; name: string }>();
+		const roomCount = await this.env.DB.prepare("SELECT COUNT(*) AS count FROM event_rooms WHERE event_id = ? AND soft_deleted = 0").bind(submission.event_id).first<{ count: number }>();
 		if ((roomCount?.count ?? 0) > 0 && !room) return { ok: false, error: "Unknown room", status: 400 };
+		const tracks = await this.env.DB.prepare("SELECT id, name FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position").bind(submission.event_id).all<{ id: string; name: string }>();
+		const trackId = input.trackId === undefined ? current?.track_id ?? null : input.trackId;
+		const track = trackId ? tracks.results.find((row) => row.id === trackId) : null;
+		if (typeof input.trackId === "string" && !track) return { ok: false, error: "Choose an active agenda track", status: 400 };
 		const candidateSpeakers = await this.speakers(submission.id);
-		const candidate: ScheduleInterval = { submissionId: submission.id, roomName, startsAtMs: input.startsAtMs, endsAtMs: input.endsAtMs, speakerKeys: candidateSpeakers };
-		const slots = await this.env.DB.prepare("SELECT submission_id, room_name, starts_at, ends_at FROM agenda_slots WHERE event_id = ?").bind(submission.event_id).all<{ submission_id: string; room_name: string; starts_at: number; ends_at: number }>();
+		const candidate: ScheduleInterval = { submissionId: submission.id, roomId: room?.id ?? null, roomName, startsAtMs: input.startsAtMs, endsAtMs: input.endsAtMs, speakerKeys: candidateSpeakers };
+		const slots = await this.env.DB.prepare("SELECT submission_id, room_id, room_name, track_id, starts_at, ends_at FROM agenda_slots WHERE event_id = ?").bind(submission.event_id).all<{ submission_id: string; room_id: string | null; room_name: string; track_id: string | null; starts_at: number; ends_at: number }>();
+		if (event.track_conflict_policy === "hard" && track) {
+			const conflict = slots.results.find((slot) => slot.submission_id !== submission.id && slot.track_id === track.id && slot.starts_at < input.endsAtMs && input.startsAtMs < slot.ends_at);
+			if (conflict) return { ok: false, error: `Track conflict: "${track.name}" overlaps (${submission.id} vs ${conflict.submission_id})`, status: 409 };
+		}
 		const intervals: ScheduleInterval[] = [];
 		for (const slot of slots.results) {
-			intervals.push({ submissionId: slot.submission_id, roomName: slot.room_name, startsAtMs: slot.starts_at, endsAtMs: slot.ends_at, speakerKeys: await this.speakers(slot.submission_id) });
+			intervals.push({ submissionId: slot.submission_id, roomId: slot.room_id, roomName: slot.room_name, startsAtMs: slot.starts_at, endsAtMs: slot.ends_at, speakerKeys: await this.speakers(slot.submission_id) });
 		}
 		const conflicts = detectConflicts(candidate, intervals);
 		if (conflicts.length) return { ok: false, error: formatScheduleConflicts(conflicts), status: 409 };
@@ -109,30 +139,58 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		try { if (status !== "scheduled" && status !== "published") status = transitionSubmission(status, "scheduled"); }
 		catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Cannot schedule submission", status: 409 }; }
 		const now = Date.now();
-		const current = await this.env.DB.prepare("SELECT id, ics_uid, created_at FROM agenda_slots WHERE submission_id = ?").bind(submission.id).first<{ id: string; ics_uid: string; created_at: number }>();
-		const slot = current ?? { id: crypto.randomUUID(), ics_uid: stableAgendaUid(submission.event_id, submission.id), created_at: now };
+		const slot = current ?? { id: crypto.randomUUID(), ics_uid: lifecycle?.ics_uid ?? stableAgendaUid(submission.event_id, submission.id), created_at: now };
+		const calendarSequence = lifecycle ? lifecycle.sequence + 1 : 0;
 		await this.env.DB.batch([
 			this.env.DB.prepare("UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?").bind(status, now, submission.id),
+			lifecycle
+				? this.env.DB.prepare("UPDATE agenda_calendar_lifecycles SET sequence = ?, updated_at = ? WHERE event_id = ? AND submission_id = ?").bind(calendarSequence, now, submission.event_id, submission.id)
+				: this.env.DB.prepare("INSERT INTO agenda_calendar_lifecycles (event_id, submission_id, ics_uid, sequence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(submission.event_id, submission.id, slot.ics_uid, calendarSequence, now, now),
 			current
-				? this.env.DB.prepare("UPDATE agenda_slots SET room_id = ?, room_name = ?, starts_at = ?, ends_at = ?, updated_at = ? WHERE id = ?").bind(room?.id ?? null, roomName, input.startsAtMs, input.endsAtMs, now, slot.id)
-				: this.env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(slot.id, submission.event_id, submission.id, room?.id ?? null, roomName, input.startsAtMs, input.endsAtMs, slot.ics_uid, now, now),
+				? this.env.DB.prepare("UPDATE agenda_slots SET room_id = ?, room_name = ?, track_id = ?, starts_at = ?, ends_at = ?, updated_at = ? WHERE id = ?").bind(room?.id ?? null, roomName, trackId, input.startsAtMs, input.endsAtMs, now, slot.id)
+				: this.env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_id, track_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(slot.id, submission.event_id, submission.id, room?.id ?? null, trackId, roomName, input.startsAtMs, input.endsAtMs, slot.ics_uid, now, now),
 		]);
 		this.broadcast(JSON.stringify({ type: "invalidate", reason: "schedule.mutate", eventId: submission.event_id, at: now }));
-		return { ok: true, status, slot: { ...slot, event_id: submission.event_id, submission_id: submission.id, room_id: room?.id ?? null, room_name: roomName, starts_at: input.startsAtMs, ends_at: input.endsAtMs, updated_at: now } };
+		return { ok: true, status, slot: { ...slot, event_id: submission.event_id, submission_id: submission.id, room_id: room?.id ?? null, track_id: trackId, room_name: roomName, starts_at: input.startsAtMs, ends_at: input.endsAtMs, updated_at: now, calendar_sequence: calendarSequence } };
 	}
 
-	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction): Promise<{ ok: true; status: string } | { ok: false; error: string; status: number }> {
+	private async configure(eventId: string, mutation: ConfigurationMutation): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(eventId).first<{ mode: "live" | "demo" }>();
+		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		if (event.mode === "demo") return { ok: false, error: "This event is read-only", status: 403 };
+		try {
+			if (mutation.action === "event-settings") await updateEventConfiguration(this.env.DB, eventId, mutation.input);
+			else if (mutation.action === "room-update") await updateRoom(this.env.DB, eventId, mutation.id, mutation.name);
+			else await deleteRoom(this.env.DB, eventId, mutation.id);
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : "Configuration update failed", status: error instanceof Error && "status" in error && typeof error.status === "number" ? error.status : 400 };
+		}
+		this.broadcast(JSON.stringify({ type: "invalidate", reason: `configuration.${mutation.action}`, eventId, at: Date.now() }));
+		return { ok: true };
+	}
+
+	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction): Promise<{ ok: true; status: string; slot?: Record<string, unknown> } | { ok: false; error: string; status: number }> {
 		const submission = await this.env.DB.prepare("SELECT id, event_id, status FROM submissions WHERE id = ?").bind(submissionId).first<{ id: string; event_id: string; status: string }>();
 		if (!submission || submission.event_id !== eventId) return { ok: false, error: "Submission not found", status: 404 };
+		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(eventId).first<{ mode: "live" | "demo" }>();
+		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
 		const now = Date.now();
 		if (action === "unplace") {
 			if (submission.status !== "scheduled" && submission.status !== "published") return { ok: false, error: "Only scheduled submissions can be unplaced", status: 409 };
+			const slot = await this.env.DB.prepare("SELECT id, room_name, starts_at, ends_at, ics_uid FROM agenda_slots WHERE submission_id = ?").bind(submission.id).first<{ id: string; room_name: string; starts_at: number; ends_at: number; ics_uid: string }>();
+			if (!slot) return { ok: false, error: "Scheduled session is missing its calendar slot", status: 409 };
+			const lifecycle = await this.env.DB.prepare("SELECT ics_uid, sequence FROM agenda_calendar_lifecycles WHERE event_id = ? AND submission_id = ?").bind(eventId, submission.id).first<{ ics_uid: string; sequence: number }>();
+			const calendarSequence = (lifecycle?.sequence ?? 0) + 1;
 			await this.env.DB.batch([
+				lifecycle
+					? this.env.DB.prepare("UPDATE agenda_calendar_lifecycles SET sequence = ?, updated_at = ? WHERE event_id = ? AND submission_id = ?").bind(calendarSequence, now, eventId, submission.id)
+					: this.env.DB.prepare("INSERT INTO agenda_calendar_lifecycles (event_id, submission_id, ics_uid, sequence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(eventId, submission.id, slot.ics_uid, calendarSequence, now, now),
 				this.env.DB.prepare("DELETE FROM agenda_slots WHERE submission_id = ?").bind(submission.id),
 				this.env.DB.prepare("UPDATE submissions SET status = 'accepted', updated_at = ? WHERE id = ?").bind(now, submission.id),
 			]);
 			this.broadcast(JSON.stringify({ type: "invalidate", reason: "schedule.unplace", eventId, at: now }));
-			return { ok: true, status: "accepted" };
+			return { ok: true, status: "accepted", slot: { ...slot, ics_uid: lifecycle?.ics_uid ?? slot.ics_uid, calendar_sequence: calendarSequence } };
 		}
 		const target = action === "publish" ? "published" : "scheduled";
 		if (!isSubmissionStatus(submission.status) || (action === "publish" && submission.status !== "scheduled") || (action === "unpublish" && submission.status !== "published")) {
@@ -143,6 +201,28 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		]);
 		this.broadcast(JSON.stringify({ type: "invalidate", reason: `schedule.${action}`, eventId, at: now }));
 		return { ok: true, status: target };
+	}
+
+	/** Publication shares the exact queue used by place/move/unplace. Validation
+	 * and status writes therefore observe one coherent agenda snapshot. */
+	private async bulkPublication(input: BulkPublicationInput): Promise<{ ok: true; changed: number } | { ok: false; error: string; status: number }> {
+		const ids = [...new Set(input.submissionIds)];
+		if (ids.length === 0 || ids.length > 100) return { ok: false, error: "Choose between 1 and 100 sessions", status: 400 };
+		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(input.eventId).first<{ mode: "live" | "demo" }>();
+		if (!event) return { ok: false, error: "Event not found", status: 404 };
+		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
+		const placeholders = ids.map(() => "?").join(", ");
+		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, a.id AS slot_id FROM submissions s LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id WHERE s.event_id = ? AND s.id IN (${placeholders})`).bind(input.eventId, ...ids).all<{ id: string; status: string; slot_id: string | null }>();
+		if (rows.results.length !== ids.length) return { ok: false, error: "One or more sessions are outside this event or no longer exist", status: 404 };
+		if (input.action === "publish") {
+			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id)) return { ok: false, error: "Only scheduled sessions with an agenda slot can be published", status: 409 };
+		} else if (rows.results.some((row) => row.status !== "published")) {
+			return { ok: false, error: "Only published sessions can be unpublished", status: 409 };
+		}
+		const now = Date.now();
+		await this.env.DB.prepare(`UPDATE submissions SET status = ?, updated_at = ? WHERE event_id = ? AND id IN (${placeholders})`).bind(input.action === "publish" ? "published" : "scheduled", now, input.eventId, ...ids).run();
+		this.broadcast(JSON.stringify({ type: "invalidate", reason: `schedule.bulk-${input.action}`, eventId: input.eventId, at: now }));
+		return { ok: true, changed: ids.length };
 	}
 
 	private async speakers(submissionId: string): Promise<string[]> {
@@ -164,6 +244,28 @@ async function parseScheduleRequest(request: Request): Promise<ScheduleInput | n
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	const body = value as Record<string, unknown>;
 	const eventId = request.headers.get("x-ce-event-id") ?? "";
-	return typeof body.submissionId === "string" && typeof body.roomName === "string" && typeof body.startsAtMs === "number" && typeof body.endsAtMs === "number" && eventId
-		? { eventId, submissionId: body.submissionId, roomName: body.roomName, startsAtMs: body.startsAtMs, endsAtMs: body.endsAtMs } : null;
+	if (typeof body.submissionId !== "string" || typeof body.roomName !== "string" || typeof body.startsAtMs !== "number" || typeof body.endsAtMs !== "number" || !eventId) return null;
+	if ("trackId" in body && typeof body.trackId !== "string" && body.trackId !== null) return null;
+	return { eventId, submissionId: body.submissionId, roomName: body.roomName, trackId: "trackId" in body ? body.trackId as string | null : undefined, startsAtMs: body.startsAtMs, endsAtMs: body.endsAtMs };
+}
+
+async function parseBulkPublicationRequest(request: Request): Promise<BulkPublicationInput | null> {
+	let value: unknown;
+	try { value = await request.json(); } catch { return null; }
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const body = value as Record<string, unknown>;
+	const eventId = request.headers.get("x-ce-event-id") ?? "";
+	if (!eventId || (body.action !== "publish" && body.action !== "unpublish") || !Array.isArray(body.sessionIds) || body.sessionIds.some((id) => typeof id !== "string" || id.length === 0 || id.length > 128)) return null;
+	return { eventId, action: body.action, submissionIds: body.sessionIds };
+}
+
+async function parseConfigurationMutation(request: Request): Promise<ConfigurationMutation | null> {
+	let value: unknown;
+	try { value = await request.json(); } catch { return null; }
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const body = value as Record<string, unknown>;
+	if (body.action === "event-settings" && body.input && typeof body.input === "object" && !Array.isArray(body.input)) return { action: body.action, input: body.input as Record<string, unknown> };
+	if (body.action === "room-update") return { action: body.action, id: body.id, name: body.name };
+	if (body.action === "room-delete") return { action: body.action, id: body.id };
+	return null;
 }

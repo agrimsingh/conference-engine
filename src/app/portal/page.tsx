@@ -4,13 +4,17 @@ import { EmptyState } from "@/components/ui";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	listEventsByIds,
+	getAgendaSlotBySubmission,
+	getSpeakerProfile,
 	listSubmissionsForPerson,
+	listSpeakersForSubmissions,
 	listTasksForPerson,
 } from "@/lib/db/queries";
 import { SPEAKER_TASK_TYPE_REGISTRY, isSpeakerTaskKey } from "@/lib/domain";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { PortalLoginForm } from "./portal-login-form";
 import { TaskChecklist } from "./task-checklist";
+import { ProfileEditor } from "./profile-editor";
 
 type Props = {
 	searchParams: Promise<{ email?: string; error?: string }>;
@@ -45,13 +49,25 @@ export default async function PortalPage({ searchParams }: Props) {
 	const tasks = await listTasksForPerson(db, session.personId);
 
 	const eventRows = await listEventsByIds(db, submissions.map((submission) => submission.event_id));
-	const events = new Map(eventRows.map((event) => [event.id, event.name]));
+	const events = new Map(eventRows.map((event) => [event.id, event]));
+	const [speakersBySubmission, profiles, slots] = await Promise.all([
+		listSpeakersForSubmissions(db, submissions.map((submission) => submission.id)),
+		Promise.all(eventRows.map(async (event) => [event.id, await getSpeakerProfile(db, event.id, session.personId)] as const)),
+		Promise.all(submissions.map(async (submission) => [submission.id, await getAgendaSlotBySubmission(db, submission.id)] as const)),
+	]);
+	const profilesByEvent = new Map(profiles);
+	const slotsBySubmission = new Map(slots);
+	const firstSubmissionIdByEvent = new Map<string, string>();
+	for (const submission of submissions) {
+		if (!firstSubmissionIdByEvent.has(submission.event_id)) firstSubmissionIdByEvent.set(submission.event_id, submission.id);
+	}
 
-	const completedCount = tasks.filter((t) => t.status === "completed").length;
+	const requiredTasks = tasks.filter((task) => task.template_required !== 0);
+	const completedCount = requiredTasks.filter((task) => task.status === "completed").length;
 	const portalDescription = submissions.length === 0
 		? "Every proposal tied to this email will show here, and accepted talks include their onboarding work."
 		: tasks.length > 0
-			? `${completedCount}/${tasks.length} onboarding tasks complete.`
+			? `${completedCount}/${requiredTasks.length} required onboarding tasks complete.`
 			: `${submissions.length} proposal${submissions.length === 1 ? "" : "s"} on file. We’ll show speaker materials here when they’re ready.`;
 
 	return (
@@ -76,33 +92,49 @@ export default async function PortalPage({ searchParams }: Props) {
 							{submissions.map((row) => {
 								const answers = parseAnswers(row.answers_json);
 								const submissionTasks = tasks.filter((task) => task.submission_id === row.id);
-								const completed = submissionTasks.filter((task) => task.status === "completed").length;
-								return (
-									<li key={row.id} className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 text-sm">
-										<p className="font-medium text-neutral-100">
-										{typeof answers.title === "string" ? answers.title : "(untitled)"}
-									</p>
-										<p className="mt-1 text-neutral-400">
-										{events.get(row.event_id) ?? "Event"} ·{" "}
-										{row.status.replaceAll("_", " ")}
+								const requiredSubmissionTasks = submissionTasks.filter((task) => task.template_required !== 0);
+								const completed = requiredSubmissionTasks.filter((task) => task.status === "completed").length;
+									return (
+										<li key={row.id} className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 text-sm">
+											<p className="font-medium text-neutral-100">
+												{typeof answers.title === "string" ? answers.title : "(untitled)"}
+											</p>
+											<p className="mt-1 text-neutral-400">
+											{events.get(row.event_id)?.name ?? "Event"} ·{" "}
+											{row.status.replaceAll("_", " ")}
 										</p>
+										{row.status === "accepted" || row.status === "scheduled" || row.status === "published" ? (() => {
+											const slot = slotsBySubmission.get(row.id);
+											const event = events.get(row.event_id);
+											return <p className="mt-1 text-xs text-neutral-500">{slot ? `${slot.room_name} · ${formatEventTime(slot.starts_at, event?.timezone)}` : "Accepted session · schedule pending"}</p>;
+										})() : null}
+										{(() => {
+											const speakers = speakersBySubmission.get(row.id) ?? [];
+											return speakers.length > 1 ? <div className="mt-3 border-t border-neutral-800 pt-3"><p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Co-speakers and invitation history</p><ul className="mt-2 space-y-1 text-xs text-neutral-400">{speakers.filter((speaker) => speaker.position > 0).map((speaker) => <li key={speaker.id}>{speaker.name || speaker.email} · {speaker.status}{speaker.invited_at ? ` · invited ${new Date(speaker.invited_at).toLocaleDateString()}` : " · invite not sent"}{speaker.confirmed_at ? ` · confirmed ${new Date(speaker.confirmed_at).toLocaleDateString()}` : ""}</li>)}</ul></div> : null;
+										})()}
+										{(() => {
+											const event = events.get(row.event_id);
+											const profile = profilesByEvent.get(row.event_id);
+											if (!event || event.mode === "demo" || firstSubmissionIdByEvent.get(row.event_id) !== row.id) return null;
+											return <div className="mt-3"><ProfileEditor eventId={event.id} displayName={profile?.display_name ?? session.email} bio={profile?.bio ?? ""} /></div>;
+										})()}
 										{row.status === "accepted" || row.status === "scheduled" || row.status === "published" ? (
 											<div className="mt-4 border-t border-neutral-800 pt-3">
 												<div className="mb-3 flex items-baseline justify-between gap-3">
 													<p className="font-medium text-neutral-200">Speaker materials</p>
-													<span className="text-xs text-neutral-500">{completed}/{submissionTasks.length} complete</span>
+													<span className="text-xs text-neutral-500">{completed}/{requiredSubmissionTasks.length} required complete</span>
 												</div>
 												{submissionTasks.length === 0 ? (
 													<p className="text-neutral-500">Materials are being prepared by the organizers.</p>
 												) : (
-											<TaskChecklist compact tasks={submissionTasks.map((task) => {
-														const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
-														return { id: task.id, key: task.template_key, label: meta?.label ?? task.template_key, kind: meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id };
-														})} />
+														<TaskChecklist compact tasks={submissionTasks.map((task) => {
+															const meta = isSpeakerTaskKey(task.template_key) ? SPEAKER_TASK_TYPE_REGISTRY[task.template_key] : null;
+															return { id: task.id, key: task.template_key, label: task.template_label || meta?.label || task.template_key, kind: task.template_task_kind ?? meta?.kind ?? "file", status: task.status, accept: meta?.accept ?? [], textValue: task.text_value, assetId: task.asset_id, required: task.template_required !== 0 };
+																																					})} readOnly={events.get(row.event_id)?.mode === "demo"} />
 												)}
 											</div>
 										) : null}
-									</li>
+										</li>
 							);
 						})}
 					</ul>
@@ -122,4 +154,16 @@ function parseAnswers(raw: string): Record<string, unknown> {
 		// ignore
 	}
 	return {};
+}
+
+function formatEventTime(value: number, timeZone?: string): string {
+	try {
+		return new Intl.DateTimeFormat(undefined, {
+			timeZone: timeZone || "UTC",
+			dateStyle: "medium",
+			timeStyle: "short",
+		}).format(new Date(value));
+	} catch {
+		return new Date(value).toISOString();
+	}
 }

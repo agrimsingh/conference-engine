@@ -14,6 +14,7 @@ type Body = {
 	submissionId?: unknown;
 	score?: unknown;
 	comment?: unknown;
+	criterionScores?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -27,15 +28,23 @@ export async function POST(request: Request) {
 	const score = typeof body.score === "number" ? body.score : Number(body.score);
 	const comment = typeof body.comment === "string" ? body.comment : undefined;
 
-	if (!submissionId || !Number.isFinite(score)) {
+	const criterionScores = Array.isArray(body.criterionScores) ? body.criterionScores.map((value) => {
+		if (!isJsonObject(value)) return { criterionId: "", score: Number.NaN, comment: undefined };
+		return { criterionId: typeof value.criterionId === "string" ? value.criterionId : "", score: typeof value.score === "number" ? value.score : Number(value.score), comment: typeof value.comment === "string" ? value.comment : undefined };
+	}) : undefined;
+	if (!submissionId || (!Number.isFinite(score) && !criterionScores)) {
 		return NextResponse.json(
-			{ ok: false, error: "submissionId and score required" },
+			{ ok: false, error: "submissionId and score or criterionScores required" },
 			{ status: 400 },
 		);
 	}
+	if (criterionScores?.some((value) => !value.criterionId || !Number.isFinite(value.score))) {
+		return NextResponse.json({ ok: false, error: "criterionScores must contain criterionId and numeric score" }, { status: 400 });
+	}
 
 	const db = await getDb();
-	let token = typeof body.token === "string" ? body.token.trim() : "";
+	const token = typeof body.token === "string" ? body.token.trim() : "";
+	let committeePlanId: string | undefined;
 
 	if (!token && (await isAdminBypass())) {
 		const eventSlug =
@@ -57,18 +66,20 @@ export async function POST(request: Request) {
 				{ status: 409 },
 			);
 		}
-		token = plan.reviewer_token;
+		committeePlanId = plan.id;
 	}
 
-	if (!token) {
+	if (!token && !committeePlanId) {
 		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 	}
 
 	const result = await upsertEvaluationScore(db, {
 		token,
 		submissionId,
-		score,
+		score: Number.isFinite(score) ? score : undefined,
 		comment,
+		criterionScores: criterionScores ?? undefined,
+		committeePlanId,
 	});
 
 	if (!result.ok) {

@@ -9,7 +9,7 @@ import {
 	StatusPill,
 } from "@/components/ui";
 
-type TaskView = {
+export type TaskView = {
 	id: string;
 	key: string;
 	label: string;
@@ -18,14 +18,20 @@ type TaskView = {
 	accept: readonly string[];
 	textValue: string | null;
 	assetId: string | null;
+	required: boolean;
 };
 
 type Props = {
 	tasks: TaskView[];
 	compact?: boolean;
+	readOnly?: boolean;
 };
 
-export function TaskChecklist({ tasks, compact = false }: Props) {
+export function textTaskRules(key: string): { minLength: number | undefined; hint: string } {
+	return key === "bio" ? { minLength: 20, hint: " (20+ characters)" } : { minLength: undefined, hint: "" };
+}
+
+export function TaskChecklist({ tasks, compact = false, readOnly = false }: Props) {
 	const router = useRouter();
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -87,6 +93,7 @@ export function TaskChecklist({ tasks, compact = false }: Props) {
 			<ul className="space-y-3">
 				{tasks.map((task) => {
 					const done = task.status === "completed";
+					const bioRules = textTaskRules(task.key);
 					return (
 						<li
 							key={task.id}
@@ -94,12 +101,14 @@ export function TaskChecklist({ tasks, compact = false }: Props) {
 						>
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
 								<p className="font-medium text-neutral-100">{task.label}</p>
-								<StatusPill tone={done ? "positive" : "warning"}>
-									{done ? "Done" : "To do"}
+								<StatusPill tone={done ? "positive" : task.required ? "warning" : "neutral"}>
+									{done ? "Done" : task.required ? "To do" : "Optional"}
 								</StatusPill>
 							</div>
 
-							{task.kind === "text" ? (
+							{readOnly ? (
+								<p className="mt-3 text-xs text-neutral-500">Demo tasks are read-only{task.textValue ? ` · ${task.textValue}` : ""}{task.assetId ? " · file uploaded" : ""}</p>
+							) : task.kind === "text" ? (
 								<form
 									className="mt-3 space-y-2"
 									onSubmit={(event) => {
@@ -112,11 +121,11 @@ export function TaskChecklist({ tasks, compact = false }: Props) {
 										<textarea
 										name="text"
 										required
-										minLength={20}
+										minLength={bioRules.minLength}
 										maxLength={10000}
 										rows={4}
 										className={`w-full ${INPUT_CLASSES}`}
-											placeholder={`Write your ${task.label.toLowerCase()} (20+ characters)`}
+											placeholder={`Write your ${task.label.toLowerCase()}${bioRules.hint}`}
 											defaultValue={task.textValue ?? ""}
 									/>
 									<button

@@ -3,11 +3,14 @@ import { requirePublicApiKey } from "@/lib/auth/public-api";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
+	listAgendaTracks,
 	listAgendaSlotsWithSubmissions,
 	listEventRooms,
 	listSpeakersForSubmission,
 } from "@/lib/db/queries";
 import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
+import { safeExternalUrl } from "@/lib/sessions/session";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -36,9 +39,10 @@ export async function GET(request: Request, context: RouteContext) {
 		return NextResponse.json({ ok: false, error: "Event not found" }, { status: 404 });
 	}
 
-	const [rooms, slots] = await Promise.all([
+	const [rooms, slots, tracks] = await Promise.all([
 		listEventRooms(db, event.id),
 		listAgendaSlotsWithSubmissions(db, event.id),
+		listAgendaTracks(db, event.id, { includeRetired: true }),
 	]);
 
 	const publicSlots = slots.filter((slot) =>
@@ -49,12 +53,22 @@ export async function GET(request: Request, context: RouteContext) {
 	for (const slot of publicSlots) {
 		const answers = parseAnswers(slot.answers_json);
 		const speakers = await listSpeakersForSubmission(db, slot.submission_id);
+		const track = publicScheduleTrack(slot.track_id, tracks);
 		items.push({
 			id: slot.id,
 			submissionId: slot.submission_id,
 			title: titleFromAnswers(answers),
 			status: slot.submission_status,
 			roomName: slot.room_name,
+			trackId: track.id,
+			trackName: track.name,
+			trackRetired: track.retired,
+			detailUrl: `/e/${event.slug}/sessions/${slot.submission_id}`,
+			media: {
+				videoUrl: safeExternalUrl(slot.video_url),
+				googleDocUrl: safeExternalUrl(slot.google_doc_url),
+				supportingUrl: safeExternalUrl(slot.supporting_url),
+			},
 			startsAt: slot.starts_at,
 			endsAt: slot.ends_at,
 			// Public schedule payload mirrors the public page: confirmed only.

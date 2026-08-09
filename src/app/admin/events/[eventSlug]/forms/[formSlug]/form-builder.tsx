@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui";
-import { FIELD_TYPES, type FieldType } from "@/lib/domain";
+import { FIELD_TYPES, type CategoryRoute, type FieldType, type VisibilityRule } from "@/lib/domain";
 
 import type { SelectOption } from "@/lib/domain/form-fields";
 
@@ -15,12 +15,7 @@ type FieldRow = {
 	required: boolean;
 	position: number;
 	helpText?: string;
-	visibilityRule: {
-		op: string;
-		fieldKey?: string;
-		value?: string;
-		values?: string[];
-	};
+	visibilityRule: VisibilityRule;
 	config: Record<string, unknown>;
 };
 
@@ -30,7 +25,9 @@ type Props = {
 	initialTitle: string;
 	initialDescription: string;
 	initialStatus: string;
+	initialOpensAt: number | null;
 	initialClosesAt: number | null;
+	initialCategoryRoute: CategoryRoute | null;
 	initialMinSpeakers: number;
 	initialMaxSpeakers: number;
 	initialDraftsEnabled: boolean;
@@ -38,6 +35,7 @@ type Props = {
 	initialWelcomeCopy: string;
 	initialConfirmationCopy: string;
 	initialReminderCopy: string;
+	initialThankYouCopy: string;
 	initialFields: FieldRow[];
 };
 
@@ -66,26 +64,27 @@ function readSelectOptions(config: Record<string, unknown>): SelectOption[] {
 	return options.length > 0 ? options : defaultSelectOptions();
 }
 
-function closesAtInputValue(ms: number | null): string {
+function dateTimeInputValue(ms: number | null): string {
 	if (ms == null) return "";
 	const d = new Date(ms);
 	const pad = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function parseClosesAtInput(value: string): number | null {
+function parseDateTimeInput(value: string): number | null {
 	const trimmed = value.trim();
 	if (!trimmed) return null;
 	const ms = Date.parse(trimmed);
 	return Number.isFinite(ms) ? ms : null;
 }
 
-type VisibilityOp = "always" | "eq";
+type VisibilityOp = "always" | "eq" | "in";
 
 type VisibilityDraft = {
 	visibilityOp: VisibilityOp;
 	visibilityFieldKey: string;
 	visibilityValue: string;
+	visibilityValues: string;
 };
 
 function buildVisibilityRule(draft: VisibilityDraft): {
@@ -94,6 +93,10 @@ function buildVisibilityRule(draft: VisibilityDraft): {
 	op: "eq";
 	fieldKey: string;
 	value: string;
+} | {
+	op: "in";
+	fieldKey: string;
+	values: string[];
 } {
 	if (
 		draft.visibilityOp === "eq" &&
@@ -106,10 +109,14 @@ function buildVisibilityRule(draft: VisibilityDraft): {
 			value: draft.visibilityValue.trim(),
 		};
 	}
+	if (draft.visibilityOp === "in" && draft.visibilityFieldKey.trim()) {
+		const values = [...new Set(draft.visibilityValues.split(",").map((value) => value.trim()).filter(Boolean))];
+		if (values.length) return { op: "in", fieldKey: draft.visibilityFieldKey.trim(), values };
+	}
 	return { op: "always" };
 }
 
-function visibilitySummary(rule: FieldRow["visibilityRule"]): string {
+function visibilitySummary(rule: VisibilityRule): string {
 	if (rule.op === "eq" && rule.fieldKey && rule.value != null) {
 		return `visible when ${rule.fieldKey} = ${rule.value}`;
 	}
@@ -124,12 +131,14 @@ function VisibilityFields({
 	op,
 	fieldKey,
 	value,
+	values,
 	siblingKeys,
 	onChange,
 }: {
 	op: VisibilityOp;
 	fieldKey: string;
 	value: string;
+	values: string;
 	siblingKeys: string[];
 	onChange: (next: VisibilityDraft) => void;
 }) {
@@ -145,14 +154,16 @@ function VisibilityFields({
 							visibilityOp: e.target.value as VisibilityOp,
 							visibilityFieldKey: fieldKey,
 							visibilityValue: value,
+							visibilityValues: values,
 						})
 					}
 				>
 					<option value="always">Always</option>
 					<option value="eq">Equals</option>
+					<option value="in">Is one of</option>
 				</select>
 			</label>
-			{op === "eq" ? (
+			{op === "eq" || op === "in" ? (
 				<div className="grid gap-2 sm:grid-cols-2">
 					<label className="block text-xs text-neutral-400">
 						Field key
@@ -162,9 +173,10 @@ function VisibilityFields({
 								value={fieldKey}
 								onChange={(e) =>
 									onChange({
-										visibilityOp: op,
-										visibilityFieldKey: e.target.value,
-										visibilityValue: value,
+									visibilityOp: op,
+									visibilityFieldKey: e.target.value,
+									visibilityValue: value,
+									visibilityValues: values,
 									})
 								}
 							>
@@ -185,25 +197,27 @@ function VisibilityFields({
 								value={fieldKey}
 								onChange={(e) =>
 									onChange({
-										visibilityOp: op,
-										visibilityFieldKey: e.target.value,
-										visibilityValue: value,
+									visibilityOp: op,
+									visibilityFieldKey: e.target.value,
+									visibilityValue: value,
+									visibilityValues: values,
 									})
 								}
 							/>
 						)}
 					</label>
 					<label className="block text-xs text-neutral-400">
-						Value
+						{op === "in" ? "Values (comma-separated)" : "Value"}
 						<input
 							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							placeholder="value"
-							value={value}
+							placeholder={op === "in" ? "stage, workshop" : "value"}
+							value={op === "in" ? values : value}
 							onChange={(e) =>
 								onChange({
 									visibilityOp: op,
 									visibilityFieldKey: fieldKey,
-									visibilityValue: e.target.value,
+									visibilityValue: op === "eq" ? e.target.value : value,
+									visibilityValues: op === "in" ? e.target.value : values,
 								})
 							}
 						/>
@@ -220,7 +234,9 @@ export function FormBuilder({
 	initialTitle,
 	initialDescription,
 	initialStatus,
+	initialOpensAt,
 	initialClosesAt,
+	initialCategoryRoute,
 	initialMinSpeakers,
 	initialMaxSpeakers,
 	initialDraftsEnabled,
@@ -228,14 +244,18 @@ export function FormBuilder({
 	initialWelcomeCopy,
 	initialConfirmationCopy,
 	initialReminderCopy,
+	initialThankYouCopy,
 	initialFields,
 }: Props) {
 	const router = useRouter();
 	const [title, setTitle] = useState(initialTitle);
 	const [description, setDescription] = useState(initialDescription);
 	const [status, setStatus] = useState(initialStatus);
-	const [closesAtInput, setClosesAtInput] = useState(
-		closesAtInputValue(initialClosesAt),
+	const [opensAtInput, setOpensAtInput] = useState(dateTimeInputValue(initialOpensAt));
+	const [closesAtInput, setClosesAtInput] = useState(dateTimeInputValue(initialClosesAt));
+	const [categoryFieldKey, setCategoryFieldKey] = useState(initialCategoryRoute?.fieldKey ?? "");
+	const [categoryMapText, setCategoryMapText] = useState(
+		initialCategoryRoute ? Object.entries(initialCategoryRoute.map).map(([value, label]) => `${value} = ${label}`).join("\n") : "",
 	);
 	const [minSpeakers, setMinSpeakers] = useState(initialMinSpeakers);
 	const [maxSpeakers, setMaxSpeakers] = useState(initialMaxSpeakers);
@@ -244,15 +264,17 @@ export function FormBuilder({
 	const [welcomeCopy, setWelcomeCopy] = useState(initialWelcomeCopy);
 	const [confirmationCopy, setConfirmationCopy] = useState(initialConfirmationCopy);
 	const [reminderCopy, setReminderCopy] = useState(initialReminderCopy);
+	const [thankYouCopy, setThankYouCopy] = useState(initialThankYouCopy);
 	const [fields, setFields] = useState(initialFields);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<{
 		label: string;
 		required: boolean;
 		helpText: string;
-		visibilityOp: "always" | "eq";
+		visibilityOp: VisibilityOp;
 		visibilityFieldKey: string;
 		visibilityValue: string;
+		visibilityValues: string;
 		options: SelectOption[];
 	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -266,13 +288,35 @@ export function FormBuilder({
 		visibilityOp: "always" as VisibilityOp,
 		visibilityFieldKey: "",
 		visibilityValue: "",
+		visibilityValues: "",
 		options: defaultSelectOptions(),
 	});
 
 	const base = `/api/admin/events/${eventSlug}/forms/${formSlug}/fields`;
-	const siblingKeysForAdd = fields.map((f) => f.key);
+	const visibilitySourceKeys = fields.filter((field) => field.fieldType === "select").map((field) => field.key);
+
+	function categoryRouteFromDraft(): CategoryRoute | null | "invalid" {
+		const fieldKey = categoryFieldKey.trim();
+		const lines = categoryMapText.split("\n").map((line) => line.trim()).filter(Boolean);
+		if (!fieldKey && lines.length === 0) return null;
+		if (!fieldKey || lines.length === 0) return "invalid";
+		const map: Record<string, string> = {};
+		for (const line of lines) {
+			const divider = line.indexOf("=");
+			const value = divider < 0 ? "" : line.slice(0, divider).trim();
+			const label = divider < 0 ? "" : line.slice(divider + 1).trim();
+			if (!value || !label || map[value]) return "invalid";
+			map[value] = label;
+		}
+		return { fieldKey, map };
+	}
 
 	async function saveMeta() {
+		const categoryRoute = categoryRouteFromDraft();
+		if (categoryRoute === "invalid") {
+			setError("Category routing needs a select field key and unique value = category lines.");
+			return;
+		}
 		setBusy(true);
 		setError(null);
 		const res = await fetch(`/api/admin/events/${eventSlug}/forms`, {
@@ -283,7 +327,9 @@ export function FormBuilder({
 				title,
 				description: description.trim() || null,
 				status,
-				closesAt: parseClosesAtInput(closesAtInput),
+				opensAt: parseDateTimeInput(opensAtInput),
+				closesAt: parseDateTimeInput(closesAtInput),
+				categoryRoute,
 				minSpeakers,
 				maxSpeakers,
 				draftsEnabled,
@@ -291,6 +337,7 @@ export function FormBuilder({
 				welcomeCopy: welcomeCopy.trim() || null,
 				confirmationCopy: confirmationCopy.trim() || null,
 				reminderCopy: reminderCopy.trim() || null,
+				thankYouCopy: thankYouCopy.trim() || null,
 			}),
 		});
 		const json = (await res.json()) as { ok?: boolean; error?: string };
@@ -343,20 +390,24 @@ export function FormBuilder({
 			visibilityOp: "always",
 			visibilityFieldKey: "",
 			visibilityValue: "",
+			visibilityValues: "",
 			options: defaultSelectOptions(),
 		});
 		router.refresh();
 	}
 
 	function startEdit(field: FieldRow) {
+		const rule = field.visibilityRule;
+		const conditionalRule = rule.op === "eq" || rule.op === "in" ? rule : null;
 		setEditingId(field.id);
 		setEditDraft({
 			label: field.label,
 			required: field.required,
 			helpText: field.helpText ?? "",
-			visibilityOp: field.visibilityRule.op === "eq" ? "eq" : "always",
-			visibilityFieldKey: field.visibilityRule.fieldKey ?? "",
-			visibilityValue: field.visibilityRule.value ?? "",
+			visibilityOp: conditionalRule?.op ?? "always",
+			visibilityFieldKey: conditionalRule?.fieldKey ?? "",
+			visibilityValue: conditionalRule?.op === "eq" ? conditionalRule.value : "",
+			visibilityValues: conditionalRule?.op === "in" ? conditionalRule.values.join(", ") : "",
 			options: readSelectOptions(field.config),
 		});
 	}
@@ -374,6 +425,13 @@ export function FormBuilder({
 			return { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 };
 		}
 		return { kind: fieldType };
+	}
+
+	function configForFieldEdit(field: FieldRow, options: SelectOption[]): Record<string, unknown> {
+		if (field.fieldType === "select" || field.fieldType === "multiselect") {
+			return { ...field.config, kind: field.fieldType, options };
+		}
+		return field.config;
 	}
 
 	async function saveFieldEdit(field: FieldRow) {
@@ -394,7 +452,7 @@ export function FormBuilder({
 					required: editDraft.required,
 					position: field.position,
 					visibilityRule,
-					config: buildFieldConfig(field.fieldType, editDraft.options),
+					config: configForFieldEdit(field, editDraft.options),
 					helpText: editDraft.helpText.trim() || undefined,
 				},
 			}),
@@ -495,10 +553,11 @@ export function FormBuilder({
 				</label>
 				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
 					<summary className="cursor-pointer font-medium text-neutral-200">Email copy and reminders</summary>
-					<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail and confirmation copy for submitted proposals. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the event template defaults.</p>
+					<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail, confirmation copy for email, and thank-you copy after submit. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the default copy.</p>
 					<label className="mt-3 block">Welcome copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={welcomeCopy} onChange={(e) => setWelcomeCopy(e.target.value)} /></label>
 					<label className="mt-3 block">Confirmation copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={confirmationCopy} onChange={(e) => setConfirmationCopy(e.target.value)} /></label>
 					<label className="mt-3 block">Reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
+					<label className="mt-3 block">Thank-you copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={thankYouCopy} onChange={(e) => setThankYouCopy(e.target.value)} /></label>
 				</details>
 				<label className="block text-xs text-neutral-400">
 					Description
@@ -521,15 +580,39 @@ export function FormBuilder({
 						<option value="closed">closed</option>
 					</select>
 				</label>
-				<label className="block text-xs text-neutral-400">
-					Closes at (local)
-					<input
-						type="datetime-local"
-						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-						value={closesAtInput}
-						onChange={(e) => setClosesAtInput(e.target.value)}
-					/>
-				</label>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<label className="block text-xs text-neutral-400">
+						Opens at (local)
+						<input
+							type="datetime-local"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={opensAtInput}
+							onChange={(e) => setOpensAtInput(e.target.value)}
+						/>
+					</label>
+					<label className="block text-xs text-neutral-400">
+						Closes at (local)
+						<input
+							type="datetime-local"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={closesAtInput}
+							onChange={(e) => setClosesAtInput(e.target.value)}
+						/>
+					</label>
+				</div>
+				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
+					<summary className="cursor-pointer font-medium text-neutral-200">Category routing</summary>
+					<p className="mt-2 text-neutral-500">Route a select answer to an organizer category. Leave both fields blank for no category.</p>
+					<label className="mt-3 block">Select field key
+						<select className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={categoryFieldKey} onChange={(e) => setCategoryFieldKey(e.target.value)}>
+							<option value="">No category routing</option>
+							{fields.filter((field) => field.fieldType === "select").map((field) => <option key={field.id} value={field.key}>{field.key}</option>)}
+						</select>
+					</label>
+					<label className="mt-3 block">Value = category
+						<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={4} placeholder={"stage = Stage\nworkshop = Workshop"} value={categoryMapText} onChange={(e) => setCategoryMapText(e.target.value)} />
+					</label>
+				</details>
 				<Button type="button" disabled={busy} onClick={() => void saveMeta()}>
 					Save settings
 				</Button>
@@ -586,8 +669,9 @@ export function FormBuilder({
 										op={editDraft.visibilityOp}
 										fieldKey={editDraft.visibilityFieldKey}
 										value={editDraft.visibilityValue}
+										values={editDraft.visibilityValues}
 										siblingKeys={fields
-											.filter((f) => f.id !== field.id)
+											.filter((f) => f.id !== field.id && f.fieldType === "select")
 											.map((f) => f.key)}
 										onChange={(next) =>
 											setEditDraft((d) => (d ? { ...d, ...next } : d))
@@ -742,7 +826,8 @@ export function FormBuilder({
 							op={draft.visibilityOp}
 							fieldKey={draft.visibilityFieldKey}
 							value={draft.visibilityValue}
-							siblingKeys={siblingKeysForAdd}
+							values={draft.visibilityValues}
+							siblingKeys={visibilitySourceKeys}
 							onChange={(next) => setDraft((d) => ({ ...d, ...next }))}
 						/>
 					</div>

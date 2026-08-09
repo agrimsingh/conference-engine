@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db/cloudflare";
 import { getEventById, getSubmissionById } from "@/lib/db/queries";
-import { getSpeakerByConfirmToken } from "@/lib/speakers/co-speakers";
+import { getSpeakerByConfirmToken, listCoSpeakerInviteHistory } from "@/lib/speakers/co-speakers";
 import { titleFromAnswersJson } from "@/lib/email/notify";
 import { coSpeakerStatusTone, EmptyState, StatusPill } from "@/components/ui";
 import { RespondButtons } from "./respond-buttons";
@@ -30,6 +30,7 @@ export default async function CoSpeakerRespondPage({ params, searchParams }: Pro
 
 	const submission = await getSubmissionById(db, speaker.submission_id);
 	const event = submission ? await getEventById(db, submission.event_id) : null;
+	const history = await listCoSpeakerInviteHistory(db, speaker.id);
 	const title = submission
 		? titleFromAnswersJson(submission.answers_json)
 		: "(unknown talk)";
@@ -78,6 +79,14 @@ export default async function CoSpeakerRespondPage({ params, searchParams }: Pro
 								: "This listing was removed by the organizers."}
 					</p>
 				)}
+				{history.length > 0 ? (
+					<div className="mt-5 border-t border-neutral-800 pt-4">
+						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Invitation history</p>
+						<ul className="mt-2 space-y-1 text-xs text-neutral-400">
+							{history.map((invite) => <li key={invite.delivery_key}>Invite {invite.generation} · {invite.status ?? "pending"}{invite.error ? ` · ${invite.error}` : ""}</li>)}
+						</ul>
+					</div>
+				) : null}
 			</div>
 		</main>
 	);

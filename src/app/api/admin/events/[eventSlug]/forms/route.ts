@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { createForm, listFormsForEvent, updateFormMeta } from "@/lib/cfp/form-admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug } from "@/lib/db/queries";
+import { isCategoryRoute, parseCategoryRoute } from "@/lib/domain";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -13,9 +14,7 @@ export async function GET(_request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
 	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	if (!access) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
 	const forms = await listFormsForEvent(db, access.event.id);
 	return NextResponse.json({
@@ -28,6 +27,7 @@ export async function GET(_request: Request, context: RouteContext) {
 			status: form.status,
 			opensAt: form.opens_at,
 			closesAt: form.closes_at,
+			categoryRoute: parseCategoryRoute(form.category_routing_json),
 			updatedAt: form.updated_at,
 		})),
 	});
@@ -38,7 +38,9 @@ type PatchBody = {
 	title?: unknown;
 	description?: unknown;
 	status?: unknown;
+	opensAt?: unknown;
 	closesAt?: unknown;
+	categoryRoute?: unknown;
 	minSpeakers?: unknown;
 	maxSpeakers?: unknown;
 	draftsEnabled?: unknown;
@@ -46,15 +48,15 @@ type PatchBody = {
 	welcomeCopy?: unknown;
 	confirmationCopy?: unknown;
 	reminderCopy?: unknown;
+	thankYouCopy?: unknown;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	const parsed = await readBoundedJson(request, 64 * 1024);
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
@@ -78,6 +80,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 		body.status === "draft" || body.status === "open" || body.status === "closed"
 			? body.status
 			: undefined;
+	const timestamp = (value: unknown): number | null | undefined =>
+		value === null ? null : typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
+	if ((body.opensAt !== undefined && timestamp(body.opensAt) === undefined) || (body.closesAt !== undefined && timestamp(body.closesAt) === undefined)) {
+		return NextResponse.json({ ok: false, error: "opensAt and closesAt must be timestamps or null" }, { status: 400 });
+	}
+	if (body.categoryRoute !== undefined && body.categoryRoute !== null && !isCategoryRoute(body.categoryRoute)) {
+		return NextResponse.json({ ok: false, error: "categoryRoute is invalid" }, { status: 400 });
+	}
 
 	try {
 		await updateFormMeta(db, {
@@ -90,12 +100,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 						? body.description
 						: undefined,
 			status,
-			closesAt:
-				body.closesAt === null
-					? null
-					: typeof body.closesAt === "number"
-						? body.closesAt
-					: undefined,
+			opensAt: timestamp(body.opensAt),
+			closesAt: timestamp(body.closesAt),
+			categoryRoute: body.categoryRoute === null ? null : isCategoryRoute(body.categoryRoute) ? body.categoryRoute : undefined,
 			minSpeakers:
 				typeof body.minSpeakers === "number" ? body.minSpeakers : undefined,
 			maxSpeakers:
@@ -121,6 +128,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 					? null
 					: typeof body.reminderCopy === "string"
 						? body.reminderCopy
+					: undefined,
+			thankYouCopy:
+				body.thankYouCopy === null
+					? null
+					: typeof body.thankYouCopy === "string"
+						? body.thankYouCopy
 						: undefined,
 		});
 	} catch (error) {
@@ -144,10 +157,9 @@ type PostBody = {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	const parsed = await readBoundedJson(request, 16 * 1024);
 	if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });

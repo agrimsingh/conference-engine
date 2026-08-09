@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import {
-	authorizeEventAdminApi,
+	authorizeWritableEventAdminApi,
 	isAdminBypass,
 } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
@@ -14,10 +14,9 @@ type RouteContext = {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
-	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-	}
+	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	if (!authorization.ok) return authorization.response;
+	const access = authorization.access;
 
 	const bypass = await isAdminBypass();
 	if (access.membership?.role !== "owner" && !bypass) {

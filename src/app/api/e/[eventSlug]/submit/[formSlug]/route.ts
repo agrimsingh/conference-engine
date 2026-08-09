@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isCfpPastClosesAt } from "@/lib/cfp/closes-at";
+import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswers, validateSubmitterIdentity } from "@/lib/cfp/submit";
 import { isJsonObject, readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
@@ -9,6 +9,7 @@ import { notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
+import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -56,11 +57,19 @@ export async function POST(request: Request, context: RouteContext) {
 			{ status: 404 },
 		);
 	}
+	try {
+		assertEventWritable(loaded.event);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return NextResponse.json({ ok: false, errors: ["This form is read-only"] }, { status: 403 });
+		}
+		throw error;
+	}
 
 	const now = Date.now();
-	if (isCfpPastClosesAt(loaded.form, now)) {
+	if (!isCfpOpenNow(loaded.form, now)) {
 		return NextResponse.json(
-			{ ok: false, errors: ["CFP closed"] },
+			{ ok: false, errors: ["CFP is not accepting submissions right now"] },
 			{ status: 403 },
 		);
 	}
@@ -77,7 +86,7 @@ export async function POST(request: Request, context: RouteContext) {
 		return NextResponse.json(validated, { status: 400 });
 	}
 
-	const category = resolveSubmissionCategory(formSlug, validated.visibleAnswers);
+	const category = resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers);
 
 	let submissionId: string;
 	try {

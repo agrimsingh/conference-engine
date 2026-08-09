@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/logo";
 
-const DEMO_EVENT = "aie-sandbox";
+const DEMO_EVENT = "demo-cfp-to-stage";
 const REPO_URL = "https://github.com/agrimsingh/conference-engine";
 
 const HOUR_PX = 64;
@@ -150,43 +150,43 @@ const PIPELINE: {
 		stage: "CFP",
 		description:
 			"Conditional forms per format — a workshop asks different questions than a keynote — and answers route submissions into categories on their own.",
-		href: `/e/${DEMO_EVENT}/submit/cfp`,
-		linkLabel: "Open the demo CFP",
+		href: "/demo?perspective=applicant",
+		linkLabel: "Explore applicant view",
 	},
 	{
 		stage: "Review",
 		description:
-			"Score proposals against a rubric, side by side, with per-reviewer attribution.",
-		href: `/review?event=${DEMO_EVENT}`,
-		linkLabel: "Open the review board",
+			"Named reviewers give each assigned proposal a 1–5 score and optional comment against the active rubric.",
+		href: "/demo?perspective=reviewer",
+		linkLabel: "Explore reviewer view",
 	},
 	{
 		stage: "Accept",
 		description:
-			"Decisions send templated email with a calendar invite attached — acceptance, rejection, and reminders all from one template registry.",
-		href: "/admin",
-		linkLabel: "See it in the organizer demo",
+			"Decisions use templated email, while calendar attachments are sent when a session is scheduled or rescheduled.",
+		href: "/demo?perspective=organizer",
+		linkLabel: "Explore organizer view",
 	},
 	{
 		stage: "Speaker tasks",
 		description:
 			"Accepted speakers get a magic-link portal for bio, headshot, slides, and supporting docs. Every upload lands in object storage, every gap stays visible.",
-		href: "/portal",
-		linkLabel: "Open the speaker portal",
+		href: "/demo?perspective=speaker",
+		linkLabel: "Explore speaker view",
 	},
 	{
 		stage: "Schedule",
 		description:
 			"Drag talks onto the grid. Room clashes and double-booked speakers flag themselves before you drop.",
-		href: "/admin",
-		linkLabel: "Try it in the organizer demo",
+		href: "/demo?perspective=organizer",
+		linkLabel: "See schedule readiness",
 	},
 	{
 		stage: "Publish",
 		description:
 			"A public schedule in list, day, week, track, and room views — plus a read-only JSON API for your site and apps.",
 		href: `/e/${DEMO_EVENT}/schedule`,
-		linkLabel: "View the public schedule",
+		linkLabel: "View published schedule",
 	},
 ];
 
@@ -276,7 +276,7 @@ function ScheduleScene() {
 			{/* Toolbar */}
 			<div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-3 sm:px-6">
 				<span className="rounded-full border border-neutral-700 px-2.5 py-0.5 text-[11px] text-neutral-400">
-					{DEMO_EVENT} · demo data
+					Interface preview
 				</span>
 				<div className="flex items-center gap-1 text-xs">
 					{["Day 1", "Day 2", "Day 3"].map((day, i) => (
@@ -498,10 +498,10 @@ export default function Home() {
 						</a>
 					</div>
 					<Link
-						href="/admin"
+						href="/demo"
 						className="ml-auto rounded-md bg-emerald-500 px-3.5 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400 sm:ml-0"
 					>
-						Open demo
+						Explore demo
 					</Link>
 				</nav>
 			</header>
@@ -519,19 +519,16 @@ export default function Home() {
 					</p>
 					<div className="mt-5 flex flex-wrap items-center gap-6 text-sm font-medium">
 						<Link
-							href="/admin"
+							href="/demo"
 							className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300"
 						>
-							Open the live demo
+							Explore demo
 							<ArrowIcon />
 						</Link>
-						<a
-							href="#deploy"
-							className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
-						>
-							Deploy your own
+						<Link href="/admin" className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100">
+							Create your event
 							<ArrowIcon />
-						</a>
+						</Link>
 					</div>
 				</section>
 
@@ -549,8 +546,8 @@ export default function Home() {
 						The whole program pipeline, one system
 					</h2>
 					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
-						Six stages that usually live in six tools. Each one below links
-						into the live demo event.
+						Six stages that usually live in six tools. Each one below opens a
+						read-only view of the seeded lifecycle.
 					</p>
 					<ol className="mt-10 border-t border-neutral-800">
 						{PIPELINE.map((item, index) => (
@@ -592,10 +589,10 @@ export default function Home() {
 								Daily reminder emails go out on a cron, or on demand.
 							</p>
 							<Link
-								href="/admin"
+								href="/demo?perspective=organizer"
 								className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
 							>
-								Watch it live in the demo
+								Explore the organizer view
 								<ArrowIcon />
 							</Link>
 						</div>
@@ -713,7 +710,7 @@ npm run deploy`}
 							Public schedule
 						</Link>
 						<Link className="hover:text-neutral-100" href="/admin">
-							Organizer admin
+							Create your event
 						</Link>
 					</div>
 				</div>

@@ -74,6 +74,7 @@ export function isVisibilityRule(value: unknown): value is VisibilityRule {
 			return (
 				typeof v.fieldKey === "string" &&
 				Array.isArray(v.values) &&
+				v.values.length > 0 &&
 				v.values.every((x) => typeof x === "string")
 			);
 		}

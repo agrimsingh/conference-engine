@@ -46,7 +46,7 @@ export function CreateEventForm({ canCreate }: Props) {
 				setError(data.error ?? "Could not create event");
 				return;
 			}
-			router.push(`/admin/events/${data.slug}/submissions`);
+			router.push(`/admin/events/${data.slug}/setup`);
 			router.refresh();
 		} catch {
 			setError("Network error");
@@ -84,7 +84,7 @@ export function CreateEventForm({ canCreate }: Props) {
 					onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
 					className={`w-full ${INPUT_CLASSES}`}
 					placeholder="aie-2026"
-					pattern="[a-z0-9-]+"
+					pattern="(?:[a-z0-9]|-)+"
 				/>
 			</label>
 			<label className="block space-y-1.5 text-sm">

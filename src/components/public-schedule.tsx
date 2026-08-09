@@ -3,17 +3,17 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
+	listAgendaTracks,
 	listAgendaSlotsWithSubmissions,
 	listEventRooms,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
+import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import {
-	AIE_CATEGORY_LABELS,
-	UNCATEGORIZED_CATEGORY,
-	displayCategory,
-	isPublicScheduleStatus,
-	titleFromAnswers,
-} from "@/lib/domain";
+	publicScheduleTrack,
+	publicScheduleTrackColumns,
+	type PublicScheduleTrack,
+} from "@/lib/schedule/public-tracks";
 import {
 	SEGMENTED_CONTAINER_CLASSES,
 	EmptyState,
@@ -42,12 +42,13 @@ type EnrichedSlot = {
 	submissionId: string;
 	title: string;
 	roomName: string;
-	category: string;
+	track: PublicScheduleTrack;
 	startsAtMs: number;
 	endsAtMs: number;
 	status: string;
 	speakers: string[];
 	dayKey: string;
+	detailHref: string;
 };
 
 function parseAnswers(raw: string): Record<string, unknown> {
@@ -110,12 +111,12 @@ function SlotCard({
 	slot,
 	timezone,
 	showRoom,
-	showCategory,
+	showTrack,
 }: {
 	slot: EnrichedSlot;
 	timezone: string;
 	showRoom?: boolean;
-	showCategory?: boolean;
+	showTrack?: boolean;
 }) {
 	return (
 		<div className="rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm">
@@ -123,9 +124,9 @@ function SlotCard({
 				{formatClock(slot.startsAtMs, timezone)}–
 				{formatClock(slot.endsAtMs, timezone)}
 				{showRoom ? ` · ${slot.roomName}` : ""}
-				{showCategory ? ` · ${slot.category}` : ""}
+				{showTrack ? ` · ${slot.track.name}` : ""}
 			</p>
-			<p className="mt-0.5 font-medium text-neutral-100">{slot.title}</p>
+			<Link className="mt-0.5 block font-medium text-neutral-100 hover:underline" href={slot.detailHref}>{slot.title}</Link>
 			{slot.speakers.length > 0 ? (
 				<p className="text-neutral-400">{slot.speakers.join(", ")}</p>
 			) : null}
@@ -145,9 +146,10 @@ export async function PublicSchedule({
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) notFound();
 
-	const [rooms, slots] = await Promise.all([
+	const [rooms, slots, tracks] = await Promise.all([
 		listEventRooms(db, event.id),
 		listAgendaSlotsWithSubmissions(db, event.id),
+		listAgendaTracks(db, event.id, { includeRetired: true }),
 	]);
 	const days = deriveScheduleDays({
 		startDay: event.start_day,
@@ -174,7 +176,7 @@ export async function PublicSchedule({
 			submissionId: slot.submission_id,
 			title: titleFromAnswers(answers),
 			roomName: slot.room_name,
-			category: displayCategory(slot.category),
+			track: publicScheduleTrack(slot.track_id, tracks),
 			startsAtMs: slot.starts_at,
 			endsAtMs: slot.ends_at,
 			status: slot.submission_status,
@@ -182,6 +184,7 @@ export async function PublicSchedule({
 				.filter((speaker) => speaker.status === "confirmed")
 				.map((speaker) => speaker.name || speaker.email),
 			dayKey: dayKeyInTimeZone(slot.starts_at, event.timezone),
+			detailHref: `${basePath}/${event.slug}/sessions/${slot.submission_id}`,
 		});
 	}
 
@@ -212,21 +215,10 @@ export async function PublicSchedule({
 			? roomNames
 			: [...new Set(daySlots.map((slot) => slot.roomName))];
 
-	const trackLabels = [
-		...AIE_CATEGORY_LABELS,
-		...[
-			...new Set(
-				enriched
-					.map((slot) => slot.category)
-					.filter(
-						(label) =>
-							!(AIE_CATEGORY_LABELS as readonly string[]).includes(label) &&
-							label !== UNCATEGORIZED_CATEGORY,
-					),
-			),
-		],
-		UNCATEGORIZED_CATEGORY,
-	];
+	const trackColumns = publicScheduleTrackColumns(
+		tracks,
+		enriched.map((slot) => slot.track),
+	);
 
 	const trackSlots = applyRoom(
 		enriched
@@ -328,11 +320,9 @@ export async function PublicSchedule({
 								<p className="font-mono text-xs tabular-nums text-neutral-500">
 									{formatClock(slot.startsAtMs, event.timezone)}–
 									{formatClock(slot.endsAtMs, event.timezone)} · {slot.roomName} ·{" "}
-									{slot.category}
+									{slot.track.name}
 								</p>
-								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100">
-									{slot.title}
-								</h2>
+								<h2 className="mt-1 text-lg font-medium tracking-tight text-neutral-100"><Link className="hover:underline" href={slot.detailHref}>{slot.title}</Link></h2>
 								{slot.speakers.length > 0 ? (
 									<p className="mt-1 text-sm text-neutral-400">
 										{slot.speakers.join(", ")}
@@ -372,9 +362,9 @@ export async function PublicSchedule({
 														{formatClock(slot.endsAtMs, event.timezone)}
 													</p>
 													<div>
-														<p className="font-medium text-neutral-100">{slot.title}</p>
+														<Link className="font-medium text-neutral-100 hover:underline" href={slot.detailHref}>{slot.title}</Link>
 														<p className="text-xs text-neutral-500">
-															{slot.category}
+															{slot.track.name}
 														</p>
 														{slot.speakers.length > 0 ? (
 															<p className="text-neutral-400">
@@ -416,7 +406,7 @@ export async function PublicSchedule({
 													slot={slot}
 													timezone={event.timezone}
 													showRoom
-													showCategory
+													showTrack
 												/>
 											</li>
 										))}
@@ -430,12 +420,12 @@ export async function PublicSchedule({
 
 			{view === "track" ? (
 				<div className="space-y-6">
-					{trackLabels.map((label) => {
-						const column = trackSlots.filter((slot) => slot.category === label);
+					{trackColumns.map((track) => {
+						const column = trackSlots.filter((slot) => slot.track.id === track.id);
 						return (
-							<section key={label}>
+							<section key={track.id ?? "unassigned"}>
 								<h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-									{label}{" "}
+									{track.name}{" "}
 									<span className="font-normal normal-case text-neutral-500">
 										({column.length})
 									</span>
@@ -487,7 +477,7 @@ export async function PublicSchedule({
 												<SlotCard
 													slot={slot}
 													timezone={event.timezone}
-													showCategory
+													showTrack
 												/>
 											</li>
 										))}

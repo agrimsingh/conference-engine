@@ -19,8 +19,9 @@ import {
 	AIE_CATEGORY_LABELS,
 	UNCATEGORIZED_CATEGORY,
 	displayCategory,
-	renderDecisionPreviews,
+	DECISION_REGISTRY,
 } from "@/lib/domain";
+import { defaultMessageTemplate, listEventMessageTemplates, renderStoredMessageTemplate } from "@/lib/email/templates";
 import { DecisionButtons } from "@/components/decision-buttons";
 import { ActivatePlanButton } from "./activate-plan-button";
 import { AssignmentControls } from "./assignment-controls";
@@ -49,11 +50,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	const pageSize = 25;
 	const requestedPage = Math.max(1, Number(pageParam) || 1);
 	const activePlan = await getActiveEvaluationPlan(db, event.id);
-	const [pageResult, facets, reviewers] = await Promise.all([
+	const [pageResult, facets, reviewers, configuredTemplates] = await Promise.all([
 		listAdminSubmissionsPage(db, event.id, { category: categoryFilter, label: labelFilter, status: statusFilter, query, sort, page: requestedPage, pageSize }),
 		getSubmissionFacetCounts(db, event.id),
 		activePlan ? listReviewersForPlan(db, activePlan.id) : Promise.resolve([]),
+		listEventMessageTemplates(db, event.id),
 	]);
+	const configuredTemplateByKey = new Map(configuredTemplates.map((template) => [template.template_key, template]));
 	const totalPages = Math.max(1, Math.ceil(pageResult.total / pageSize));
 	const page = Math.min(requestedPage, totalPages);
 	const pageRows = page === requestedPage
@@ -222,17 +225,27 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						{pageRows.map((row) => {
 							const answers = parseAnswers(row.answers_json);
 							const tasks = tasksBySubmission.get(row.id) ?? [];
-							const completed = tasks.filter(
+							const requiredTasks = tasks.filter((task) => task.template_required !== 0);
+							const completed = requiredTasks.filter(
 								(t) => t.status === "completed",
 							).length;
 							const category = displayCategory(row.category);
 							const title =
 								typeof answers.title === "string" ? answers.title : "(untitled)";
-							const previews = renderDecisionPreviews({
+							const decisionContext = {
 								eventName: event.name,
 								submitterName: row.submitter_name ?? "there",
 								title,
-							});
+							};
+							const previews = Object.fromEntries(
+								Object.entries(DECISION_REGISTRY).map(([action, meta]) => {
+									const saved = configuredTemplateByKey.get(meta.templateKey);
+									return [action, renderStoredMessageTemplate(
+										saved ? { subject: saved.subject_template, text: saved.text_template } : defaultMessageTemplate(meta.templateKey),
+										{ ...decisionContext, portalHint: meta.templateKey === "acceptance" ? "Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs." : undefined },
+									)];
+								}),
+							) as ReturnType<typeof import("@/lib/domain").renderDecisionPreviews>;
 							return (
 								<li key={row.id} className="px-4 py-3 text-sm">
 									<div className="flex flex-wrap items-start justify-between gap-3">
@@ -293,14 +306,14 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 									{tasks.length > 0 ? (
 										<div className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-400">
 											<p className="font-medium text-neutral-300">
-												Speaker tasks {completed}/{tasks.length}
+												Speaker tasks {completed}/{requiredTasks.length} required complete
 											</p>
 											<ul className="mt-1 space-y-0.5">
 												{tasks.map((task) => (
 													<li key={task.id}>
 														{personNames.get(task.person_id) ??
 															task.person_id}{" "}
-														· {task.template_key} · {task.status}
+														· {task.template_label || task.template_key} · {task.status}{task.template_required === 0 ? " (optional)" : ""}
 													</li>
 												))}
 											</ul>

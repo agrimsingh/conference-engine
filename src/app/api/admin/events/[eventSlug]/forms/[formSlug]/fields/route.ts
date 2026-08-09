@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
-import { authorizeEventAdminApi } from "@/lib/auth/admin";
+import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import {
 	insertFormField,
 	reorderFormFields,
@@ -16,9 +16,13 @@ type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
 };
 
-async function loadForm(eventSlug: string, formSlug: string) {
+async function loadForm(eventSlug: string, formSlug: string, writable = false) {
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
+	const authorization = writable
+		? await authorizeWritableEventAdminApi(db, eventSlug)
+		: null;
+	if (authorization && !authorization.ok) return { error: authorization.response };
+	const access = authorization?.access ?? await authorizeEventAdminApi(db, eventSlug);
 	if (!access) {
 		return {
 			error: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
@@ -54,7 +58,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug, formSlug } = await context.params;
-	const loaded = await loadForm(eventSlug, formSlug);
+	const loaded = await loadForm(eventSlug, formSlug, true);
 	if ("error" in loaded) return loaded.error;
 
 	const parsed = await readBoundedJson(request, 64 * 1024);
@@ -85,7 +89,7 @@ export async function POST(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
 	const { eventSlug, formSlug } = await context.params;
-	const loaded = await loadForm(eventSlug, formSlug);
+	const loaded = await loadForm(eventSlug, formSlug, true);
 	if ("error" in loaded) return loaded.error;
 
 	const parsed = await readBoundedJson(request, 64 * 1024);
@@ -148,7 +152,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
 	const { eventSlug, formSlug } = await context.params;
-	const loaded = await loadForm(eventSlug, formSlug);
+	const loaded = await loadForm(eventSlug, formSlug, true);
 	if ("error" in loaded) return loaded.error;
 
 	const url = new URL(request.url);

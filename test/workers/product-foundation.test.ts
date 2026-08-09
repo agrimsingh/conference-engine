@@ -56,6 +56,11 @@ describe("product foundation migration", () => {
 			{ key: "slides", label: "Slides", task_kind: "file", required: 1, position: 2, soft_deleted: 0 },
 			{ key: "docs", label: "Supporting docs", task_kind: "file", required: 1, position: 3, soft_deleted: 0 },
 		]);
+		const plan = await env.DB.prepare(
+			"SELECT id, reviewer_token, reviewer_token_digest FROM evaluation_plans WHERE event_id = ?",
+		).bind(created.eventId).first<{ id: string; reviewer_token: string; reviewer_token_digest: string }>();
+		expect(plan).toMatchObject({ reviewer_token: `digest:${plan?.id}` });
+		expect(plan?.reviewer_token_digest).toMatch(/^[A-Za-z0-9_-]{43}$/);
 	});
 
 	it("materializes only active D1 templates and fails clearly when an event has none", async () => {

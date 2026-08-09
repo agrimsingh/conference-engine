@@ -9,9 +9,6 @@ import {
 	type ScheduleInterval,
 } from "@/lib/domain";
 import {
-	DAY_END_MINUTES,
-	DAY_START_MINUTES,
-	SLOT_STEP_MINUTES,
 	formatClock,
 	formatDayLabel,
 	dayKeyInTimeZone,
@@ -29,7 +26,10 @@ export type ScheduleSession = {
 	speakerKeys: string[];
 	speakerLabels: string[];
 	slot: {
+		roomId: string | null;
 		roomName: string;
+		trackId: string | null;
+		trackName: string;
 		startsAtMs: number;
 		endsAtMs: number;
 	} | null;
@@ -41,6 +41,11 @@ type Props = {
 	dayKey: string;
 	days: string[];
 	rooms: string[];
+	roomIds: Record<string, string>;
+	tracks: { id: string; name: string }[];
+	dayStartMinutes: number;
+	dayEndMinutes: number;
+	slotDurationMinutes: number;
 	sessions: ScheduleSession[];
 };
 
@@ -52,11 +57,18 @@ export function ScheduleBoard({
 	dayKey,
 	days,
 	rooms,
+	roomIds,
+	tracks,
+	dayStartMinutes,
+	dayEndMinutes,
+	slotDurationMinutes,
 	sessions: initialSessions,
 }: Props) {
 	const [sessions, setSessions] = useState(initialSessions);
 	const [view, setView] = useState<ViewMode>("day");
 	const [roomFilter, setRoomFilter] = useState<string>("all");
+	const [trackId, setTrackId] = useState<string>(tracks[0]?.id ?? "");
+	const [reassignTrack, setReassignTrack] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
@@ -65,20 +77,21 @@ export function ScheduleBoard({
 	const timeRows = useMemo(() => {
 		const rows: number[] = [];
 		for (
-			let minutes = DAY_START_MINUTES;
-			minutes < DAY_END_MINUTES;
-			minutes += SLOT_STEP_MINUTES
+			let minutes = dayStartMinutes;
+			minutes < dayEndMinutes;
+			minutes += slotDurationMinutes
 		) {
 			rows.push(minutes);
 		}
 		return rows;
-	}, []);
+	}, [dayEndMinutes, dayStartMinutes, slotDurationMinutes]);
 
 	const intervals = useMemo((): ScheduleInterval[] => {
 		return sessions
 			.filter((session) => session.slot)
 			.map((session) => ({
 				submissionId: session.id,
+				roomId: session.slot!.roomId,
 				roomName: session.slot!.roomName,
 				startsAtMs: session.slot!.startsAtMs,
 				endsAtMs: session.slot!.endsAtMs,
@@ -137,7 +150,7 @@ export function ScheduleBoard({
 			}
 			for (const key of keys) if (![...groups.keys()].includes(formatDayLabel(key, timeZone))) groups.set(formatDayLabel(key, timeZone), []);
 		} else if (view === "track") {
-			for (const session of daySessions.filter((item) => roomFilter === "all" || item.slot?.roomName === roomFilter)) add(session.category, session);
+			for (const session of daySessions.filter((item) => roomFilter === "all" || item.slot?.roomName === roomFilter)) add(session.slot!.trackName, session);
 		} else if (view === "room") {
 			for (const session of daySessions.filter((item) => roomFilter === "all" || item.slot?.roomName === roomFilter)) add(session.slot!.roomName, session);
 		}
@@ -164,6 +177,7 @@ export function ScheduleBoard({
 		const endsAtMs = startsAtMs + session.durationMinutes * 60_000;
 		const candidate: ScheduleInterval = {
 			submissionId,
+			roomId: roomIds[roomName] ?? null,
 			roomName,
 			startsAtMs,
 			endsAtMs,
@@ -189,6 +203,7 @@ export function ScheduleBoard({
 						startsAt: startsAtMs,
 						endsAt: endsAtMs,
 						roomName,
+						...(session.slot && !reassignTrack ? {} : { trackId: trackId || null }),
 					}),
 				},
 			);
@@ -205,8 +220,10 @@ export function ScheduleBoard({
 				ok: boolean;
 				error?: string;
 				status?: string;
-				slot?: {
-					room_name: string;
+					slot?: {
+						room_id: string | null;
+						room_name: string;
+						track_id: string | null;
 					starts_at: number;
 					ends_at: number;
 				};
@@ -223,7 +240,10 @@ export function ScheduleBoard({
 								...row,
 								status: result.status ?? "scheduled",
 								slot: {
-									roomName: result.slot!.room_name,
+								roomId: result.slot!.room_id,
+								roomName: result.slot!.room_name,
+								trackId: result.slot!.track_id,
+								trackName: tracks.find((track) => track.id === result.slot!.track_id)?.name ?? "Unassigned",
 									startsAtMs: result.slot!.starts_at,
 									endsAtMs: result.slot!.ends_at,
 								},
@@ -315,6 +335,16 @@ export function ScheduleBoard({
 							</option>
 						))}
 					</select>
+				</label>
+				<label className="flex items-center gap-2 text-sm text-neutral-300">
+					Track for new placements
+					<select className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-neutral-100" value={trackId} onChange={(event) => setTrackId(event.target.value)}>
+						{tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+					</select>
+				</label>
+				<label className="flex items-center gap-2 text-sm text-neutral-300">
+					<input type="checkbox" checked={reassignTrack} onChange={(event) => setReassignTrack(event.target.checked)} />
+					Apply selected track when moving a session
 				</label>
 			</div>
 
@@ -437,17 +467,17 @@ export function ScheduleBoard({
 												occupant?.slot?.startsAtMs === cellStartMs;
 											return (
 												<td key={room} className="p-0 align-top">
-													{occupant && !isStart ? (
-														<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
-													) : occupant && isStart ? (
-									<div
-										draggable
-										role="button"
-										tabIndex={0}
-									aria-label={`Move ${occupant.title}; press Enter then choose a schedule cell`}
-									aria-pressed={selectedId === occupant.id}
-										onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
-															onDragStart={(event) => {
+												{occupant && !isStart ? (
+													<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
+												) : occupant && isStart ? (
+													<div
+														draggable
+														role="button"
+														tabIndex={0}
+														aria-label={`Move ${occupant.title}; press Enter then choose a schedule cell`}
+														aria-pressed={selectedId === occupant.id}
+														onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
+														onDragStart={(event) => {
 																event.dataTransfer.setData(
 																	"text/submission-id",
 																	occupant.id,
@@ -460,8 +490,8 @@ export function ScheduleBoard({
 																minHeight: `${Math.max(
 																	1,
 																	Math.ceil(
-																		occupant.durationMinutes /
-																			SLOT_STEP_MINUTES,
+																				occupant.durationMinutes /
+																					slotDurationMinutes,
 																	),
 																) * 2.5}rem`,
 															}}
@@ -479,7 +509,7 @@ export function ScheduleBoard({
 																)}
 															</p>
 														</div>
-															) : (
+													) : (
 														<button
 															type="button"
 															className="flex h-10 w-full items-stretch border border-transparent hover:border-neutral-600 hover:bg-neutral-800/40"
@@ -488,9 +518,9 @@ export function ScheduleBoard({
 																onDropCell(event, room, startMinutes)
 															}
 															onClick={() => onClickCell(room, startMinutes)}
-																					aria-label={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
-																				/>
-															)}
+														aria-label={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
+													/>
+													)}
 												</td>
 											);
 										})}
@@ -501,15 +531,15 @@ export function ScheduleBoard({
 					</table>
 				</div>
 				) : view === "list" ? (
-				<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
+					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 					{listSessions.length === 0 ? (
 						<li className="px-4 py-8 text-center text-sm text-neutral-400">
 							<p className="font-medium text-neutral-100">No sessions on this day</p>
 							<p className="mt-1">Drag a talk from the pool onto the day grid.</p>
 						</li>
 					) : (
-						listSessions.map((session) => (
-									<li key={session.id} className="px-4 py-3 text-sm">
+							listSessions.map((session) => (
+								<li key={session.id} className="px-4 py-3 text-sm">
 								<p className="font-medium text-neutral-100">{session.title}</p>
 								<p className="mt-1 text-neutral-400">
 									<span className="font-mono text-xs tabular-nums">
@@ -520,12 +550,12 @@ export function ScheduleBoard({
 									{session.speakerLabels.length
 										? ` · ${session.speakerLabels.join(", ")}`
 										: ""}
-										</p>
-										<div className="mt-2 flex flex-wrap gap-2">
-											<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
-											{session.status === "published" ? <button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button> : <button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => mutateAction(session.id, "publish")}>Publish</button>}
-										</div>
-							</li>
+								</p>
+								<div className="mt-2 flex flex-wrap gap-2">
+									<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
+									{session.status === "published" ? <button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button> : <button type="button" className="rounded-md border border-indigo-400/60 px-2 py-1 text-xs text-indigo-100" onClick={() => mutateAction(session.id, "publish")}>Publish</button>}
+								</div>
+								</li>
 							))
 						)}
 					</ul>

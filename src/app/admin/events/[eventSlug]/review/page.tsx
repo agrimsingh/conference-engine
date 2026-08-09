@@ -1,0 +1,36 @@
+import { AdminEventNav } from "@/components/admin-event-nav";
+import { PageHeader } from "@/components/page-header";
+import { assertCanManageEvent } from "@/lib/auth/admin";
+import { getDb } from "@/lib/db/cloudflare";
+import { getActiveEvaluationPlan, listAssignmentsForPlan, listEvaluationScoresForPlan, listReviewableSubmissions } from "@/lib/db/queries";
+import { listCriteria, listEvaluationPlans } from "@/lib/evaluation/plan";
+import { listPlanReviewers } from "@/lib/evaluation/reviewers";
+import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
+import { ReviewWorkspace } from "./review-workspace";
+
+type Props = { params: Promise<{ eventSlug: string }>; searchParams: Promise<{ plan?: string }> };
+
+export default async function AdminReviewPage({ params, searchParams }: Props) {
+	const { eventSlug } = await params;
+	const { plan: selectedPlanId } = await searchParams;
+	const db = await getDb();
+	const { event } = await assertCanManageEvent(db, eventSlug);
+	const plans = await listEvaluationPlans(db, event.id);
+	const active = await getActiveEvaluationPlan(db, event.id);
+	const plan = plans.find((item) => item.id === selectedPlanId) ?? active ?? plans[0] ?? null;
+	if (!plan) return <div className="min-h-dvh bg-neutral-950 text-neutral-200"><AdminEventNav eventSlug={event.slug} /><main className="mx-auto max-w-6xl px-4 py-10"><PageHeader eyebrow="Organizer · Review" title={event.name} description="Create a rubric before inviting reviewers or assigning proposals." /><ReviewWorkspace eventSlug={event.slug} plans={[]} plan={null} criteria={[]} reviewers={[]} submissions={[]} summary={{ total: 0, scored: 0, accepted: 0, rejected: 0 }} /></main></div>;
+	const [criteria, reviewers, submissions, assignments, scores, criterionScores] = await Promise.all([
+		listCriteria(db, plan.id), listPlanReviewers(db, plan.id), listReviewableSubmissions(db, event.id), listAssignmentsForPlan(db, plan.id), listEvaluationScoresForPlan(db, plan.id), listCriterionScoresForPlan(db, plan.id),
+	]);
+	const assignmentsBySubmission = new Map<string, string[]>();
+	for (const assignment of assignments) assignmentsBySubmission.set(assignment.submission_id, [...(assignmentsBySubmission.get(assignment.submission_id) ?? []), assignment.reviewer_id]);
+	const scoredBySubmission = new Set(scores.map((score) => score.submission_id));
+	const reviewCount = new Map<string, number>();
+	for (const score of scores) if (score.reviewer_id) reviewCount.set(score.reviewer_id, (reviewCount.get(score.reviewer_id) ?? 0) + 1);
+	const workload = new Map<string, { assigned: number; scored: number }>();
+	for (const reviewer of reviewers) workload.set(reviewer.id, { assigned: 0, scored: reviewCount.get(reviewer.id) ?? 0 });
+	for (const assignment of assignments) { const row = workload.get(assignment.reviewer_id); if (row) row.assigned += 1; }
+	return <div className="min-h-dvh bg-neutral-950 text-neutral-200"><AdminEventNav eventSlug={event.slug} /><main className="mx-auto max-w-6xl px-4 py-10"><PageHeader eyebrow="Organizer · Review" title={event.name} description="Build the rubric, issue named review links, balance workload, and decide proposals from one scoped workspace." /><ReviewWorkspace eventSlug={event.slug} plans={plans.map((item) => ({ id: item.id, name: item.name, status: item.status }))} plan={{ id: plan.id, name: plan.name, status: plan.status }} criteria={criteria.map((criterion) => ({ id: criterion.id, label: criterion.label, description: criterion.description, weight: criterion.weight, scaleMin: criterion.scale_min, scaleMax: criterion.scale_max }))} reviewers={reviewers.map((reviewer) => ({ id: reviewer.id, name: reviewer.name, revokedAt: reviewer.revoked_at, assigned: workload.get(reviewer.id)?.assigned ?? 0, scored: workload.get(reviewer.id)?.scored ?? 0 }))} submissions={submissions.map((submission) => ({ id: submission.id, title: titleFor(submission.answers_json), submitter: submission.submitter_name ?? submission.submitter_email ?? "Unknown submitter", status: submission.status, assignedReviewerIds: assignmentsBySubmission.get(submission.id) ?? [], scored: scoredBySubmission.has(submission.id), criterionScoreCount: criterionScores.filter((score) => score.submission_id === submission.id).length }))} summary={{ total: submissions.length, scored: scoredBySubmission.size, accepted: submissions.filter((submission) => submission.status === "accepted").length, rejected: submissions.filter((submission) => submission.status === "rejected").length }} /></main></div>;
+}
+
+function titleFor(answersJson: string): string { try { const parsed: unknown = JSON.parse(answersJson); return typeof parsed === "object" && parsed !== null && "title" in parsed && typeof (parsed as { title: unknown }).title === "string" ? (parsed as { title: string }).title : "(untitled)"; } catch { return "(untitled)"; } }

@@ -8,23 +8,31 @@ type Props = {
 	eventSlug: string;
 };
 
-const LINKS = [
+export const ADMIN_EVENT_LINKS = [
+	{ segment: "setup", label: "Setup" },
+	{ segment: "settings", label: "Settings" },
 	{ segment: "submissions", label: "Submissions" },
+	{ segment: "review", label: "Review" },
+	{ segment: "sessions", label: "Sessions" },
 	{ segment: "forms", label: "Forms" },
 	{ segment: "schedule", label: "Schedule" },
 	{ segment: "dashboard", label: "Dashboard" },
 	{ segment: "tasks", label: "Tasks" },
+	{ segment: "communications", label: "Comms" },
 	{ segment: "team", label: "Team" },
 ] as const;
 
+export function adminEventPath(eventSlug: string, segment: (typeof ADMIN_EVENT_LINKS)[number]["segment"]): string {
+	return `/admin/events/${eventSlug}/${segment}`;
+}
+
 export function AdminEventNav({ eventSlug }: Props) {
 	const pathname = usePathname();
-	const base = `/admin/events/${eventSlug}`;
 
 	return (
 		<AppNav ariaLabel="Event admin">
-			{LINKS.map((link) => {
-				const href = `${base}/${link.segment}`;
+			{ADMIN_EVENT_LINKS.map((link) => {
+				const href = adminEventPath(eventSlug, link.segment);
 				const active = pathname === href || pathname.startsWith(`${href}/`);
 				return (
 					<Link
@@ -54,12 +62,6 @@ export function AdminEventNav({ eventSlug }: Props) {
 				className="rounded-md px-2.5 py-1 text-xs font-medium text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
 			>
 				Public schedule
-			</Link>
-			<Link
-				href={`/review?event=${eventSlug}`}
-				className="rounded-md px-2.5 py-1 text-xs font-medium text-neutral-500 hover:bg-neutral-900 hover:text-neutral-100"
-			>
-				Review board
 			</Link>
 		</AppNav>
 	);

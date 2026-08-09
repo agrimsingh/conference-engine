@@ -60,7 +60,7 @@ Reviewers receive tokenised links and see only their assigned submissions. Evalu
 
 After acceptance, the portal lets speakers update a bio, complete required tasks, and upload headshots, slides, and supporting files. Co-speakers receive a separate confirmation link. Organisers can schedule sessions using rooms and tracks; a per-event Durable Object serialises schedule changes and rejects room or speaker conflicts before a conflicting agenda slot is written. Scheduling can generate an `.ics` invitation, and a daily Worker cron groups incomplete task reminders by person and event.
 
-The latest lifecycle work is present in the current code paths: category routing for CFPs, durable rubric scores and reviewer revocation, event-level message templates and delivery history, and a session workbench for manual or invited sessions, CSV preview/import, clone lineage, media URLs, and bulk publish/unpublish. Migrations `0017` through `0020` must be applied before deploying code that depends on those paths.
+The latest lifecycle work is present in the current code paths: category routing for CFPs, durable rubric scores and reviewer revocation, event-level message templates and delivery history, and a session workbench for manual or invited sessions, CSV preview/import, clone lineage, media URLs, and bulk publish/unpublish. Migrations `0017` through `0021` must be applied before deploying code that depends on those paths.
 
 ## Runtime and data boundaries
 
@@ -134,7 +134,7 @@ Deploy in this order because a Worker can start using a new column before D1 has
 
 1. **Back up D1 and R2.** Export the remote D1 database and take an R2 object backup before changing production state. This preserves a recoverable record before an additive migration or data repair.
 2. **Inspect legacy ownership.** Run `scripts/preflight-legacy-ownership.sql` against remote D1 and resolve any duplicate or ownerless records it reports before the migration changes ownership storage.
-3. **Apply the migrations.** Run `npx wrangler d1 migrations apply conference-engine --remote`, including `0017` through `0020` when the deployed code needs their lifecycle paths.
+3. **Apply the migrations.** Run `npx wrangler d1 migrations apply conference-engine --remote`, including `0017` through `0021` when the deployed code needs their lifecycle paths.
 4. **Run the post-0012 fail-closed preflight.** Execute `scripts/preflight-production.sql` after migration. It intentionally aborts when an event would have no authorised owner, so a failed check is a data-repair task rather than a deploy override.
 5. **Build and dry-run.** `npx opennextjs-cloudflare build` generates the artefact; `npx wrangler deploy --dry-run` checks the configured Worker and bindings without uploading it.
 6. **Deploy the guarded Worker.** Run `npm run deploy`, which rebuilds and deploys through OpenNext with production bypass disabled and the migration-backed ownership and demo-write guards in place.
