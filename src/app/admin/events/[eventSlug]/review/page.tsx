@@ -40,13 +40,25 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 			</div>
 		);
 	}
-	const [criteria, reviewers, submissions, assignments, scores, criterionScores] = await Promise.all([
+	const [criteria, reviewers, submissions, assignments, scores, criterionScores, speakerRows] = await Promise.all([
 		listCriteria(db, plan.id),
 		listPlanReviewers(db, plan.id),
 		listReviewableSubmissions(db, event.id),
 		listAssignmentsForPlan(db, plan.id),
 		listEvaluationScoresForPlan(db, plan.id),
 		listCriterionScoresForPlan(db, plan.id),
+		db.prepare(`SELECT ss.submission_id, ss.name, ss.email, ss.status, ss.position
+			FROM submission_speakers ss
+			INNER JOIN submissions s ON s.id = ss.submission_id
+			WHERE s.event_id = ?
+				AND s.status IN ('submitted', 'under_review', 'accepted', 'rejected')
+			ORDER BY ss.submission_id, ss.position, ss.name`).bind(event.id).all<{
+				submission_id: string;
+				name: string;
+				email: string;
+				status: string;
+				position: number;
+			}>(),
 	]);
 	const criteriaByPlan = new Map(await Promise.all(plans.map(async (item) => [item.id, await listCriteria(db, item.id)] as const)));
 	const assignmentsBySubmission = new Map<string, string[]>();
@@ -64,6 +76,13 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 		if (assignment.recused_at != null) continue;
 		const row = workload.get(assignment.reviewer_id);
 		if (row) row.assigned += 1;
+	}
+	const speakersBySubmission = new Map<string, Array<{ name: string; email: string; status: string }>>();
+	for (const speaker of speakerRows.results) {
+		speakersBySubmission.set(speaker.submission_id, [
+			...(speakersBySubmission.get(speaker.submission_id) ?? []),
+			{ name: speaker.name, email: speaker.email, status: speaker.status },
+		]);
 	}
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -98,6 +117,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 						id: submission.id,
 						title: titleFor(submission.answers_json),
 						submitter: submission.submitter_name ?? submission.submitter_email ?? "Unknown submitter",
+						speakers: speakersBySubmission.get(submission.id) ?? [],
 						status: submission.status,
 						assignedReviewerIds: assignmentsBySubmission.get(submission.id) ?? [],
 						scored: scoredBySubmission.has(submission.id),
@@ -108,12 +128,15 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 						reviewerId: score.reviewer_id,
 						scoredBy: score.scored_by,
 						score: score.score,
+						comment: score.comment,
 					}))}
 					criterionScores={criterionScores.map((score) => ({
 						submissionId: score.submission_id,
 						reviewerId: score.reviewer_id,
 						criterionId: score.criterion_id,
 						score: score.score,
+						valueText: score.value_text,
+						comment: score.comment,
 					}))}
 					summary={{
 						total: submissions.length,

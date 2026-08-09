@@ -1,4 +1,9 @@
-export type ScoreMatrixCriterion = { id: string; label: string; weight: number };
+export type ScoreMatrixCriterion = {
+	id: string;
+	label: string;
+	weight: number;
+	type: "numeric" | "dropdown" | "text";
+};
 export type ScoreMatrixReviewer = { id: string; name: string };
 export type ScoreMatrixSubmission = { id: string; title: string };
 export type ScoreMatrixAggregate = {
@@ -6,17 +11,26 @@ export type ScoreMatrixAggregate = {
 	reviewerId: string | null;
 	scoredBy: string;
 	score: number;
+	comment: string | null;
 };
 export type ScoreMatrixCriterionScore = {
 	submissionId: string;
 	reviewerId: string | null;
 	criterionId: string;
 	score: number;
+	valueText: string | null;
+	comment: string | null;
+};
+
+export type ScoreMatrixCriterionResult = {
+	value: number | string | null;
+	comment: string | null;
 };
 
 export type ScoreMatrixCell = {
 	aggregate: number | null;
-	byCriterion: Record<string, number | null>;
+	comment: string | null;
+	byCriterion: Record<string, ScoreMatrixCriterionResult>;
 };
 
 export type ScoreMatrix = {
@@ -42,19 +56,29 @@ export function buildScoreComparisonMatrix(args: {
 		for (const reviewer of args.reviewers) {
 			cells[submission.id]![reviewer.id] = {
 				aggregate: null,
-				byCriterion: Object.fromEntries(args.criteria.map((criterion) => [criterion.id, null])),
+				comment: null,
+				byCriterion: Object.fromEntries(args.criteria.map((criterion) => [criterion.id, { value: null, comment: null }])),
 			};
 		}
 	}
 	for (const aggregate of args.aggregates) {
 		if (!aggregate.reviewerId) continue;
 		const cell = cells[aggregate.submissionId]?.[aggregate.reviewerId];
-		if (cell) cell.aggregate = aggregate.score;
+		if (cell) {
+			cell.aggregate = aggregate.score;
+			cell.comment = aggregate.comment;
+		}
 	}
 	for (const score of args.criterionScores) {
 		if (!score.reviewerId) continue;
 		const cell = cells[score.submissionId]?.[score.reviewerId];
-		if (cell) cell.byCriterion[score.criterionId] = score.score;
+		const criterion = args.criteria.find((item) => item.id === score.criterionId);
+		if (cell && criterion) {
+			cell.byCriterion[score.criterionId] = {
+				value: criterion.type === "numeric" ? score.score : score.valueText,
+				comment: score.comment,
+			};
+		}
 	}
 	for (const submission of args.submissions) {
 		const values = args.reviewers

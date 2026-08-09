@@ -17,9 +17,10 @@ import { parseBulkDecisionResult } from "./bulk-decision-result";
 type Plan = { id: string; name: string; status: string; openAt: number | null; closeAt: number | null; blindReview: boolean; assignmentCap: number | null; scorecardSummary?: string[] };
 type Criterion = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number; type: "numeric" | "dropdown" | "text"; options: string[] };
 type Reviewer = { id: string; name: string; email: string | null; revokedAt: number | null; assigned: number; scored: number };
-type Submission = { id: string; title: string; submitter: string; status: string; assignedReviewerIds: string[]; scored: boolean; criterionScoreCount: number };
-type AggregateScore = { submissionId: string; reviewerId: string | null; scoredBy: string; score: number };
-type CriterionScore = { submissionId: string; reviewerId: string | null; criterionId: string; score: number };
+type SubmissionSpeaker = { name: string; email: string; status: string };
+type Submission = { id: string; title: string; submitter: string; speakers: SubmissionSpeaker[]; status: string; assignedReviewerIds: string[]; scored: boolean; criterionScoreCount: number };
+type AggregateScore = { submissionId: string; reviewerId: string | null; scoredBy: string; score: number; comment: string | null };
+type CriterionScore = { submissionId: string; reviewerId: string | null; criterionId: string; score: number; valueText: string | null; comment: string | null };
 type Props = {
 	eventSlug: string;
 	eventName: string;
@@ -77,7 +78,7 @@ export function ReviewWorkspace({
 	const [matrixSortDir, setMatrixSortDir] = useState<ScoreMatrixSortDirection>("desc");
 
 	const visible = useMemo(
-		() => submissions.filter((submission) => `${submission.title} ${submission.submitter}`.toLowerCase().includes(query.trim().toLowerCase()) && (status === "all" || submission.status === status)),
+		() => submissions.filter((submission) => `${submission.title} ${submission.submitter} ${submission.speakers.map((speaker) => `${speaker.name} ${speaker.email}`).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()) && (status === "all" || submission.status === status)),
 		[query, status, submissions],
 	);
 	const active = plan?.status === "active";
@@ -89,12 +90,12 @@ export function ReviewWorkspace({
 	const matrix = useMemo(
 		() => buildScoreComparisonMatrix({
 			submissions: submissions.map((submission) => ({ id: submission.id, title: submission.title })),
-			reviewers: liveReviewers.map((reviewer) => ({ id: reviewer.id, name: reviewer.name })),
-			criteria: criteria.filter((criterion) => criterion.type === "numeric").map((criterion) => ({ id: criterion.id, label: criterion.label, weight: criterion.weight })),
+			reviewers: reviewers.map((reviewer) => ({ id: reviewer.id, name: `${reviewer.name}${reviewer.revokedAt === null ? "" : " (revoked)"}` })),
+			criteria: criteria.map((criterion) => ({ id: criterion.id, label: criterion.label, weight: criterion.weight, type: criterion.type })),
 			aggregates,
 			criterionScores,
 		}),
-		[aggregates, criteria, criterionScores, liveReviewers, submissions],
+		[aggregates, criteria, criterionScores, reviewers, submissions],
 	);
 	const statusBySubmission = useMemo(
 		() => new Map(submissions.map((submission) => [submission.id, submission.status])),
@@ -482,7 +483,13 @@ export function ReviewWorkspace({
 									<input type="checkbox" checked={selected.has(submission.id)} onChange={() => toggle(setSelected, submission.id)} aria-label={`Select ${submission.title}`} />
 									<div className="min-w-0 flex-1">
 										<p className="truncate font-medium text-neutral-200">{submission.title}</p>
-										<p className="truncate text-xs text-neutral-500">{submission.submitter} · {submission.assignedReviewerIds.length} assigned · {submission.criterionScoreCount} criterion scores</p>
+										<p className="truncate text-xs text-neutral-500">Submitted by {submission.submitter} · {submission.assignedReviewerIds.length} assigned · {submission.criterionScoreCount} criterion scores</p>
+										<p className="mt-1 text-xs text-neutral-400">
+											<span className="font-medium text-neutral-300">Presenters:</span>{" "}
+											{submission.speakers.length > 0
+												? submission.speakers.map((speaker) => `${speaker.name} <${speaker.email}> (${speaker.status})`).join(" · ")
+												: "No presenters attached"}
+										</p>
 									</div>
 									<StatusPill tone={submissionStatusTone(submission.status)}>{submission.status.replaceAll("_", " ")}</StatusPill>
 								</li>
@@ -494,7 +501,7 @@ export function ReviewWorkspace({
 						<div className="flex flex-wrap items-start justify-between gap-3">
 							<div>
 								<h2 className="font-medium text-neutral-100">Score comparison</h2>
-								<p className="mt-1 text-xs text-neutral-500">Aggregate scores per named reviewer, with per-criterion breakdown on hover. Click Proposal, Status, or Avg to sort.</p>
+								<p className="mt-1 text-xs text-neutral-500">Aggregate scores, criterion values, and written feedback per named reviewer. Click Proposal, Status, or Avg to sort.</p>
 							</div>
 							<div className="flex flex-wrap gap-2">
 								<a
@@ -545,22 +552,37 @@ export function ReviewWorkspace({
 											<tr key={submission.id} className="border-b border-neutral-900/80">
 												<td className="max-w-[14rem] truncate px-2 py-2 text-neutral-200">{submission.title}</td>
 												<td className="px-2 py-2 text-neutral-400">{submission.status.replaceAll("_", " ")}</td>
-												{matrix.reviewers.map((reviewer) => {
-													const cell = matrix.cells[submission.id]?.[reviewer.id];
-													const title = cell
-														? matrix.criteria
-															.map((criterion) => `${criterion.label}: ${cell.byCriterion[criterion.id] ?? "—"}`)
-															.join(" · ")
-														: undefined;
-													return (
-														<td key={reviewer.id} className="px-2 py-2 tabular-nums text-neutral-300" title={title}>
-											{cell?.aggregate === null || cell?.aggregate === undefined ? "—" : String(cell.aggregate)}
-														</td>
-													);
-												})}
-												<td className="px-2 py-2 tabular-nums text-neutral-200">
-											{submission.average === null ? "—" : String(submission.average)}
-												</td>
+											{matrix.reviewers.map((reviewer) => {
+												const cell = matrix.cells[submission.id]?.[reviewer.id];
+												const feedback = cell
+													? matrix.criteria.flatMap((criterion) => {
+															const result = cell.byCriterion[criterion.id];
+															return result && (result.value !== null || result.comment)
+																? [{ criterion, result }]
+																: [];
+														})
+													: [];
+												return (
+													<td key={reviewer.id} className="min-w-52 px-2 py-2 align-top text-neutral-300">
+														<p className="font-medium tabular-nums text-neutral-100">{cell?.aggregate === null || cell?.aggregate === undefined ? "—" : String(cell.aggregate)}</p>
+														{cell?.comment ? <p className="mt-1 whitespace-pre-wrap text-[11px] leading-4 text-neutral-400"><span className="text-neutral-500">Overall:</span> {cell.comment}</p> : null}
+														{feedback.length > 0 ? (
+															<ul className="mt-1 space-y-1 text-[11px] leading-4 text-neutral-400">
+																{feedback.map(({ criterion, result }) => (
+																	<li key={criterion.id}>
+																		<span className="text-neutral-500">{criterion.label}:</span>{" "}
+																		{result.value ?? "—"}
+																		{result.comment ? <span className="block whitespace-pre-wrap text-neutral-500">Comment: {result.comment}</span> : null}
+																	</li>
+																))}
+															</ul>
+														) : null}
+													</td>
+												);
+											})}
+											<td className="px-2 py-2 tabular-nums text-neutral-200">
+												{submission.average === null ? "—" : String(submission.average)}
+											</td>
 											</tr>
 										))}
 									</tbody>
