@@ -1,17 +1,15 @@
 import Link from "next/link";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { Chip, EmptyState, StatusPill, submissionStatusTone } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getSubmissionFacetCounts,
-	listPeopleByIds,
 	listAssignmentsForPlanSubmissions,
 	listAdminSubmissionsPage,
 	listLabelsForSubmissions,
-	listReviewersForPlan,
 	listSpeakersForSubmissions,
 	listTasksForSubmissions,
 } from "@/lib/db/queries";
@@ -19,17 +17,10 @@ import {
 	AIE_CATEGORY_LABELS,
 	UNCATEGORIZED_CATEGORY,
 	displayCategory,
-	DECISION_REGISTRY,
 } from "@/lib/domain";
-import { defaultMessageTemplate, listEventMessageTemplates, renderStoredMessageTemplate } from "@/lib/email/templates";
-import { DecisionButtons } from "@/components/decision-buttons";
-import { SubmissionAnswersList } from "@/components/submission-answers-list";
-import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
 import { ActivatePlanButton } from "./activate-plan-button";
-import { AssignmentControls } from "./assignment-controls";
 import { ExportButtons } from "./export-buttons";
-import { SubmissionLabels } from "./submission-labels";
-import { SubmissionSpeakers, type SpeakerSummary } from "./submission-speakers";
+import { SubmissionRow } from "./submission-row";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -52,13 +43,10 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	const pageSize = 25;
 	const requestedPage = Math.max(1, Number(pageParam) || 1);
 	const activePlan = await getActiveEvaluationPlan(db, event.id);
-	const [pageResult, facets, reviewers, configuredTemplates] = await Promise.all([
+	const [pageResult, facets] = await Promise.all([
 		listAdminSubmissionsPage(db, event.id, { category: categoryFilter, label: labelFilter, status: statusFilter, query, sort, page: requestedPage, pageSize }),
 		getSubmissionFacetCounts(db, event.id),
-		activePlan ? listReviewersForPlan(db, activePlan.id) : Promise.resolve([]),
-		listEventMessageTemplates(db, event.id),
 	]);
-	const configuredTemplateByKey = new Map(configuredTemplates.map((template) => [template.template_key, template]));
 	const totalPages = Math.max(1, Math.ceil(pageResult.total / pageSize));
 	const page = Math.min(requestedPage, totalPages);
 	const pageRows = page === requestedPage
@@ -71,9 +59,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		listSpeakersForSubmissions(db, pageSubmissionIds),
 		activePlan ? listAssignmentsForPlanSubmissions(db, activePlan.id, pageSubmissionIds) : Promise.resolve([]),
 	]);
-	const people = await listPeopleByIds(db, pageTasks.map((task) => task.person_id));
 
-	const planReviewers = reviewers;
 	const assignedBySubmission = new Map<string, string[]>();
 	for (const row of planAssignments) {
 		const list = assignedBySubmission.get(row.submission_id) ?? [];
@@ -99,7 +85,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	];
 
 	const tasksBySubmission = new Map<string, typeof pageTasks>();
-	const speakersBySubmission = new Map<string, SpeakerSummary[]>();
+	const speakersBySubmission = new Map<string, Array<{ id: string; name: string }>>();
 	for (const task of pageTasks) {
 		const list = tasksBySubmission.get(task.submission_id) ?? [];
 		list.push(task);
@@ -112,17 +98,12 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 			speakers.map((speaker) => ({
 				id: speaker.id,
 				name: speaker.name,
-				email: speaker.email,
-				position: speaker.position,
-				status: speaker.status,
-				addedAfterAcceptance: speaker.added_after_acceptance === 1,
 			})),
 		);
 	}
-	const personNames = new Map(people.map((person) => [person.id, person.name ?? person.email]));
 
 	const baseHref = `/admin/events/${event.slug}/submissions`;
-	const filterHref = (category: string, label: string, extras: Record<string, string> = {}) => {
+	const buildFilterParams = (category: string, label: string, extras: Record<string, string> = {}) => {
 		const params = new URLSearchParams();
 		if (category !== "all") params.set("category", category);
 		if (label !== "all") params.set("label", label);
@@ -130,8 +111,16 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		if (query) params.set("q", query);
 		if (sort !== "newest") params.set("sort", sort);
 		for (const [key, value] of Object.entries(extras)) params.set(key, value);
-		const queryString = params.toString();
+		return params;
+	};
+	const filterHref = (category: string, label: string, extras: Record<string, string> = {}) => {
+		const queryString = buildFilterParams(category, label, extras).toString();
 		return queryString ? `${baseHref}?${queryString}` : baseHref;
+	};
+	const submissionDetailHref = (submissionId: string) => {
+		const queryString = buildFilterParams(categoryFilter, labelFilter, { page: String(page) }).toString();
+		const base = `/admin/events/${event.slug}/submissions/${submissionId}`;
+		return queryString ? `${base}?${queryString}` : base;
 	};
 
 	return (
@@ -225,114 +214,26 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					<>
 					<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
 						{pageRows.map((row) => {
-							const answers = parseAnswers(row.answers_json);
 							const tasks = tasksBySubmission.get(row.id) ?? [];
 							const requiredTasks = tasks.filter((task) => task.template_required !== 0);
 							const completed = requiredTasks.filter(
 								(t) => t.status === "completed",
 							).length;
-							const category = displayCategory(row.category);
-							const title =
-								typeof answers.title === "string" ? answers.title : "(untitled)";
-							const decisionContext = {
-								eventName: event.name,
-								submitterName: row.submitter_name ?? "there",
-								title,
-							};
-							const previews = Object.fromEntries(
-								Object.entries(DECISION_REGISTRY).map(([action, meta]) => {
-									const saved = configuredTemplateByKey.get(meta.templateKey);
-									return [action, renderStoredMessageTemplate(
-										saved ? { subject: saved.subject_template, text: saved.text_template } : defaultMessageTemplate(meta.templateKey),
-										{ ...decisionContext, portalHint: meta.templateKey === "acceptance" ? "Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs." : undefined },
-									)];
-								}),
-							) as ReturnType<typeof import("@/lib/domain").renderDecisionPreviews>;
-							const answerDisplays = buildSubmissionAnswerDisplays(answers, {
-								submissionId: row.id,
-								downloadHref: (fieldKey) =>
-									`/api/admin/events/${event.slug}/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset`,
-							});
+							const taskSummary =
+								requiredTasks.length > 0
+									? { completed, required: requiredTasks.length }
+									: null;
 							return (
-								<li key={row.id} className="px-4 py-3 text-sm">
-									<div className="flex flex-wrap items-start justify-between gap-3">
-										<div>
-											<p className="font-medium text-neutral-100">{title}</p>
-											<p className="mt-1 text-neutral-400">
-												{row.submitter_name} · {row.submitter_email}
-												{typeof answers.format === "string"
-													? ` · ${answers.format}`
-													: ""}
-											</p>
-										</div>
-										<div className="flex flex-wrap justify-end gap-1.5">
-											<Chip>{category}</Chip>
-											<StatusPill tone={submissionStatusTone(row.status)}>
-												{row.status.replaceAll("_", " ")}
-											</StatusPill>
-										</div>
-									</div>
-									<div className="mt-2">
-										<SubmissionSpeakers
-											eventSlug={event.slug}
-											submissionId={row.id}
-											speakers={speakersBySubmission.get(row.id) ?? []}
-										/>
-									</div>
-									<div className="mt-2">
-										<SubmissionLabels
-											eventSlug={event.slug}
-											submissionId={row.id}
-											labels={labelsBySubmission.get(row.id) ?? []}
-										/>
-									</div>
-									{activePlan ? (
-										<div className="mt-2">
-											<AssignmentControls
-												key={`${row.id}:${(assignedBySubmission.get(row.id) ?? []).join(",")}`}
-												eventSlug={event.slug}
-												submissionId={row.id}
-												reviewers={planReviewers.map((reviewer) => ({
-													id: reviewer.id,
-													name: reviewer.name,
-												}))}
-												assignedReviewerIds={
-													assignedBySubmission.get(row.id) ?? []
-												}
-											/>
-										</div>
-									) : null}
-									{answerDisplays.length > 0 ? (
-										<details className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs">
-											<summary className="cursor-pointer font-medium text-neutral-300">Proposal answers</summary>
-											<SubmissionAnswersList answers={answerDisplays} />
-										</details>
-									) : null}
-									<div className="mt-3">
-										<DecisionButtons
-											eventSlug={event.slug}
-											submissionId={row.id}
-											status={row.status}
-											previews={previews}
-										/>
-									</div>
-									{tasks.length > 0 ? (
-										<div className="mt-3 rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-400">
-											<p className="font-medium text-neutral-300">
-												Speaker tasks {completed}/{requiredTasks.length} required complete
-											</p>
-											<ul className="mt-1 space-y-0.5">
-												{tasks.map((task) => (
-													<li key={task.id}>
-														{personNames.get(task.person_id) ??
-															task.person_id}{" "}
-														· {task.template_label || task.template_key} · {task.status}{task.template_required === 0 ? " (optional)" : ""}
-													</li>
-												))}
-											</ul>
-										</div>
-									) : null}
-								</li>
+								<SubmissionRow
+									key={row.id}
+									eventSlug={event.slug}
+									row={row}
+									href={submissionDetailHref(row.id)}
+									labels={labelsBySubmission.get(row.id) ?? []}
+									speakers={speakersBySubmission.get(row.id) ?? []}
+									taskSummary={taskSummary}
+									assignedReviewerCount={(assignedBySubmission.get(row.id) ?? []).length}
+								/>
 							);
 						})}
 					</ul>
@@ -365,16 +266,4 @@ function CategoryChip({
 			{label}
 		</Link>
 	);
-}
-
-function parseAnswers(raw: string): Record<string, unknown> {
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-			return parsed as Record<string, unknown>;
-		}
-	} catch {
-		// ignore
-	}
-	return {};
 }
