@@ -4,6 +4,7 @@ import { displayCategory } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { ensureTaskTemplates, materializeAcceptedSpeaker, prepareMaterializationWriteFence, MaterializationClaimLostError, MATERIALIZATION_WRITE_FENCE_PREDICATE, type MaterializationWriteFence, type MaterializedSpeakerResources } from "@/lib/speakers/materialize";
 import { hasFormulaPrefix, parseBoundedCsv, type CsvRecord } from "./csv";
+import { canonicalizeCsvRecord, csvHasTitleColumn } from "./import-columns";
 
 export const MAX_SESSION_TEXT = 8_000;
 export const MAX_SESSION_TITLE = 240;
@@ -104,13 +105,18 @@ export function normalizeSessionInput(raw: SessionInput): { ok: true; value: Nor
 }
 
 export function inputFromCsvRow(row: CsvRecord): SessionInput {
-	const value = (...keys: string[]) => keys.map((key) => row[key]).find((item) => item !== undefined) ?? "";
-	const speakerName = value("speaker_name", "speaker", "name");
-	const speakerEmail = value("speaker_email", "email");
+	const c = canonicalizeCsvRecord(row);
+	const composedName = [c.first_name, c.last_name].map((part) => part.trim()).filter(Boolean).join(" ");
+	const speakerName = c.speaker_name.trim() || composedName;
+	const speakerEmail = c.speaker_email;
 	return {
-		title: value("title"), abstract: value("abstract", "description"), category: value("track", "category"),
-		videoUrl: value("video_url", "video"), googleDocUrl: value("google_doc_url", "google_doc", "doc_url"), supportingUrl: value("supporting_url", "supporting", "resources_url"),
-		speakers: speakerName || speakerEmail ? [{ name: speakerName, email: speakerEmail, bio: value("speaker_bio", "bio") }] : [],
+		title: c.title,
+		abstract: c.abstract,
+		category: c.track,
+		videoUrl: c.video_url,
+		googleDocUrl: c.google_doc_url,
+		supportingUrl: c.supporting_url,
+		speakers: speakerName || speakerEmail ? [{ name: speakerName, email: speakerEmail, bio: c.speaker_bio }] : [],
 	};
 }
 
@@ -133,7 +139,7 @@ async function findExistingDuplicate(db: D1Database, eventId: string, input: Nor
 export async function previewSessionImport(db: D1Database, eventId: string, csv: string): Promise<{ ok: true; rows: SessionPreviewRow[] } | { ok: false; error: string }> {
 	const parsed = parseBoundedCsv(csv);
 	if (!parsed.ok) return parsed;
-	if (!parsed.headers.includes("title")) return { ok: false, error: "CSV requires a title column" };
+	if (!csvHasTitleColumn(parsed.headers)) return { ok: false, error: "CSV requires a title column (or Sessionboard alias such as Session Title)" };
 	const seen = new Set<string>();
 	const rows: SessionPreviewRow[] = [];
 	for (const [index, record] of parsed.rows.entries()) {
