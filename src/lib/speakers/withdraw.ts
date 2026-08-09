@@ -4,7 +4,8 @@ import {
 	transitionSubmission,
 	type SubmissionStatus,
 } from "@/lib/domain";
-import { getSubmissionById } from "@/lib/db/queries";
+import { getAgendaSlotBySubmission, getSubmissionById } from "@/lib/db/queries";
+import { unplaceScheduledSubmission } from "@/lib/schedule/unplace";
 
 export type WithdrawResult =
 	| { ok: true; submissionId: string; status: "withdrawn" }
@@ -12,7 +13,8 @@ export type WithdrawResult =
 
 /**
  * Speaker-initiated withdraw. Person must own the proposal as submitter or
- * linked speaker. Status moves to `withdrawn` when the transition is legal.
+ * linked speaker. Placed sessions unplace via EventRoom first (CANCEL invite),
+ * then status moves to `withdrawn`.
  */
 export async function withdrawSubmission(
 	db: D1Database,
@@ -46,14 +48,33 @@ export async function withdrawSubmission(
 		return { ok: true, submissionId: submission.id, status: "withdrawn" };
 	}
 
+	let currentStatus: SubmissionStatus = submission.status;
+	if (currentStatus === "scheduled" || currentStatus === "published") {
+		const slot = await getAgendaSlotBySubmission(db, args.submissionId);
+		if (slot) {
+			const unplaced = await unplaceScheduledSubmission(db, {
+				eventId: submission.event_id,
+				submissionId: args.submissionId,
+			});
+			if (!unplaced.ok) {
+				return unplaced;
+			}
+			const refreshed = await getSubmissionById(db, args.submissionId);
+			if (!refreshed || !isSubmissionStatus(refreshed.status)) {
+				return { ok: false, error: "Submission missing after unplace", status: 500 };
+			}
+			currentStatus = refreshed.status;
+		}
+	}
+
 	let next: SubmissionStatus;
 	try {
-		next = transitionSubmission(submission.status, "withdrawn");
+		next = transitionSubmission(currentStatus, "withdrawn");
 	} catch (error) {
 		if (error instanceof IllegalSubmissionTransitionError) {
 			return {
 				ok: false,
-				error: `Cannot withdraw from ${submission.status}`,
+				error: `Cannot withdraw from ${currentStatus}`,
 				status: 409,
 			};
 		}
