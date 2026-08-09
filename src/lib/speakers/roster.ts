@@ -18,9 +18,9 @@ export type { EventSpeakerProfileRow };
  * Exclude declined|removed speaker rows and draft|rejected|withdrawn submissions
  * unless the person still has a durable event_speaker_profiles row.
  *
- * Organizer fields (job_title, company, social_json, workflow_status) live on
- * event_speaker_profiles so this branch does not ALTER people or speaker_profiles
- * (fields agent owns portal columns on speaker_profiles via 0025).
+ * Contact fields (job_title, company, social_json, display_name) are read from
+ * speaker_profiles (portal SoT). event_speaker_profiles owns workflow_status;
+ * its job/company/social columns are legacy fallbacks only (COALESCE).
  */
 
 export const SPEAKER_WORKFLOW_STATUSES = ["invited", "confirmed", "declined", "withdrawn"] as const;
@@ -195,13 +195,13 @@ export async function listEventSpeakerRoster(
 				`SELECT
 					p.id AS person_id,
 					p.email AS email,
-					p.name AS name,
+					COALESCE(NULLIF(TRIM(sp.display_name), ''), p.name) AS name,
 					ss.status AS speaker_status,
 					s.status AS submission_status,
 					s.id AS submission_id,
-					esp.job_title AS job_title,
-					esp.company AS company,
-					esp.social_json AS social_json,
+					COALESCE(sp.job_title, esp.job_title) AS job_title,
+					COALESCE(sp.company, esp.company) AS company,
+					COALESCE(sp.social_json, esp.social_json) AS social_json,
 					esp.workflow_status AS workflow_status,
 					esp.id AS profile_id
 				 FROM submission_speakers ss
@@ -209,6 +209,8 @@ export async function listEventSpeakerRoster(
 				 JOIN people p ON p.id = ss.person_id
 				 LEFT JOIN event_speaker_profiles esp
 				   ON esp.event_id = s.event_id AND esp.person_id = p.id
+				 LEFT JOIN speaker_profiles sp
+				   ON sp.event_id = s.event_id AND sp.person_id = p.id
 				 WHERE s.event_id = ?
 				   AND ss.person_id IS NOT NULL
 				   AND ss.status IN ('confirmed', 'pending')
@@ -224,14 +226,16 @@ export async function listEventSpeakerRoster(
 				`SELECT
 					p.id AS person_id,
 					p.email AS email,
-					p.name AS name,
-					esp.job_title AS job_title,
-					esp.company AS company,
-					esp.social_json AS social_json,
+					COALESCE(NULLIF(TRIM(sp.display_name), ''), p.name) AS name,
+					COALESCE(sp.job_title, esp.job_title) AS job_title,
+					COALESCE(sp.company, esp.company) AS company,
+					COALESCE(sp.social_json, esp.social_json) AS social_json,
 					esp.workflow_status AS workflow_status,
 					esp.id AS profile_id
 				 FROM event_speaker_profiles esp
 				 JOIN people p ON p.id = esp.person_id
+				 LEFT JOIN speaker_profiles sp
+				   ON sp.event_id = esp.event_id AND sp.person_id = esp.person_id
 				 WHERE esp.event_id = ?`,
 			)
 			.bind(eventId)
@@ -441,6 +445,32 @@ export async function upsertEventSpeakerProfile(
 		personId = person.id;
 	}
 
+	await db
+		.prepare(
+			`INSERT INTO speaker_profiles (
+				id, event_id, person_id, display_name, bio, job_title, company, social_json,
+				headshot_asset_id, created_at, updated_at
+			) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?)
+			ON CONFLICT(event_id, person_id) DO UPDATE SET
+				display_name = excluded.display_name,
+				job_title = excluded.job_title,
+				company = excluded.company,
+				social_json = excluded.social_json,
+				updated_at = excluded.updated_at`,
+		)
+		.bind(
+			crypto.randomUUID(),
+			args.eventId,
+			personId,
+			name,
+			jobTitle,
+			company,
+			socialJson,
+			now,
+			now,
+		)
+		.run();
+
 	const existing = await db
 		.prepare("SELECT id FROM event_speaker_profiles WHERE event_id = ? AND person_id = ?")
 		.bind(args.eventId, personId)
@@ -449,19 +479,19 @@ export async function upsertEventSpeakerProfile(
 		await db
 			.prepare(
 				`UPDATE event_speaker_profiles
-				 SET job_title = ?, company = ?, social_json = ?, workflow_status = ?, updated_at = ?
+				 SET job_title = NULL, company = NULL, social_json = NULL, workflow_status = ?, updated_at = ?
 				 WHERE id = ?`,
 			)
-			.bind(jobTitle, company, socialJson, workflowStatus, now, existing.id)
+			.bind(workflowStatus, now, existing.id)
 			.run();
 	} else {
 		await db
 			.prepare(
 				`INSERT INTO event_speaker_profiles (
 					id, event_id, person_id, job_title, company, social_json, workflow_status, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				) VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`,
 			)
-			.bind(crypto.randomUUID(), args.eventId, personId, jobTitle, company, socialJson, workflowStatus, now, now)
+			.bind(crypto.randomUUID(), args.eventId, personId, workflowStatus, now, now)
 			.run();
 	}
 
