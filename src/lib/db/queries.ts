@@ -285,7 +285,18 @@ export async function removeEventMembership(
 		)
 		.bind(args.eventId, args.accountId)
 		.run();
-	return (result.meta.changes ?? 0) > 0;
+	const removed = (result.meta.changes ?? 0) > 0;
+	if (!removed) return false;
+
+	await db
+		.prepare(
+			`UPDATE event_api_tokens
+			 SET revoked_at = ?
+			 WHERE event_id = ? AND created_by_account_id = ? AND revoked_at IS NULL`,
+		)
+		.bind(Date.now(), args.eventId, args.accountId)
+		.run();
+	return true;
 }
 
 export async function setEventMembershipRole(

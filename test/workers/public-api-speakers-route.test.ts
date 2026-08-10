@@ -1,17 +1,22 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db/cloudflare", () => ({
+	getAuthSecret: async () => env.AUTH_SECRET,
 	getDb: async () => env.DB,
 	getCloudflareEnv: async () => env,
 }));
 
 import { GET as getOpenApi } from "@/app/api/v1/openapi.json/route";
 import { GET as getSpeakers } from "@/app/api/v1/events/[eventSlug]/speakers/route";
+import { createToken } from "@/lib/auth/event-api-tokens";
 import { createEventWithDefaults } from "@/lib/events/create-event";
 import { createSession } from "@/lib/sessions/session";
 
 const now = 1_786_000_000_000;
+const testEnv = env as CloudflareEnv & {
+	PUBLIC_API_KEY_CROSS_EVENT?: string;
+};
 let sequence = 0;
 
 async function seedSpeakerEvent() {
@@ -60,6 +65,10 @@ async function seedSpeakerEvent() {
 }
 
 describe("v1 speaker API", () => {
+	beforeEach(() => {
+		delete testEnv.PUBLIC_API_KEY_CROSS_EVENT;
+	});
+
 	it("requires an API key before exposing speaker data", async () => {
 		env.PUBLIC_API_KEY = "speaker-api-test-key";
 		const response = await getSpeakers(
@@ -71,8 +80,48 @@ describe("v1 speaker API", () => {
 		expect(await response.json()).toEqual({ ok: false, error: "Unauthorized" });
 	});
 
-	it("returns a roster, task state, and resource metadata for a valid Bearer key", async () => {
+	it("rejects the deployment API key without explicit cross-event access", async () => {
 		env.PUBLIC_API_KEY = "speaker-api-test-key";
+		const created = await seedSpeakerEvent();
+		const response = await getSpeakers(
+			new Request(`https://conference.example.test/api/v1/events/${created.slug}/speakers`, {
+				headers: { authorization: "Bearer speaker-api-test-key" },
+			}),
+			{ params: Promise.resolve({ eventSlug: created.slug }) },
+		);
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({ ok: false, error: "Unauthorized" });
+	});
+
+	it("scopes event PAT access to its own event", async () => {
+		env.PUBLIC_API_KEY = "speaker-api-test-key";
+		const eventA = await seedSpeakerEvent();
+		const eventB = await seedSpeakerEvent();
+		const created = await createToken(env.DB, {
+			secret: env.AUTH_SECRET,
+			eventId: eventA.eventId,
+			name: "Event A reader",
+			createdByAccountId: null,
+			now,
+			token: `ce_pat_speakers-${sequence}`,
+		});
+		const request = (eventSlug: string) =>
+			getSpeakers(
+				new Request(
+					`https://conference.example.test/api/v1/events/${eventSlug}/speakers`,
+					{ headers: { authorization: `Bearer ${created.token}` } },
+				),
+				{ params: Promise.resolve({ eventSlug }) },
+			);
+
+		expect((await request(eventB.slug)).status).toBe(401);
+		expect((await request(eventA.slug)).status).toBe(200);
+	});
+
+	it("returns a roster, task state, and resource metadata when cross-event access is enabled", async () => {
+		env.PUBLIC_API_KEY = "speaker-api-test-key";
+		testEnv.PUBLIC_API_KEY_CROSS_EVENT = "true";
 		const created = await seedSpeakerEvent();
 		const response = await getSpeakers(
 			new Request(`https://conference.example.test/api/v1/events/${created.slug}/speakers`, {
@@ -116,6 +165,7 @@ describe("v1 speaker API", () => {
 
 	it("accepts x-api-key and returns a scoped 404 for an unknown event", async () => {
 		env.PUBLIC_API_KEY = "speaker-api-test-key";
+		testEnv.PUBLIC_API_KEY_CROSS_EVENT = "1";
 		const response = await getSpeakers(
 			new Request("https://conference.example.test/api/v1/events/no-event/speakers", {
 				headers: { "x-api-key": "speaker-api-test-key" },

@@ -107,7 +107,8 @@ Copy [`.dev.vars.example`](./.dev.vars.example). Keep secrets out of git.
 | `AUTH_SECRET` | Required. Strong random value (HMAC / login challenges). |
 | `APP_ORIGIN` | Exact public origin for email links (`http://127.0.0.1:8787` for preview; example file may say `localhost:3000` for `npm run dev`). |
 | `ADMIN_BYPASS_ENABLED` | `1` local only; `0` in production. |
-| `PUBLIC_API_KEY` | Protects `/api/v1` (name is historical — treat as a secret). |
+| `PUBLIC_API_KEY` | Optional deployment-wide `/api/v1` operator key. Requires `PUBLIC_API_KEY_CROSS_EVENT=1`. |
+| `PUBLIC_API_KEY_CROSS_EVENT` | Set to `1`, `true`, or `yes` to enable the deployment-wide operator key. Disabled by default. |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Optional until you send real mail. |
 | `AIRTABLE_*` | Optional: copy submissions into Airtable (manual push or nightly). Airtable edits are not pulled back. |
 | Accelevents | Per event under **Integrations**: sync speakers and sessions out, including speaker-on-session assignment (preview, push, optional daily). |
@@ -136,7 +137,7 @@ Two surfaces. Keep emails out of logs on both.
 
 ### Public read (`/api/v1`)
 
-Keyed, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`.
+Event-scoped, read-only operator API. Authenticate with a per-event `ce_pat_…` Bearer token. `PUBLIC_API_KEY` is an optional deployment-wide operator escape hatch only when `PUBLIC_API_KEY_CROSS_EVENT=1` (also accepts `true` or `yes`). Shared multi-tenant deployments have no cross-event key by default.
 
 | Docs | URL |
 | --- | --- |
@@ -155,7 +156,7 @@ Public, no-key routes under `/api/e/[eventSlug]/...` serve published schedule JS
 
 ```bash
 curl -sS http://127.0.0.1:8787/api/v1/events/demo-cfp-to-stage/speakers \
-  -H "Authorization: Bearer $PUBLIC_API_KEY"
+  -H "Authorization: Bearer $CE_PAT"
 ```
 
 ### Admin agent API (`/api/admin/...`)

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePublicApiKey } from "@/lib/auth/public-api";
+import { requireV1ReadAccess } from "@/lib/auth/public-api";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
@@ -26,10 +26,10 @@ function parseAnswers(raw: string): Record<string, unknown> {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-	const auth = await requirePublicApiKey(request);
+	const { eventSlug } = await context.params;
+	const auth = await requireV1ReadAccess(request, eventSlug);
 	if (!auth.ok) return auth.response;
 
-	const { eventSlug } = await context.params;
 	const db = await getDb();
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) {

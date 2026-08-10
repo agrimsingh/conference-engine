@@ -13,10 +13,18 @@ import {
 
 type Row = Record<string, unknown>;
 
-function createMemoryDb(seed: { events?: Row[]; accounts?: Row[] } = {}) {
+function createMemoryDb(
+	seed: { events?: Row[]; accounts?: Row[]; memberships?: Row[] } = {},
+) {
 	const tokens = new Map<string, Row>();
 	const events = new Map((seed.events ?? []).map((row) => [String(row.id), row]));
 	const accounts = new Map((seed.accounts ?? []).map((row) => [String(row.id), row]));
+	const memberships = new Map(
+		(seed.memberships ?? []).map((row) => [
+			`${String(row.event_id)}:${String(row.account_id)}`,
+			row,
+		]),
+	);
 	const bySlug = new Map(
 		[...events.values()].map((row) => [String(row.slug), row]),
 	);
@@ -36,6 +44,10 @@ function createMemoryDb(seed: { events?: Row[]; accounts?: Row[] } = {}) {
 					}
 					if (sql.includes("FROM accounts WHERE id")) {
 						return (accounts.get(String(statement.values[0])) as T) ?? null;
+					}
+					if (sql.includes("FROM event_memberships m")) {
+						const key = `${String(statement.values[0])}:${String(statement.values[1])}`;
+						return (memberships.get(key) as T) ?? null;
 					}
 					if (sql.includes("FROM event_api_tokens WHERE token_hash")) {
 						const hash = String(statement.values[0]);
@@ -129,11 +141,22 @@ describe("event api tokens", () => {
 		created_at: 1,
 		updated_at: 1,
 	};
+	const membership = {
+		id: "mem_1",
+		event_id: event.id,
+		account_id: account.id,
+		role: "admin",
+		created_at: 1,
+	};
 
 	let db: ReturnType<typeof createMemoryDb>;
 
 	beforeEach(() => {
-		db = createMemoryDb({ events: [event], accounts: [account] });
+		db = createMemoryDb({
+			events: [event],
+			accounts: [account],
+			memberships: [membership],
+		});
 	});
 
 	it("hashes with AUTH_SECRET HMAC like auth challenges", async () => {
@@ -220,19 +243,88 @@ describe("event api tokens", () => {
 		).resolves.toBeNull();
 	});
 
-	it("keeps synthetic admin membership when creator account is gone", async () => {
-		const created = await createToken(db, {
+	it("rejects an account-bound token when its membership is missing", async () => {
+		const membershiplessDb = createMemoryDb({
+			events: [event],
+			accounts: [account],
+		});
+		const created = await createToken(membershiplessDb, {
+			secret,
+			eventId: event.id,
+			name: "Removed organizer",
+			createdByAccountId: account.id,
+			now: 100,
+			token: `${EVENT_API_TOKEN_PREFIX}removed-organizer`,
+		});
+
+		await expect(
+			resolveTokenAccess(membershiplessDb, event.slug, created.token, {
+				secret,
+				now: 200,
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("returns the creator's real event membership", async () => {
+		const ownerDb = createMemoryDb({
+			events: [event],
+			accounts: [account],
+			memberships: [{ ...membership, role: "owner" }],
+		});
+		const created = await createToken(ownerDb, {
+			secret,
+			eventId: event.id,
+			name: "Owner",
+			createdByAccountId: account.id,
+			now: 100,
+			token: `${EVENT_API_TOKEN_PREFIX}owner`,
+		});
+
+		const access = await resolveTokenAccess(ownerDb, event.slug, created.token, {
+			secret,
+			now: 200,
+		});
+
+		expect(access?.membership).toEqual({ ...membership, role: "owner" });
+	});
+
+	it("rejects an account-bound token when its creator account is missing", async () => {
+		const missingAccountDb = createMemoryDb({
+			events: [event],
+			memberships: [membership],
+		});
+		const created = await createToken(missingAccountDb, {
 			secret,
 			eventId: event.id,
 			name: "Orphan",
-			createdByAccountId: "missing-account",
+			createdByAccountId: account.id,
 			now: 100,
 			token: `${EVENT_API_TOKEN_PREFIX}orphan`,
 		});
+
+		await expect(
+			resolveTokenAccess(missingAccountDb, event.slug, created.token, {
+				secret,
+				now: 200,
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("keeps synthetic admin access for null-creator service tokens", async () => {
+		const created = await createToken(db, {
+			secret,
+			eventId: event.id,
+			name: "Service",
+			createdByAccountId: null,
+			now: 100,
+			token: `${EVENT_API_TOKEN_PREFIX}service`,
+		});
+
 		const access = await resolveTokenAccess(db, event.slug, created.token, {
 			secret,
 			now: 200,
 		});
+
 		expect(access?.account).toBeNull();
 		expect(access?.membership?.role).toBe("admin");
 	});

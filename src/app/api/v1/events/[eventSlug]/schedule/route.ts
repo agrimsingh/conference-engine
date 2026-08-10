@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePublicApiKey } from "@/lib/auth/public-api";
+import { requireV1ReadAccess } from "@/lib/auth/public-api";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
@@ -29,10 +29,10 @@ function parseAnswers(raw: string): Record<string, unknown> {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-	const auth = await requirePublicApiKey(request);
+	const { eventSlug } = await context.params;
+	const auth = await requireV1ReadAccess(request, eventSlug);
 	if (!auth.ok) return auth.response;
 
-	const { eventSlug } = await context.params;
 	const db = await getDb();
 	const event = await getEventBySlug(db, eventSlug);
 	if (!event) {
@@ -45,8 +45,10 @@ export async function GET(request: Request, context: RouteContext) {
 		listAgendaTracks(db, event.id, { includeRetired: true }),
 	]);
 
-	const publicSlots = slots.filter((slot) =>
-		isPublicScheduleStatus(slot.submission_status),
+	const publicSlots = slots.filter(
+		(slot) =>
+			isPublicScheduleStatus(slot.submission_status) &&
+			slot.content_approved === 1,
 	);
 	const speakersBySubmission = await listSpeakersForSubmissions(
 		db,
@@ -55,7 +57,10 @@ export async function GET(request: Request, context: RouteContext) {
 
 	const items = [];
 	for (const slot of publicSlots) {
-		const answers = parseAnswers(slot.answers_json);
+		const answers = {
+			...parseAnswers(slot.answers_json),
+			...parseAnswers(slot.approved_answers_json ?? "{}"),
+		};
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];
 		const track = publicScheduleTrack(slot.track_id, tracks);
 		items.push({
