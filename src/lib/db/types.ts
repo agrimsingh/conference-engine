@@ -31,6 +31,8 @@ export type EventRow = {
 	airtable_sync_enabled?: number;
 	notify_on_submission_create?: number;
 	notify_on_submission_update?: number;
+	/** Reply-To for speaker/reviewer emails; null falls back to owner account email. */
+	contact_email?: string | null;
 	created_at: number;
 	updated_at: number;
 };

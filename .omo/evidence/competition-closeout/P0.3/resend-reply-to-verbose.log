@@ -1,0 +1,20 @@
+
+> conference-engine@0.1.0 test:unit
+> vitest run --config vitest.config.mts src/lib/email/resend-reply-to.test.ts --reporter=verbose
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/Untitled
+
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > confirmation sends Resend payload with reply_to 39ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > decision sends Resend payload with reply_to 2ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > reminders sends Resend payload with reply_to 1ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > portal_invite sends Resend payload with reply_to 1ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > announcements sends Resend payload with reply_to 1ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > calendar_invites sends Resend payload with reply_to 1ms
+ ✓ src/lib/email/resend-reply-to.test.ts > sendTemplatedEmail reply_to by template family > omits reply_to for organizer submission fan-out templates 1ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  02:35:16
+   Duration  431ms (transform 160ms, setup 0ms, import 186ms, tests 46ms, environment 0ms)
+

@@ -1,0 +1,14 @@
+
+> conference-engine@0.1.0 test:unit
+> vitest run --config vitest.config.mts src/lib/email/reply-to.test.ts src/lib/email/resend-reply-to.test.ts src/lib/events/configuration.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/Untitled
+
+
+ Test Files  3 passed (3)
+      Tests  21 passed (21)
+   Start at  02:35:08
+   Duration  288ms (transform 171ms, setup 0ms, import 240ms, tests 67ms, environment 0ms)
+
+UNIT_EXIT:0
