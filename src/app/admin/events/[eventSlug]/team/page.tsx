@@ -1,9 +1,4 @@
-import { AdminEventNav } from "@/components/admin-event-nav";
-import { PageHeader } from "@/components/page-header";
-import { assertCanManageEvent, isAdminBypass } from "@/lib/auth/admin";
-import { getDb } from "@/lib/db/cloudflare";
-import { listEventMembers } from "@/lib/db/queries";
-import { InviteTeamForm } from "./invite-team-form";
+import { redirect } from "next/navigation";
 
 type Props = {
 	params: Promise<{ eventSlug: string }>;
@@ -11,41 +6,5 @@ type Props = {
 
 export default async function AdminTeamPage({ params }: Props) {
 	const { eventSlug } = await params;
-	const db = await getDb();
-	const access = await assertCanManageEvent(db, eventSlug);
-	const [members, bypass] = await Promise.all([
-		listEventMembers(db, access.event.id),
-		isAdminBypass(),
-	]);
-	const canRemove = access.membership?.role === "owner" || bypass;
-	const canTransfer = access.membership?.role === "owner" || bypass;
-	const canInviteAsOwner = access.membership?.role === "owner" || bypass;
-
-	return (
-		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
-			<AdminEventNav eventSlug={access.event.slug} />
-			<main className="mx-auto max-w-2xl px-4 py-10">
-				<PageHeader
-					eyebrow="Organizer · Team"
-					title="Event organizers"
-					description="Invite teammates by email. They sign in with a magic link. Owners can transfer ownership; admins can leave."
-				/>
-				<InviteTeamForm
-					eventSlug={access.event.slug}
-					canRemove={canRemove}
-					canTransfer={canTransfer}
-					canInviteAsOwner={canInviteAsOwner}
-					currentAccountId={access.account?.id ?? null}
-					currentRole={access.membership?.role ?? null}
-					initialMembers={members.map((member) => ({
-						accountId: member.account_id,
-						email: member.email,
-						name: member.name,
-						role: member.role,
-						createdAt: member.created_at,
-					}))}
-				/>
-			</main>
-		</div>
-	);
+	redirect(`/admin/events/${eventSlug}/settings?section=team`);
 }

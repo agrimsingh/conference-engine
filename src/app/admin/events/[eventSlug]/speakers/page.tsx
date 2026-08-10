@@ -31,7 +31,7 @@ export default async function AdminSpeakersPage({ params, searchParams }: Props)
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={event.slug} />
-			<main className="mx-auto max-w-5xl px-4 py-10">
+			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader
 					eyebrow="Organizer · Speakers"
 					title={event.name}
@@ -41,10 +41,10 @@ export default async function AdminSpeakersPage({ params, searchParams }: Props)
 					eventSlug={event.slug}
 					initialSpeakers={speakers}
 					initialStatus={initialStatus}
-				initialQuery={query.q ?? ""}
-				eventName={event.name}
-				crmOwners={crmOwners}
-			/>
+					initialQuery={query.q ?? ""}
+					eventName={event.name}
+					crmOwners={crmOwners}
+				/>
 			</main>
 		</div>
 	);

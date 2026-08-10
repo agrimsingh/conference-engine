@@ -66,11 +66,20 @@ function workflowTone(status: SpeakerWorkflowStatus): "neutral" | "positive" | "
 	}
 }
 
+type SpeakerPanel = "roster" | "add" | "import";
+
+const SPEAKER_PANELS: Array<{ id: SpeakerPanel; label: string; description: string }> = [
+	{ id: "roster", label: "Roster", description: "Search, filter, email, and open CRM." },
+	{ id: "add", label: "Add / edit", description: "Create a roster entry or edit the selected speaker." },
+	{ id: "import", label: "Import CSV", description: "Bulk import speaker profiles." },
+];
+
 export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialStatus, initialQuery, crmOwners }: Props) {
 	const router = useRouter();
 	const [speakers, setSpeakers] = useState(initialSpeakers);
 	const [status, setStatus] = useState(initialStatus);
 	const [q, setQ] = useState(initialQuery);
+	const [panel, setPanel] = useState<SpeakerPanel>("roster");
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
 	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website,facebook\n");
 	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
@@ -152,6 +161,7 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 			else {
 				setNotice(draft.personId ? "Speaker updated." : "Speaker added.");
 				setDraft(emptyDraft());
+				setPanel("roster");
 				await refresh();
 			}
 		} catch {
@@ -236,8 +246,11 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 			workflowStatus: speaker.workflowStatus,
 			socials: { ...speaker.socials },
 		});
+		setPanel("add");
 		setNotice(null);
 	}
+
+	const activePanel = SPEAKER_PANELS.find((item) => item.id === panel) ?? SPEAKER_PANELS[0]!;
 
 	async function invite(personId: string) { setPending(true); setNotice(null); try { const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(personId)}/invite`, { method: "POST" }); const value = await response.json() as { ok?: boolean; error?: string }; setNotice(response.ok && value.ok ? "Portal invitation sent and logged in Communications." : value.error ?? "Invite failed"); } catch { setNotice("Network error"); } finally { setPending(false); } }
 
@@ -316,285 +329,595 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 	const crmSpeaker = crmSpeakerId ? speakers.find((speaker) => speaker.personId === crmSpeakerId) ?? null : null;
 
 	return (
-		<div className="space-y-8">
-			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<div className="flex flex-wrap items-end gap-3">
-					<label className="text-sm text-neutral-300">
-						Search
-						<input
-							value={q}
-							onChange={(event) => {
-								setQ(event.target.value);
-								syncUrl(status, event.target.value);
-							}}
-							placeholder="Name, email, company…"
-							className={`mt-1 w-64 ${INPUT_CLASSES}`}
-						/>
-					</label>
-					<label className="text-sm text-neutral-300">
-						Status
-						<select
-							value={status}
-							onChange={(event) => {
-								setStatus(event.target.value);
-								syncUrl(event.target.value, q);
-							}}
-							className={`mt-1 ${INPUT_CLASSES}`}
-						>
-							<option value="all">All</option>
-							{SPEAKER_WORKFLOW_STATUSES.map((value) => (
-								<option key={value} value={value}>{value}</option>
-							))}
-						</select>
-					</label>
-					<label className="text-sm text-neutral-300">
-						Email type
-						<select
-							value={emailTemplateKey}
-							onChange={(event) => setEmailTemplateKey(event.target.value as "task_reminder" | "speaker_announcement")}
-							className={`mt-1 ${INPUT_CLASSES}`}
-						>
-							<option value="task_reminder">Task reminder</option>
-							<option value="speaker_announcement">Announcement</option>
-						</select>
-					</label>
-					<button
-						type="button"
-						disabled={pending || selectedVisible.length === 0 || (emailTemplateKey === "speaker_announcement" && (!emailSubject.trim() || !emailBody.trim()))}
-						onClick={() => void bulkEmail()}
-						className={buttonClasses("secondary", "sm")}
+		<div className="mt-8 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+			<aside className="mb-6 lg:mb-0">
+				<label className="mb-2 block text-xs font-medium uppercase tracking-wide text-neutral-500 lg:hidden">
+					Speakers section
+					<select
+						value={panel}
+						onChange={(event) => setPanel(event.target.value as SpeakerPanel)}
+						className={`mt-1.5 w-full ${INPUT_CLASSES}`}
 					>
-						Email selected ({selectedVisible.length})
-					</button>
-					<Link
-						href={`/admin/events/${eventSlug}/tasks`}
-						className="text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-200"
-					>
-						Open speaker tasks
-					</Link>
-				</div>
-				{emailTemplateKey === "speaker_announcement" ? (
-					<div className="mt-4 grid gap-3">
-						<label className="text-sm text-neutral-300">
-							Subject
-							<input
-								value={emailSubject}
-								onChange={(event) => setEmailSubject(event.target.value)}
-								className={`mt-1 w-full ${INPUT_CLASSES}`}
-							/>
-						</label>
-						<label className="text-sm text-neutral-300">
-							Body
-							<textarea
-								value={emailBody}
-								onChange={(event) => setEmailBody(event.target.value)}
-								rows={5}
-								className={`mt-1 w-full ${INPUT_CLASSES}`}
-							/>
-						</label>
-						<p className="text-xs text-neutral-500">
-							Tokens: {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{portal_url}}"}.
-						</p>
-						{previewSpeaker && preview ? <div className="rounded border border-neutral-700 bg-neutral-950 p-3 text-xs"><p className="font-medium text-neutral-200">Preview for {previewSpeaker.name}</p><p className="mt-2 text-neutral-300">{preview.subject}</p><p className="mt-2 whitespace-pre-wrap text-neutral-400">{preview.text}</p></div> : null}
-					</div>
-				) : (
-					<p className="mt-3 text-xs text-neutral-500">
-						Sends the outstanding-task reminder template to filtered speakers (all required pending tasks).
-					</p>
-				)}
-			</section>
-
-			<section className="rounded-lg border border-neutral-800 bg-neutral-900">
-				{visible.length === 0 ? (
-					<p className="px-4 py-8 text-sm text-neutral-500">No speakers match this filter.</p>
-				) : (
-					<ul className="divide-y divide-neutral-800">
-						{visible.map((speaker) => (
-							<li key={speaker.personId} className="px-4 py-3 text-sm">
-								<label className="mb-2 inline-flex items-center text-xs text-neutral-400"><input type="checkbox" className="mr-2" checked={selectedRecipients.includes(speaker.personId)} onChange={(event) => setSelectedRecipients((current) => event.target.checked ? [...new Set([...current, speaker.personId])] : current.filter((id) => id !== speaker.personId))} />Email recipient</label>
-								<div className="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p className="font-medium text-neutral-100">
-											{[speaker.salutation, speaker.name, speaker.honorific].filter(Boolean).join(" ")}
-											{speaker.pronouns ? (
-												<span className="font-normal text-neutral-500"> ({speaker.pronouns})</span>
-											) : null}
-											<span className="font-normal text-neutral-500"> · {speaker.email}</span>
-										</p>
-										<p className="mt-1 text-neutral-400">
-											{[speaker.jobTitle, speaker.company].filter(Boolean).join(" · ") || "No title/company"}
-											{speaker.submissionStatuses.length
-												? ` · submissions: ${speaker.submissionStatuses.join(", ")}`
-												: " · roster-only"}
-										</p>
-										{speaker.tasks.length > 0 ? (
-											<p className="mt-1 text-xs text-neutral-500">
-												{speaker.pendingTaskCount} pending task{speaker.pendingTaskCount === 1 ? "" : "s"}
-												{speaker.earliestDueAt
-													? ` · next due ${formatTaskDueAt(speaker.earliestDueAt)}`
-													: ""}
-												{" · "}
-												<Link
-													href={`/admin/events/${eventSlug}/tasks`}
-													className="underline underline-offset-2 hover:text-neutral-300"
-												>
-													view tasks
-												</Link>
-												{" · "}
-												<Link
-													href="/portal"
-													className="underline underline-offset-2 hover:text-neutral-300"
-												>
-													portal
-												</Link>
-											</p>
-										) : null}
-										{speaker.crm.owner || speaker.crm.tags.length > 0 || speaker.crm.lastContactAt ? (
-											<p className="mt-1 text-xs text-neutral-500">
-												{speaker.crm.owner ? `owner: ${speaker.crm.owner.name}` : "owner: unassigned"}
-												{speaker.crm.tags.length > 0 ? ` · ${speaker.crm.tags.join(" · ")}` : ""}
-												{speaker.crm.lastContactAt ? ` · last contact ${new Date(speaker.crm.lastContactAt).toLocaleDateString()}` : ""}
-											</p>
-										) : null}
-										{Object.keys(speaker.socials).length > 0 ? (
-											<p className="mt-1 text-xs text-neutral-500">
-												{SOCIAL_KEYS.filter((key) => speaker.socials[key]).map((key) => (
-													<span key={key} className="mr-3">{key}: {speaker.socials[key]}</span>
-												))}
-											</p>
-										) : null}
-										{speaker.bio ? <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs text-neutral-400">{speaker.bio}</p> : null}
-										{speaker.logisticsText ? <p className="mt-2 text-xs text-neutral-500">Travel / logistics: {speaker.logisticsText}</p> : null}
-										{speaker.headshot ? <div className="mt-2 flex items-center gap-3"><Image unoptimized width={56} height={56} src={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`} alt={`${speaker.name} headshot`} className="h-14 w-14 rounded-lg object-cover" /><a className="text-xs underline" href={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`}>{speaker.headshot.filename ?? "View headshot"} · uploaded {new Date(speaker.headshot.uploadedAt).toLocaleString()}</a></div> : null}
-									</div>
-									<div className="flex items-center gap-2">
-										<StatusPill tone={workflowTone(speaker.workflowStatus)}>
-											{speaker.workflowStatus}
-										</StatusPill>
-											<button
-											type="button"
-											disabled={pending}
-											onClick={() => edit(speaker)}
-											className={buttonClasses("secondary", "sm")}
-											>
-												Edit
-											</button>
-											<button type="button" disabled={pending} onClick={() => void openCrm(speaker)} className={buttonClasses("secondary", "sm")}>CRM</button>
-											<button type="button" disabled={pending} onClick={() => void invite(speaker.personId)} className={buttonClasses("secondary", "sm")}>Send portal invite</button>
-									</div>
-								</div>
-							</li>
+						{SPEAKER_PANELS.map((item) => (
+							<option key={item.id} value={item.id}>
+								{item.label}
+							</option>
 						))}
+					</select>
+				</label>
+				<nav aria-label="Speaker sections" className="hidden lg:sticky lg:top-20 lg:block">
+					<ul className="space-y-1 border-l border-neutral-800">
+						{SPEAKER_PANELS.map((item) => {
+							const selected = item.id === panel;
+							return (
+								<li key={item.id}>
+									<button
+										type="button"
+										onClick={() => setPanel(item.id)}
+										aria-current={selected ? "page" : undefined}
+										className={
+											selected
+												? "-ml-px border-l-2 border-neutral-100 py-2 pl-4 text-left text-sm font-medium text-neutral-100"
+												: "-ml-px border-l-2 border-transparent py-2 pl-4 text-left text-sm text-neutral-500 hover:border-neutral-600 hover:text-neutral-200"
+										}
+									>
+										{item.label}
+									</button>
+								</li>
+							);
+						})}
 					</ul>
-				)}
-			</section>
+				</nav>
+			</aside>
+
+			<div className="min-w-0 space-y-4">
+				{notice ? (
+					<p
+						className={noticeClasses(
+							notice.toLowerCase().includes("fail") || notice === "Network error"
+								? "negative"
+								: "positive",
+						)}
+					>
+						{notice}
+					</p>
+				) : null}
+
+				<header className="mb-2 border-b border-neutral-800 pb-4">
+					<h2 className="text-lg font-semibold text-neutral-100">{activePanel.label}</h2>
+					<p className="mt-1 text-sm text-neutral-400">{activePanel.description}</p>
+				</header>
+
+				{panel === "roster" ? (
+					<div className="space-y-6">
+						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+							<label className="text-sm text-neutral-300 sm:col-span-2 lg:col-span-1">
+								Search
+								<input
+									value={q}
+									onChange={(event) => {
+										setQ(event.target.value);
+										syncUrl(status, event.target.value);
+									}}
+									placeholder="Name, email, company…"
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Status
+								<select
+									value={status}
+									onChange={(event) => {
+										setStatus(event.target.value);
+										syncUrl(event.target.value, q);
+									}}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								>
+									<option value="all">All</option>
+									{SPEAKER_WORKFLOW_STATUSES.map((value) => (
+										<option key={value} value={value}>
+											{value}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Email type
+								<select
+									value={emailTemplateKey}
+									onChange={(event) =>
+										setEmailTemplateKey(
+											event.target.value as "task_reminder" | "speaker_announcement",
+										)
+									}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								>
+									<option value="task_reminder">Task reminder</option>
+									<option value="speaker_announcement">Announcement</option>
+								</select>
+							</label>
+							<button
+								type="button"
+								disabled={
+									pending ||
+									selectedVisible.length === 0 ||
+									(emailTemplateKey === "speaker_announcement" &&
+										(!emailSubject.trim() || !emailBody.trim()))
+								}
+								onClick={() => void bulkEmail()}
+								className={buttonClasses("secondary")}
+							>
+								Email selected ({selectedVisible.length})
+							</button>
+						</div>
+						<p className="text-xs text-neutral-500">
+							{emailTemplateKey === "speaker_announcement"
+								? "Tokens: {{event_name}}, {{submitter_name}}, {{portal_url}}."
+								: "Sends the outstanding-task reminder template to filtered speakers (all required pending tasks)."}{" "}
+							<Link
+								href={`/admin/events/${eventSlug}/tasks`}
+								className="underline underline-offset-2 hover:text-neutral-300"
+							>
+								Open speaker tasks
+							</Link>
+						</p>
+						{emailTemplateKey === "speaker_announcement" ? (
+							<div className="grid gap-3">
+								<label className="text-sm text-neutral-300">
+									Subject
+									<input
+										value={emailSubject}
+										onChange={(event) => setEmailSubject(event.target.value)}
+										className={`mt-1 w-full ${INPUT_CLASSES}`}
+									/>
+								</label>
+								<label className="text-sm text-neutral-300">
+									Body
+									<textarea
+										value={emailBody}
+										onChange={(event) => setEmailBody(event.target.value)}
+										rows={5}
+										className={`mt-1 w-full ${INPUT_CLASSES}`}
+									/>
+								</label>
+								{previewSpeaker && preview ? (
+									<div className="border-t border-neutral-800 pt-3 text-xs">
+										<p className="font-medium text-neutral-200">
+											Preview for {previewSpeaker.name}
+										</p>
+										<p className="mt-2 text-neutral-300">{preview.subject}</p>
+										<p className="mt-2 whitespace-pre-wrap text-neutral-400">
+											{preview.text}
+										</p>
+									</div>
+								) : null}
+							</div>
+						) : null}
+
+						{visible.length === 0 ? (
+							<p className="border-t border-neutral-800 py-8 text-sm text-neutral-500">
+								No speakers match this filter.
+							</p>
+						) : (
+							<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
+								{visible.map((speaker) => (
+									<li key={speaker.personId} className="py-4 text-sm">
+										<label className="mb-2 inline-flex items-center text-xs text-neutral-400">
+											<input
+												type="checkbox"
+												className="mr-2"
+												checked={selectedRecipients.includes(speaker.personId)}
+												onChange={(event) =>
+													setSelectedRecipients((current) =>
+														event.target.checked
+															? [...new Set([...current, speaker.personId])]
+															: current.filter((id) => id !== speaker.personId),
+													)
+												}
+											/>
+											Email recipient
+										</label>
+										<div className="flex flex-wrap items-start justify-between gap-3">
+											<div>
+												<p className="font-medium text-neutral-100">
+													{[speaker.salutation, speaker.name, speaker.honorific]
+														.filter(Boolean)
+														.join(" ")}
+													{speaker.pronouns ? (
+														<span className="font-normal text-neutral-500">
+															{" "}
+															({speaker.pronouns})
+														</span>
+													) : null}
+													<span className="font-normal text-neutral-500">
+														{" "}
+														· {speaker.email}
+													</span>
+												</p>
+												<p className="mt-1 text-neutral-400">
+													{[speaker.jobTitle, speaker.company].filter(Boolean).join(" · ") ||
+														"No title/company"}
+													{speaker.submissionStatuses.length
+														? ` · submissions: ${speaker.submissionStatuses.join(", ")}`
+														: " · roster-only"}
+												</p>
+												{speaker.tasks.length > 0 ? (
+													<p className="mt-1 text-xs text-neutral-500">
+														{speaker.pendingTaskCount} pending task
+														{speaker.pendingTaskCount === 1 ? "" : "s"}
+														{speaker.earliestDueAt
+															? ` · next due ${formatTaskDueAt(speaker.earliestDueAt)}`
+															: ""}
+														{" · "}
+														<Link
+															href={`/admin/events/${eventSlug}/tasks`}
+															className="underline underline-offset-2 hover:text-neutral-300"
+														>
+															view tasks
+														</Link>
+														{" · "}
+														<Link
+															href="/portal"
+															className="underline underline-offset-2 hover:text-neutral-300"
+														>
+															portal
+														</Link>
+													</p>
+												) : null}
+												{speaker.crm.owner ||
+												speaker.crm.tags.length > 0 ||
+												speaker.crm.lastContactAt ? (
+													<p className="mt-1 text-xs text-neutral-500">
+														{speaker.crm.owner
+															? `owner: ${speaker.crm.owner.name}`
+															: "owner: unassigned"}
+														{speaker.crm.tags.length > 0
+															? ` · ${speaker.crm.tags.join(" · ")}`
+															: ""}
+														{speaker.crm.lastContactAt
+															? ` · last contact ${new Date(speaker.crm.lastContactAt).toLocaleDateString()}`
+															: ""}
+													</p>
+												) : null}
+												{Object.keys(speaker.socials).length > 0 ? (
+													<p className="mt-1 text-xs text-neutral-500">
+														{SOCIAL_KEYS.filter((key) => speaker.socials[key]).map(
+															(key) => (
+																<span key={key} className="mr-3">
+																	{key}: {speaker.socials[key]}
+																</span>
+															),
+														)}
+													</p>
+												) : null}
+												{speaker.bio ? (
+													<p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs text-neutral-400">
+														{speaker.bio}
+													</p>
+												) : null}
+												{speaker.logisticsText ? (
+													<p className="mt-2 text-xs text-neutral-500">
+														Travel / logistics: {speaker.logisticsText}
+													</p>
+												) : null}
+												{speaker.headshot ? (
+													<div className="mt-2 flex items-center gap-3">
+														<Image
+															unoptimized
+															width={56}
+															height={56}
+															src={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`}
+															alt={`${speaker.name} headshot`}
+															className="h-14 w-14 rounded-lg object-cover"
+														/>
+														<a
+															className="text-xs underline"
+															href={`/api/admin/events/${eventSlug}/speakers/${speaker.personId}/headshot`}
+														>
+															{speaker.headshot.filename ?? "View headshot"} · uploaded{" "}
+															{new Date(speaker.headshot.uploadedAt).toLocaleString()}
+														</a>
+													</div>
+												) : null}
+											</div>
+											<div className="flex flex-wrap items-center gap-2">
+												<StatusPill tone={workflowTone(speaker.workflowStatus)}>
+													{speaker.workflowStatus}
+												</StatusPill>
+												<button
+													type="button"
+													disabled={pending}
+													onClick={() => edit(speaker)}
+													className={buttonClasses("secondary")}
+												>
+													Edit
+												</button>
+												<button
+													type="button"
+													disabled={pending}
+													onClick={() => void openCrm(speaker)}
+													className={buttonClasses("secondary")}
+												>
+													CRM
+												</button>
+												<button
+													type="button"
+													disabled={pending}
+													onClick={() => void invite(speaker.personId)}
+													className={buttonClasses("secondary")}
+												>
+													Send portal invite
+												</button>
+											</div>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+				) : null}
+
+				{panel === "add" ? (
+					<div className="space-y-4">
+						<div className="flex flex-wrap items-baseline justify-between gap-2">
+							<p className="text-sm text-neutral-400">
+								{draft.personId
+									? "Editing an existing roster entry."
+									: "Add someone who is not coming in through a submission."}
+							</p>
+							{draft.personId ? (
+								<button
+									type="button"
+									className="text-xs text-neutral-400 underline underline-offset-2"
+									onClick={() => setDraft(emptyDraft())}
+								>
+									Clear form
+								</button>
+							) : null}
+						</div>
+						<div className="grid gap-4 md:grid-cols-2">
+							<label className="text-sm text-neutral-300">
+								Name
+								<input
+									value={draft.name}
+									onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Email
+								<input
+									value={draft.email}
+									onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Job title
+								<input
+									value={draft.jobTitle}
+									onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Company
+								<input
+									value={draft.company}
+									onChange={(event) => setDraft({ ...draft, company: event.target.value })}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300 md:col-span-2">
+								Bio
+								<textarea
+									rows={5}
+									maxLength={10000}
+									value={draft.bio}
+									onChange={(event) => setDraft({ ...draft, bio: event.target.value })}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300 md:col-span-2">
+								Travel and logistics
+								<textarea
+									rows={3}
+									maxLength={4000}
+									value={draft.logisticsText}
+									onChange={(event) =>
+										setDraft({ ...draft, logisticsText: event.target.value })
+									}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Workflow status
+								<select
+									value={draft.workflowStatus}
+									onChange={(event) =>
+										setDraft({
+											...draft,
+											workflowStatus: event.target.value as SpeakerWorkflowStatus,
+										})
+									}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								>
+									{SPEAKER_WORKFLOW_STATUSES.map((value) => (
+										<option key={value} value={value}>
+											{value}
+										</option>
+									))}
+								</select>
+							</label>
+							{SOCIAL_KEYS.map((key) => (
+								<label key={key} className="text-sm text-neutral-300">
+									{key}
+									<input
+										value={draft.socials[key] ?? ""}
+										onChange={(event) =>
+											setDraft({
+												...draft,
+												socials: { ...draft.socials, [key]: event.target.value },
+											})
+										}
+										className={`mt-1 w-full ${INPUT_CLASSES}`}
+									/>
+								</label>
+							))}
+						</div>
+						<button
+							type="button"
+							disabled={pending || !draft.name.trim() || !draft.email.trim()}
+							onClick={() => void saveSpeaker()}
+							className={buttonClasses("primary")}
+						>
+							{pending ? "Saving…" : draft.personId ? "Save changes" : "Add to roster"}
+						</button>
+					</div>
+				) : null}
+
+				{panel === "import" ? (
+					<div className="space-y-4">
+						<p className="text-sm text-neutral-400">
+							Columns: email, name, job_title, company, bio, logistics, workflow_status,
+							twitter, linkedin, github, website, facebook.
+						</p>
+						<textarea
+							aria-label="Speaker CSV"
+							value={csv}
+							onChange={(event) => setCsv(event.target.value)}
+							rows={8}
+							className={`w-full font-mono text-xs ${INPUT_CLASSES}`}
+						/>
+						<button
+							type="button"
+							disabled={pending || csv.trim().length === 0}
+							onClick={() => void importCsv()}
+							className={buttonClasses("secondary")}
+						>
+							Import speakers
+						</button>
+					</div>
+				) : null}
+			</div>
 
 			{crmSpeaker ? (
-				<section aria-label={`Speaker CRM for ${crmSpeaker.name}`} className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-neutral-800 bg-neutral-900 p-6 shadow-2xl shadow-black/40">
+				<section
+					aria-label={`Speaker CRM for ${crmSpeaker.name}`}
+					className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-y-auto border-l border-neutral-800 bg-neutral-900 p-6 shadow-2xl shadow-black/40"
+				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<div>
-							<h2 className="font-medium text-neutral-100">Speaker CRM · {crmSpeaker.name}</h2>
-							<p className="mt-1 text-sm text-neutral-400">Private organizer context. Email deliveries and completed tasks appear below automatically.</p>
+							<h2 className="font-medium text-neutral-100">
+								Speaker CRM · {crmSpeaker.name}
+							</h2>
+							<p className="mt-1 text-sm text-neutral-400">
+								Private organizer context. Email deliveries and completed tasks appear below
+								automatically.
+							</p>
 						</div>
-						<button type="button" className="text-xs text-neutral-400 underline underline-offset-2" onClick={() => { setCrmSpeakerId(null); setCrmDetail(null); }}>Close</button>
-					</div>
-					{crmDetail ? (
-						<div className="mt-4 grid gap-3 md:grid-cols-2">
-							<label className="text-sm text-neutral-300">Owner<select value={crmOwnerAccountId} onChange={(event) => setCrmOwnerAccountId(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`}><option value="">Unassigned</option>{crmOwners.map((owner) => <option key={owner.accountId} value={owner.accountId}>{owner.name} · {owner.email}</option>)}</select></label>
-							<label className="text-sm text-neutral-300">Tags<input value={crmTags} onChange={(event) => setCrmTags(event.target.value)} placeholder="VIP, travel, green room" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-							<label className="text-sm text-neutral-300 md:col-span-2">Internal note<textarea value={crmNote} onChange={(event) => setCrmNote(event.target.value)} rows={3} maxLength={4000} placeholder="Private organizer note" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-							<label className="text-sm text-neutral-300 md:col-span-2">Log contact<textarea value={crmContactNote} onChange={(event) => setCrmContactNote(event.target.value)} rows={2} maxLength={4000} placeholder="What happened in the last call or message?" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-							<div className="md:col-span-2"><button type="button" disabled={pending} onClick={() => void saveCrm()} className={buttonClasses("primary", "sm")}>{pending ? "Saving…" : "Save CRM"}</button>{crmDetail.lastContactAt ? <span className="ml-3 text-xs text-neutral-500">Last contact: {new Date(crmDetail.lastContactAt).toLocaleString()}</span> : <span className="ml-3 text-xs text-neutral-500">No contact recorded yet</span>}</div>
-							<div className="md:col-span-2"><h3 className="text-sm font-medium text-neutral-200">Timeline</h3>{crmDetail.timeline.length ? <ul className="mt-2 divide-y divide-neutral-800 rounded-md border border-neutral-800">{crmDetail.timeline.map((entry) => <li key={`${entry.kind}-${entry.id}`} className="px-3 py-2 text-sm"><p className="text-neutral-200">{entry.body}</p><p className="mt-1 text-xs text-neutral-500">{entry.kind.replace("_", " ")} · {new Date(entry.occurredAt).toLocaleString()}{entry.authorName ? ` · ${entry.authorName}` : ""}</p></li>)}</ul> : <p className="mt-2 text-sm text-neutral-500">No CRM activity, delivered email, or completed task yet.</p>}</div>
-						</div>
-					) : <p className="mt-4 text-sm text-neutral-500">Loading CRM history…</p>}
-				</section>
-			) : null}
-
-			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<div className="flex flex-wrap items-baseline justify-between gap-2">
-					<h2 className="font-medium text-neutral-100">
-						{draft.personId ? "Edit speaker" : "Add speaker"}
-					</h2>
-					{draft.personId ? (
 						<button
 							type="button"
 							className="text-xs text-neutral-400 underline underline-offset-2"
-							onClick={() => setDraft(emptyDraft())}
+							onClick={() => {
+								setCrmSpeakerId(null);
+								setCrmDetail(null);
+							}}
 						>
-							Clear
+							Close
 						</button>
-					) : null}
-				</div>
-				<div className="mt-3 grid gap-3 md:grid-cols-2">
-					<label className="text-sm text-neutral-300">Name<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300">Email<input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300">Job title<input value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300">Company<input value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300 md:col-span-2">Bio<textarea rows={5} maxLength={10000} value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300 md:col-span-2">Travel and logistics<textarea rows={3} maxLength={4000} value={draft.logisticsText} onChange={(event) => setDraft({ ...draft, logisticsText: event.target.value })} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-					<label className="text-sm text-neutral-300">
-						Workflow status
-						<select
-							value={draft.workflowStatus}
-							onChange={(event) => setDraft({ ...draft, workflowStatus: event.target.value as SpeakerWorkflowStatus })}
-							className={`mt-1 w-full ${INPUT_CLASSES}`}
-						>
-							{SPEAKER_WORKFLOW_STATUSES.map((value) => (
-								<option key={value} value={value}>{value}</option>
-							))}
-						</select>
-					</label>
-					{SOCIAL_KEYS.map((key) => (
-						<label key={key} className="text-sm text-neutral-300">
-							{key}
-							<input
-								value={draft.socials[key] ?? ""}
-								onChange={(event) => setDraft({
-									...draft,
-									socials: { ...draft.socials, [key]: event.target.value },
-								})}
-								className={`mt-1 w-full ${INPUT_CLASSES}`}
-							/>
-						</label>
-					))}
-				</div>
-				<button
-					type="button"
-					disabled={pending || !draft.name.trim() || !draft.email.trim()}
-					onClick={() => void saveSpeaker()}
-					className={`mt-4 ${buttonClasses("primary", "sm")}`}
-				>
-					{pending ? "Saving…" : draft.personId ? "Save changes" : "Add to roster"}
-				</button>
-			</section>
-
-			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<h2 className="font-medium text-neutral-100">Import CSV</h2>
-				<p className="mt-1 text-sm text-neutral-400">
-					Columns: email, name, job_title, company, bio, logistics, workflow_status, twitter, linkedin, github, website, facebook.
-				</p>
-				<textarea
-					aria-label="Speaker CSV"
-					value={csv}
-					onChange={(event) => setCsv(event.target.value)}
-					rows={6}
-					className={`mt-3 w-full font-mono text-xs ${INPUT_CLASSES}`}
-				/>
-				<button
-					type="button"
-					disabled={pending || csv.trim().length === 0}
-					onClick={() => void importCsv()}
-					className={`mt-3 ${buttonClasses("secondary", "sm")}`}
-				>
-					Import speakers
-				</button>
-			</section>
-
-			{notice ? (
-				<p className={noticeClasses(notice.toLowerCase().includes("fail") || notice === "Network error" ? "negative" : "positive")}>
-					{notice}
-				</p>
+					</div>
+					{crmDetail ? (
+						<div className="mt-4 grid gap-3 md:grid-cols-2">
+							<label className="text-sm text-neutral-300">
+								Owner
+								<select
+									value={crmOwnerAccountId}
+									onChange={(event) => setCrmOwnerAccountId(event.target.value)}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								>
+									<option value="">Unassigned</option>
+									{crmOwners.map((owner) => (
+										<option key={owner.accountId} value={owner.accountId}>
+											{owner.name} · {owner.email}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="text-sm text-neutral-300">
+								Tags
+								<input
+									value={crmTags}
+									onChange={(event) => setCrmTags(event.target.value)}
+									placeholder="VIP, travel, green room"
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300 md:col-span-2">
+								Internal note
+								<textarea
+									value={crmNote}
+									onChange={(event) => setCrmNote(event.target.value)}
+									rows={3}
+									maxLength={4000}
+									placeholder="Private organizer note"
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<label className="text-sm text-neutral-300 md:col-span-2">
+								Log contact
+								<textarea
+									value={crmContactNote}
+									onChange={(event) => setCrmContactNote(event.target.value)}
+									rows={2}
+									maxLength={4000}
+									placeholder="What happened in the last call or message?"
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								/>
+							</label>
+							<div className="md:col-span-2">
+								<button
+									type="button"
+									disabled={pending}
+									onClick={() => void saveCrm()}
+									className={buttonClasses("primary")}
+								>
+									{pending ? "Saving…" : "Save CRM"}
+								</button>
+								{crmDetail.lastContactAt ? (
+									<span className="ml-3 text-xs text-neutral-500">
+										Last contact: {new Date(crmDetail.lastContactAt).toLocaleString()}
+									</span>
+								) : (
+									<span className="ml-3 text-xs text-neutral-500">No contact recorded yet</span>
+								)}
+							</div>
+							<div className="md:col-span-2">
+								<h3 className="text-sm font-medium text-neutral-200">Timeline</h3>
+								{crmDetail.timeline.length ? (
+									<ul className="mt-2 divide-y divide-neutral-800 border-t border-neutral-800">
+										{crmDetail.timeline.map((entry) => (
+											<li key={`${entry.kind}-${entry.id}`} className="py-2 text-sm">
+												<p className="text-neutral-200">{entry.body}</p>
+												<p className="mt-1 text-xs text-neutral-500">
+													{entry.kind.replace("_", " ")} ·{" "}
+													{new Date(entry.occurredAt).toLocaleString()}
+													{entry.authorName ? ` · ${entry.authorName}` : ""}
+												</p>
+											</li>
+										))}
+									</ul>
+								) : (
+									<p className="mt-2 text-sm text-neutral-500">
+										No CRM activity, delivered email, or completed task yet.
+									</p>
+								)}
+							</div>
+						</div>
+					) : (
+						<p className="mt-4 text-sm text-neutral-500">Loading CRM history…</p>
+					)}
+				</section>
 			) : null}
 		</div>
 	);

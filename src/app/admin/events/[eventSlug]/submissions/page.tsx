@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, INPUT_CLASSES, buttonClasses } from "@/components/ui";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -202,7 +202,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={event.slug} />
-			<main className="mx-auto max-w-4xl px-4 py-10">
+			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader
 					eyebrow="Organizer · Submissions"
 					title={event.name}
@@ -221,105 +221,103 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						</>
 					}
 				>
-					<div className="flex flex-wrap gap-1.5 pt-2" role="tablist" aria-label="Status queues">
-						{SUBMISSION_QUEUE_TABS.map((tab) => (
-							<CategoryChip
-								key={tab}
-								active={queue === tab}
-								href={filterHref(categoryFilter, labelFilter, {
-									queue: tab,
-									page: "1",
-								})}
-								label={`${SUBMISSION_QUEUE_LABELS[tab]} (${queueCounts[tab]})`}
+					<form
+						className="grid gap-3 pt-3 sm:grid-cols-2 lg:grid-cols-3"
+						method="get"
+					>
+						<label className="text-sm text-neutral-300 sm:col-span-2 lg:col-span-3">
+							Search
+							<input
+								type="search"
+								name="q"
+								defaultValue={queryParam ?? ""}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+								placeholder="Search title, speaker, email, or abstract"
 							/>
-						))}
-					</div>
-					<div className="flex flex-wrap gap-1.5 pt-3">
-						<CategoryChip
-							active={categoryFilter === "all"}
-							href={filterHref("all", labelFilter)}
-							label={`All categories (${facets.total})`}
-						/>
-						{chipLabels.map((label) => {
-							const count = categoryCounts.get(label) ?? 0;
-							return (
-								<CategoryChip
-									key={label}
-									active={categoryFilter === label}
-									href={filterHref(label, labelFilter)}
-									label={`${label} (${count})`}
-								/>
-							);
-						})}
-					</div>
-					<form className="grid gap-2 pt-3 sm:grid-cols-[1fr_auto_auto]" method="get">
-						<input
-							type="search"
-							name="q"
-							defaultValue={queryParam ?? ""}
-							className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-							placeholder="Search title, speaker, email, or abstract"
-						/>
-						<select
-							name="status"
-							defaultValue={statusFilter}
-							className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-						>
-							<option value="all">All statuses</option>
-							{facets.byStatus.map(({ value: status }) => (
-								<option key={status} value={status}>
-									{status.replaceAll("_", " ")}
-								</option>
-							))}
-						</select>
-						<select
-							name="sort"
-							defaultValue={sort}
-							className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
-						>
-							<option value="newest">Newest</option>
-							<option value="title">Title A–Z</option>
-							<option value="status">Status</option>
-						</select>
-						<input type="hidden" name="queue" value={queue} />
-						<input
-							type="hidden"
-							name="category"
-							value={categoryFilter === "all" ? "" : categoryFilter}
-						/>
-						<input
-							type="hidden"
-							name="label"
-							value={labelFilter === "all" ? "" : labelFilter}
-						/>
-						<button
-							className="justify-self-start rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-emerald-400 sm:col-span-3"
-							type="submit"
-						>
-							Apply filters
-						</button>
-					</form>
-					{labelCounts.size > 0 ? (
-						<div className="flex flex-wrap items-center gap-1.5 pt-2">
-							<span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-								Labels
-							</span>
-							<CategoryChip
-								active={labelFilter === "all"}
-								href={filterHref(categoryFilter, "all")}
-								label="All"
-							/>
-							{[...labelCounts.entries()].map(([label, count]) => (
-								<CategoryChip
-									key={label}
-									active={labelFilter === label}
-									href={filterHref(categoryFilter, label)}
-									label={`${label} (${count})`}
-								/>
-							))}
+						</label>
+						<label className="text-sm text-neutral-300">
+							Queue
+							<select
+								name="queue"
+								defaultValue={queue}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							>
+								{SUBMISSION_QUEUE_TABS.map((tab) => (
+									<option key={tab} value={tab}>
+										{SUBMISSION_QUEUE_LABELS[tab]} ({queueCounts[tab]})
+									</option>
+								))}
+							</select>
+						</label>
+						<label className="text-sm text-neutral-300">
+							Category
+							<select
+								name="category"
+								defaultValue={categoryFilter === "all" ? "" : categoryFilter}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							>
+								<option value="">All categories ({facets.total})</option>
+								{chipLabels.map((label) => (
+									<option key={label} value={label}>
+										{label} ({categoryCounts.get(label) ?? 0})
+									</option>
+								))}
+							</select>
+						</label>
+						{labelCounts.size > 0 ? (
+							<label className="text-sm text-neutral-300">
+								Label
+								<select
+									name="label"
+									defaultValue={labelFilter === "all" ? "" : labelFilter}
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+								>
+									<option value="">All labels</option>
+									{[...labelCounts.entries()].map(([label, count]) => (
+										<option key={label} value={label}>
+											{label} ({count})
+										</option>
+									))}
+								</select>
+							</label>
+						) : null}
+						<label className="text-sm text-neutral-300">
+							Status
+							<select
+								name="status"
+								defaultValue={statusFilter}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							>
+								<option value="all">All statuses</option>
+								{facets.byStatus.map(({ value: status }) => (
+									<option key={status} value={status}>
+										{status.replaceAll("_", " ")}
+									</option>
+								))}
+							</select>
+						</label>
+						<label className="text-sm text-neutral-300">
+							Sort
+							<select
+								name="sort"
+								defaultValue={sort}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
+							>
+								<option value="newest">Newest</option>
+								<option value="title">Title A–Z</option>
+								<option value="status">Status</option>
+							</select>
+						</label>
+						<div className="flex items-end sm:col-span-2 lg:col-span-1">
+							<button
+								className={buttonClasses("primary")}
+								type="submit"
+							>
+								Apply filters
+							</button>
 						</div>
-					) : null}
-					<div className="flex flex-wrap items-start gap-x-6 gap-y-3 pt-3">
+					</form>
+					<div className="flex flex-wrap items-start gap-x-6 gap-y-3 pt-4">
 						<ActivatePlanButton eventSlug={event.slug} planActive={Boolean(activePlan)} />
 						<ExportButtons eventSlug={event.slug} />
 					</div>
@@ -340,7 +338,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 						description={
 							facets.total === 0
 								? "Share your CFP link to start collecting talks."
-								: "Try another queue tab or clear a filter."
+								: "Try another queue or clear a filter."
 						}
 					>
 						<p className="mt-4">
@@ -354,7 +352,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					</EmptyState>
 				) : (
 					<>
-						<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
+						<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
 							{pageRows.map((row) => {
 								const tasks = tasksBySubmission.get(row.id) ?? [];
 								const requiredTasks = tasks.filter(
@@ -435,28 +433,5 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 				)}
 			</main>
 		</div>
-	);
-}
-
-function CategoryChip({
-	active,
-	href,
-	label,
-}: {
-	active: boolean;
-	href: string;
-	label: string;
-}) {
-	return (
-		<Link
-			href={href}
-			className={
-				active
-					? "rounded-full border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-100"
-					: "rounded-full border border-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-400 hover:border-neutral-600 hover:text-neutral-200"
-			}
-		>
-			{label}
-		</Link>
 	);
 }

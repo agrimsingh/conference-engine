@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 
-type Member = {
+export type TeamMember = {
 	accountId: string;
 	email: string;
 	name: string;
@@ -16,7 +16,7 @@ type InviteRole = "admin" | "owner";
 
 type Props = {
 	eventSlug: string;
-	initialMembers: Member[];
+	initialMembers: TeamMember[];
 	canRemove: boolean;
 	canTransfer: boolean;
 	canInviteAsOwner: boolean;
@@ -24,7 +24,7 @@ type Props = {
 	currentRole: "owner" | "admin" | null;
 };
 
-function sortMembers(rows: Member[]): Member[] {
+function sortMembers(rows: TeamMember[]): TeamMember[] {
 	return [...rows].sort((a, b) => {
 		if (a.role === b.role) return a.email.localeCompare(b.email);
 		return a.role === "owner" ? -1 : 1;
@@ -84,20 +84,21 @@ export function InviteTeamForm({
 
 			const roleLabel = data.role === "owner" ? "ownership-transfer" : "organizer";
 			if (!data.pendingAcceptance) {
-				setError(`The ${roleLabel} invite to ${data.invitee.email} was not activated because email delivery failed; no access or ownership changed.`);
+				setError(
+					`The ${roleLabel} invite to ${data.invitee.email} was not activated because email delivery failed; no access or ownership changed.`,
+				);
 				setEmail("");
 				setName("");
 				setRole("admin");
 				return;
 			}
-			const resent = data.pendingAcceptance
-				? `Sent a pending ${roleLabel} invite to ${data.invitee.email}. Access changes after the link is accepted.`
-				: `The ${roleLabel} invite to ${data.invitee.email} was not activated; no access or ownership changed.`;
-			const emailBit = data.emailStatus === "sent"
-				? " Magic link emailed."
-				: data.emailStatus === "uncertain"
-					? " Email delivery is uncertain; the invitation link remains valid if it arrived."
-					: " Email failed to send.";
+			const resent = `Sent a pending ${roleLabel} invite to ${data.invitee.email}. Access changes after the link is accepted.`;
+			const emailBit =
+				data.emailStatus === "sent"
+					? " Magic link emailed."
+					: data.emailStatus === "uncertain"
+						? " Email delivery is uncertain; the invitation link remains valid if it arrived."
+						: " Email failed to send.";
 			setNotice(`${resent}${emailBit}`);
 			if (data.loginUrl) setDevLoginUrl(data.loginUrl);
 			setEmail("");
@@ -198,41 +199,53 @@ export function InviteTeamForm({
 
 	return (
 		<div className="space-y-8">
-			<form onSubmit={onInvite} className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
+			{notice ? <p className={noticeClasses("positive")}>{notice}</p> : null}
+			{devLoginUrl ? (
+				<p className="break-all text-xs text-neutral-500">
+					Dev login URL:{" "}
+					<a href={devLoginUrl} className="text-neutral-300 underline">
+						{devLoginUrl}
+					</a>
+				</p>
+			) : null}
+
+			<form onSubmit={onInvite} className="space-y-4">
 				<p className="text-sm text-neutral-400">
 					Invite by email. Default role is{" "}
 					<code className="text-neutral-300">admin</code>. Inviting as{" "}
-					<code className="text-neutral-300">owner</code> transfers ownership only after the recipient accepts the email link.
+					<code className="text-neutral-300">owner</code> transfers ownership
+					only after the recipient accepts the email link.
 				</p>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<label className="block text-xs text-neutral-400">
+				<div className="grid gap-4 sm:grid-cols-2">
+					<label className="block text-sm text-neutral-300">
 						Email
 						<input
 							required
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
-							className={`mt-1 ${INPUT_CLASSES}`}
+							className={`mt-1 w-full ${INPUT_CLASSES}`}
 							placeholder="teammate@example.com"
 						/>
 					</label>
-					<label className="block text-xs text-neutral-400">
+					<label className="block text-sm text-neutral-300">
 						Name (optional)
 						<input
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							className={`mt-1 ${INPUT_CLASSES}`}
+							className={`mt-1 w-full ${INPUT_CLASSES}`}
 							placeholder="Ada Lovelace"
 						/>
 					</label>
 					{canInviteAsOwner ? (
-						<label className="block text-xs text-neutral-400 sm:col-span-2">
+						<label className="block text-sm text-neutral-300 sm:col-span-2">
 							Role
 							<select
 								value={role}
 								onChange={(e) => setRole(e.target.value as InviteRole)}
-								className={`mt-1 ${INPUT_CLASSES}`}
+								className={`mt-1 w-full ${INPUT_CLASSES}`}
 							>
 								<option value="admin">admin</option>
 								<option value="owner">owner (transfers ownership)</option>
@@ -240,17 +253,65 @@ export function InviteTeamForm({
 						</label>
 					) : null}
 				</div>
-				<button
-					type="submit"
-					disabled={pending}
-					className={buttonClasses("primary")}
-				>
+				<button type="submit" disabled={pending} className={buttonClasses("primary")}>
 					{pending ? "Sending…" : "Send invite"}
 				</button>
 			</form>
 
+			<div className="border-t border-neutral-800 pt-6">
+				<p className="mb-3 text-sm font-medium text-neutral-200">Organizers</p>
+				<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
+					{members.map((member) => {
+						const isSelf = member.accountId === currentAccountId;
+						return (
+							<li
+								key={member.accountId}
+								className="flex flex-wrap items-center justify-between gap-3 py-3"
+							>
+								<div>
+									<p className="text-sm text-neutral-100">
+										{member.name.trim() || member.email}
+										{isSelf ? (
+											<span className="ml-2 text-xs text-neutral-500">(you)</span>
+										) : null}
+									</p>
+									<p className="text-xs text-neutral-500">
+										{member.email} · {member.role}
+									</p>
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									{canTransfer && member.role === "admin" ? (
+										<button
+											type="button"
+											disabled={pending}
+											onClick={() => void onTransfer(member.accountId)}
+											className={buttonClasses("secondary")}
+										>
+											Transfer ownership
+										</button>
+									) : null}
+									{canRemove && member.role !== "owner" ? (
+										<button
+											type="button"
+											disabled={pending}
+											onClick={() => void onRemove(member.accountId)}
+											className={buttonClasses("secondary")}
+										>
+											Remove
+										</button>
+									) : null}
+								</div>
+							</li>
+						);
+					})}
+					{members.length === 0 ? (
+						<li className="py-6 text-sm text-neutral-500">No members yet.</li>
+					) : null}
+				</ul>
+			</div>
+
 			{canLeave ? (
-				<div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+				<div className="border-t border-neutral-800 pt-6">
 					<p className="mb-3 text-sm text-neutral-400">
 						You are an admin on this event. Leaving removes your access.
 					</p>
@@ -270,66 +331,6 @@ export function InviteTeamForm({
 					As owner you must transfer ownership before you can leave.
 				</p>
 			) : null}
-
-			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
-			{notice ? <p className={noticeClasses("positive")}>{notice}</p> : null}
-			{devLoginUrl ? (
-				<p className="break-all text-xs text-neutral-500">
-					Dev login URL:{" "}
-					<a href={devLoginUrl} className="text-neutral-300 underline">
-						{devLoginUrl}
-					</a>
-				</p>
-			) : null}
-
-			<ul className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
-				{members.map((member) => {
-					const isSelf = member.accountId === currentAccountId;
-					return (
-						<li
-							key={member.accountId}
-							className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-						>
-							<div>
-								<p className="text-sm text-neutral-100">
-									{member.name.trim() || member.email}
-									{isSelf ? (
-										<span className="ml-2 text-xs text-neutral-500">(you)</span>
-									) : null}
-								</p>
-								<p className="text-xs text-neutral-500">
-									{member.email} · {member.role}
-								</p>
-							</div>
-							<div className="flex flex-wrap items-center gap-2">
-								{canTransfer && member.role === "admin" ? (
-									<button
-										type="button"
-										disabled={pending}
-										onClick={() => void onTransfer(member.accountId)}
-										className={buttonClasses("secondary", "sm")}
-									>
-										Transfer ownership
-									</button>
-								) : null}
-								{canRemove && member.role !== "owner" ? (
-									<button
-										type="button"
-										disabled={pending}
-										onClick={() => void onRemove(member.accountId)}
-										className={buttonClasses("secondary", "sm")}
-									>
-										Remove
-									</button>
-								) : null}
-							</div>
-						</li>
-					);
-				})}
-				{members.length === 0 ? (
-					<li className="px-4 py-6 text-sm text-neutral-500">No members yet.</li>
-				) : null}
-			</ul>
 		</div>
 	);
 }

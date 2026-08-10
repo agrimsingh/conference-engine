@@ -42,7 +42,6 @@ export const ADMIN_EVENT_GROUPS = [
 		links: [
 			{ segment: "forms", label: "Forms" },
 			{ segment: "settings", label: "Settings" },
-			{ segment: "team", label: "Team" },
 			{ segment: "embeds", label: "Embeds" },
 			{ segment: "integrations/accelevents", label: "Integrations" },
 		],

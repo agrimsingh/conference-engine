@@ -6,10 +6,27 @@ import { TimezoneSelect } from "@/components/timezone-select";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import type { EventConfiguration } from "@/lib/events/configuration";
 import type { TaskFormField, TaskFormFieldType } from "@/lib/speakers/task-forms";
+import {
+	InviteTeamForm,
+	type TeamMember,
+} from "@/app/admin/events/[eventSlug]/team/invite-team-form";
 
-type Props = { eventSlug: string; configuration: EventConfiguration };
+type TeamAccess = {
+	members: TeamMember[];
+	canRemove: boolean;
+	canTransfer: boolean;
+	canInviteAsOwner: boolean;
+	currentAccountId: string | null;
+	currentRole: "owner" | "admin" | null;
+};
+
+type Props = {
+	eventSlug: string;
+	configuration: EventConfiguration;
+	team: TeamAccess;
+};
 type Message = { kind: "positive" | "negative"; text: string } | null;
-type SectionId = "details" | "rooms" | "tracks" | "tasks";
+type SectionId = "details" | "team" | "rooms" | "tracks" | "tasks";
 
 const SECTIONS: Array<{
 	id: SectionId;
@@ -20,6 +37,11 @@ const SECTIONS: Array<{
 		id: "details",
 		label: "Event details",
 		description: "Name, dates, timezone, and schedule defaults.",
+	},
+	{
+		id: "team",
+		label: "Team",
+		description: "Invite organizers and transfer ownership.",
 	},
 	{
 		id: "rooms",
@@ -57,6 +79,7 @@ function dueLocalValue(dueAt: number | null) {
 
 function parseSection(value: string | null): SectionId {
 	switch (value) {
+		case "team":
 		case "rooms":
 		case "tracks":
 		case "tasks":
@@ -67,7 +90,7 @@ function parseSection(value: string | null): SectionId {
 	}
 }
 
-export function SettingsEditor({ eventSlug, configuration }: Props) {
+export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const section = parseSection(searchParams.get("section"));
@@ -296,6 +319,18 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 									</button>
 								</div>
 							</form>
+						) : null}
+
+						{section === "team" ? (
+							<InviteTeamForm
+								eventSlug={eventSlug}
+								canRemove={team.canRemove}
+								canTransfer={team.canTransfer}
+								canInviteAsOwner={team.canInviteAsOwner}
+								currentAccountId={team.currentAccountId}
+								currentRole={team.currentRole}
+								initialMembers={team.members}
+							/>
 						) : null}
 
 						{section === "rooms" ? (

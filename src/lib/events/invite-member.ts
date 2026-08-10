@@ -76,7 +76,10 @@ export async function inviteOrganizerToEvent(
 
 	const callbackUrl = new URL("/auth/callback", args.origin);
 	callbackUrl.searchParams.set("token", challenge.token);
-	callbackUrl.searchParams.set("next", `/admin/events/${args.event.slug}/team`);
+	callbackUrl.searchParams.set(
+		"next",
+		`/admin/events/${args.event.slug}/settings?section=team`,
+	);
 	const loginUrl = callbackUrl.toString();
 	const emailResult = await (args.sendEmail ?? sendAuthEmail)({
 		toEmail: account.email,
