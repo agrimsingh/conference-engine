@@ -5,6 +5,9 @@ RESEND_FROM_EMAIL=team@65labs.org
 APP_ORIGIN=http://localhost:3000
 AUTH_SECRET=
 PUBLIC_API_KEY=
+# Optional. Required with PUBLIC_API_KEY for deployment-wide /api/v1 access (1/true/yes).
+# Leave unset so /api/v1 stays per-event ce_pat_ only.
+PUBLIC_API_KEY_CROSS_EVENT=
 # Optional one-way Airtable export (D1 remains SoR; never read Airtable into D1)
 AIRTABLE_API_KEY=
 AIRTABLE_BASE_ID=
