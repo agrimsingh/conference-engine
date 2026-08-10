@@ -35,9 +35,9 @@ export function LandingNav({ demoEvent, repoUrl }: Props) {
 					</span>
 				</Link>
 				<div className="ml-auto hidden items-center gap-5 text-sm text-neutral-400 sm:flex">
-					<a className="hover:text-neutral-100" href="#try">
+					<Link className="hover:text-neutral-100" href="/#try">
 						Try
-					</a>
+					</Link>
 					<Link
 						className="hover:text-neutral-100"
 						href={`/e/${demoEvent}/submit/cfp`}
@@ -49,6 +49,9 @@ export function LandingNav({ demoEvent, repoUrl }: Props) {
 						href={`/e/${demoEvent}/schedule`}
 					>
 						Schedule
+					</Link>
+					<Link className="hover:text-neutral-100" href="/compare">
+						Compare
 					</Link>
 					<a
 						className="hover:text-neutral-100"

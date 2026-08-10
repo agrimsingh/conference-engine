@@ -776,7 +776,7 @@ npm run deploy`}
 							conference-engine — CFP to stage for conference organizers
 						</span>
 					</div>
-					<div className="flex items-center gap-5">
+					<div className="flex flex-wrap items-center gap-5">
 						<a
 							className="hover:text-neutral-100"
 							href={REPO_URL}
@@ -785,6 +785,9 @@ npm run deploy`}
 						>
 							GitHub
 						</a>
+						<Link className="hover:text-neutral-100" href="/compare">
+							Compare
+						</Link>
 						<Link
 							className="hover:text-neutral-100"
 							href={`/e/${DEMO_EVENT}/submit/cfp`}
