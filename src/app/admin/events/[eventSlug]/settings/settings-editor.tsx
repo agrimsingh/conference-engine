@@ -47,7 +47,8 @@ const SECTIONS: Array<{
 	{
 		id: "api-tokens",
 		label: "API tokens",
-		description: "Mint Bearer tokens for agents and scripts.",
+		description:
+			"Mint a per-event personal access token for agents. Send Authorization: Bearer ce_pat_… to admin JSON routes for this event.",
 	},
 	{
 		id: "rooms",

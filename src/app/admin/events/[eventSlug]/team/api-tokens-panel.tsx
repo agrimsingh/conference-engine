@@ -126,16 +126,7 @@ export function ApiTokensPanel({ eventSlug }: Props) {
 	}
 
 	return (
-		<div className="space-y-6 border-t border-neutral-800 pt-8">
-			<div>
-				<p className="text-sm font-medium text-neutral-200">API tokens</p>
-				<p className="mt-1 text-sm text-neutral-400">
-					Mint a per-event personal access token for agents. Send{" "}
-					<code className="text-neutral-300">Authorization: Bearer ce_pat_…</code>{" "}
-					to admin JSON routes for this event.
-				</p>
-			</div>
-
+		<div className="space-y-6">
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			{notice ? <p className={noticeClasses("positive")}>{notice}</p> : null}
 			{plaintext ? (
