@@ -3,8 +3,10 @@ import type { ScheduleInterval } from "@/lib/domain";
 import {
 	filterUnplacedRail,
 	findAvailableSlot,
+	isStageRoom,
 	isUnplaced,
 	publishableOnDay,
+	roomsForLane,
 	toPublishConfirmTarget,
 	unplacedSessions,
 } from "./board";
@@ -16,6 +18,26 @@ const base = {
 	speakerKeys: ["ada"],
 	durationMinutes: 30,
 };
+
+describe("room lanes", () => {
+	it("treats Main/Demo as stages and everything else as breakouts", () => {
+		const rooms = [
+			"Main Stage",
+			"Demo Stage",
+			"Seminar Room B1.01, Level B1",
+			"Design Stage",
+		];
+		expect(isStageRoom("Main Stage")).toBe(true);
+		expect(isStageRoom("demo stage")).toBe(true);
+		expect(isStageRoom("Design Stage")).toBe(false);
+		expect(roomsForLane(rooms, "stages")).toEqual(["Main Stage", "Demo Stage"]);
+		expect(roomsForLane(rooms, "breakouts")).toEqual([
+			"Seminar Room B1.01, Level B1",
+			"Design Stage",
+		]);
+		expect(roomsForLane(rooms, "all")).toEqual(rooms);
+	});
+});
 
 describe("unplaced pool", () => {
 	it("treats only null slot as unplaced", () => {

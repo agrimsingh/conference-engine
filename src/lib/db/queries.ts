@@ -33,6 +33,11 @@ import {
 	type SubmissionQueueTab,
 } from "@/lib/domain";
 
+/** D1 rejects queries with too many bound parameters (~100). Prefer one JSON bind. */
+function jsonIdList(ids: readonly string[]): string {
+	return JSON.stringify([...new Set(ids)]);
+}
+
 export const getEventBySlug = cache(async (
 	db: D1Database,
 	slug: string,
@@ -54,10 +59,11 @@ export async function listEventsByIds(
 ): Promise<EventRow[]> {
 	const ids = [...new Set(eventIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY name ASC`)
-		.bind(...ids)
+		.prepare(
+			`SELECT * FROM events WHERE id IN (SELECT value FROM json_each(?)) ORDER BY name ASC`,
+		)
+		.bind(jsonIdList(ids))
 		.all<EventRow>();
 	return result.results;
 }
@@ -69,10 +75,9 @@ export async function listPeopleByIds(
 ): Promise<PersonRow[]> {
 	const ids = [...new Set(personIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT * FROM people WHERE id IN (${placeholders})`)
-		.bind(...ids)
+		.prepare(`SELECT * FROM people WHERE id IN (SELECT value FROM json_each(?))`)
+		.bind(jsonIdList(ids))
 		.all<PersonRow>();
 	return result.results;
 }
@@ -84,10 +89,9 @@ export async function listSubmissionsByIds(
 ): Promise<SubmissionRow[]> {
 	const ids = [...new Set(submissionIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT * FROM submissions WHERE id IN (${placeholders})`)
-		.bind(...ids)
+		.prepare(`SELECT * FROM submissions WHERE id IN (SELECT value FROM json_each(?))`)
+		.bind(jsonIdList(ids))
 		.all<SubmissionRow>();
 	return result.results;
 }
@@ -100,10 +104,11 @@ export async function listSpeakerProfilesForPerson(
 ): Promise<SpeakerProfileRow[]> {
 	const ids = [...new Set(eventIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT * FROM speaker_profiles WHERE person_id = ? AND event_id IN (${placeholders})`)
-		.bind(personId, ...ids)
+		.prepare(
+			`SELECT * FROM speaker_profiles WHERE person_id = ? AND event_id IN (SELECT value FROM json_each(?))`,
+		)
+		.bind(personId, jsonIdList(ids))
 		.all<SpeakerProfileRow>();
 	return result.results;
 }
@@ -115,10 +120,11 @@ export async function listAgendaSlotsBySubmissionIds(
 ): Promise<AgendaSlotRow[]> {
 	const ids = [...new Set(submissionIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
-		.prepare(`SELECT * FROM agenda_slots WHERE submission_id IN (${placeholders})`)
-		.bind(...ids)
+		.prepare(
+			`SELECT * FROM agenda_slots WHERE submission_id IN (SELECT value FROM json_each(?))`,
+		)
+		.bind(jsonIdList(ids))
 		.all<AgendaSlotRow>();
 	return result.results;
 }
@@ -531,18 +537,17 @@ export async function listCloneableSessionsForEvents(
 ): Promise<CloneableSessionRow[]> {
 	const ids = [...new Set(eventIds)];
 	if (ids.length === 0) return [];
-	const placeholders = ids.map(() => "?").join(", ");
 	const result = await db
 		.prepare(
 			`SELECT s.id, s.event_id, s.status, s.answers_json, s.submitter_name,
 			        e.name AS event_name, e.slug AS event_slug
        FROM submissions s
        INNER JOIN events e ON e.id = s.event_id
-       WHERE s.event_id IN (${placeholders})
+       WHERE s.event_id IN (SELECT value FROM json_each(?))
          AND s.status IN ('accepted', 'scheduled', 'published')
        ORDER BY e.name ASC, s.created_at DESC`,
 		)
-		.bind(...ids)
+		.bind(jsonIdList(ids))
 		.all<CloneableSessionRow>();
 	return result.results;
 }
@@ -930,8 +935,12 @@ export async function listTasksForEvent(
 export async function listTasksForSubmissions(db: D1Database, submissionIds: string[]): Promise<SpeakerTaskRow[]> {
 	const ids = [...new Set(submissionIds)];
 	if (!ids.length) return [];
-	const placeholders = ids.map(() => "?").join(", ");
-	const result = await db.prepare(`SELECT * FROM speaker_tasks WHERE submission_id IN (${placeholders}) ORDER BY created_at DESC`).bind(...ids).all<SpeakerTaskRow>();
+	const result = await db
+		.prepare(
+			`SELECT * FROM speaker_tasks WHERE submission_id IN (SELECT value FROM json_each(?)) ORDER BY created_at DESC`,
+		)
+		.bind(jsonIdList(ids))
+		.all<SpeakerTaskRow>();
 	return result.results;
 }
 

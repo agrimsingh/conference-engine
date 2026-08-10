@@ -29,6 +29,20 @@ export type PublishConfirmTarget = {
 	titles: string[];
 };
 
+/** Physical main programme stages — not workshop/breakout rooms. */
+export function isStageRoom(roomName: string): boolean {
+	const normalized = roomName.trim().toLowerCase();
+	return normalized === "main stage" || normalized === "demo stage";
+}
+
+export type RoomLane = "stages" | "breakouts" | "all";
+
+export function roomsForLane(rooms: readonly string[], lane: RoomLane): string[] {
+	if (lane === "all") return [...rooms];
+	if (lane === "stages") return rooms.filter(isStageRoom);
+	return rooms.filter((room) => !isStageRoom(room));
+}
+
 export function isUnplaced(session: { slot: unknown | null }): boolean {
 	return session.slot == null;
 }

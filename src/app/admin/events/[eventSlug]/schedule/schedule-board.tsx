@@ -28,8 +28,10 @@ import {
 	filterUnplacedRail,
 	findAvailableSlot,
 	publishableOnDay,
+	roomsForLane,
 	toPublishConfirmTarget,
 	type PublishConfirmTarget,
+	type RoomLane,
 } from "@/lib/schedule/board";
 import {
 	formatClock,
@@ -85,6 +87,7 @@ export function ScheduleBoard({
 	const [sessions, setSessions] = useState(initialSessions);
 	const [view, setView] = useState<ViewMode>("day");
 	const [roomFilter, setRoomFilter] = useState<string>("all");
+	const [roomLane, setRoomLane] = useState<RoomLane>("stages");
 	const [trackId, setTrackId] = useState<string>(tracks[0]?.id ?? "");
 	const [reassignTrack, setReassignTrack] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -160,15 +163,39 @@ export function ScheduleBoard({
 		[sessions, selectedId],
 	);
 
+	const laneRooms = useMemo(
+		() => roomsForLane(rooms, roomLane),
+		[roomLane, rooms],
+	);
+
+	const visibleDayRooms = useMemo(() => {
+		const base =
+			roomFilter === "all"
+				? laneRooms
+				: laneRooms.filter((room) => room === roomFilter);
+		// Day grid: only columns that have something placed today (or the
+		// single room you're filtering to), so empty breakout rooms don't
+		// steal horizontal space from Main/Demo.
+		if (view !== "day" || roomFilter !== "all") return base;
+		const occupied = new Set(
+			daySessions
+				.map((session) => session.slot?.roomName)
+				.filter((name): name is string => Boolean(name)),
+		);
+		const withSessions = base.filter((room) => occupied.has(room));
+		return withSessions.length > 0 ? withSessions : base;
+	}, [daySessions, laneRooms, roomFilter, view]);
+
 	const listSessions = useMemo(() => {
 		const rows = daySessions.filter((session) => {
-			if (roomFilter === "all") return true;
-			return session.slot?.roomName === roomFilter;
+			if (!session.slot) return false;
+			if (roomFilter !== "all" && session.slot.roomName !== roomFilter) return false;
+			return laneRooms.includes(session.slot.roomName);
 		});
 		return rows.sort(
 			(a, b) => (a.slot?.startsAtMs ?? 0) - (b.slot?.startsAtMs ?? 0),
 		);
-	}, [daySessions, roomFilter]);
+	}, [daySessions, laneRooms, roomFilter]);
 
 	const groupedSessions = useMemo(() => {
 		const visible = sessions.filter((session) => {
@@ -279,6 +306,10 @@ export function ScheduleBoard({
 					? {
 							...row,
 							status: row.status === "published" ? "published" : "scheduled",
+							durationMinutes: Math.max(
+								1,
+								Math.round((endsAtMs - startsAtMs) / 60_000),
+							),
 							slot: {
 								roomId: roomIds[roomName] ?? null,
 								roomName,
@@ -345,6 +376,12 @@ export function ScheduleBoard({
 							? {
 									...row,
 									status: result.status ?? "scheduled",
+									durationMinutes: Math.max(
+										1,
+										Math.round(
+											(result.slot!.ends_at - result.slot!.starts_at) / 60_000,
+										),
+									),
 									slot: {
 										roomId: result.slot!.room_id,
 										roomName: result.slot!.room_name,
@@ -428,15 +465,12 @@ export function ScheduleBoard({
 			setError("Select a session first.");
 			return;
 		}
-		const visibleRooms = rooms.filter(
-			(room) => roomFilter === "all" || room === roomFilter,
-		);
 		const slot = findAvailableSlot({
 			session: selectedSession,
 			dayKey,
 			timeZone,
 			timeRows,
-			rooms: visibleRooms,
+			rooms: visibleDayRooms,
 			roomIds,
 			dayEndMinutes,
 			intervals,
@@ -577,14 +611,30 @@ export function ScheduleBoard({
 					{formatDayLabel(dayKey, timeZone)} · {timeZone}
 				</p>
 				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-300">
+					Lanes
+					<select
+						className={INPUT_CLASSES}
+						value={roomLane}
+						onChange={(event) => {
+							setRoomLane(event.target.value as RoomLane);
+							setRoomFilter("all");
+						}}
+						aria-label="Room lanes"
+					>
+						<option value="stages">Stages (Main / Demo)</option>
+						<option value="breakouts">Breakouts (workshops / leadership)</option>
+						<option value="all">All rooms</option>
+					</select>
+				</label>
+				<label className="flex items-center gap-2 text-sm text-neutral-300">
 					Room
 					<select
 						className={INPUT_CLASSES}
 						value={roomFilter}
 						onChange={(event) => setRoomFilter(event.target.value)}
 					>
-						<option value="all">All</option>
-						{rooms.map((room) => (
+						<option value="all">All in lane</option>
+						{laneRooms.map((room) => (
 							<option key={room} value={room}>
 								{room}
 							</option>
@@ -724,18 +774,16 @@ export function ScheduleBoard({
 
 			{view === "day" ? (
 				<div className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
-					<table className="min-w-full border-collapse text-sm">
+					<table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
 						<thead>
 							<tr className="border-b border-neutral-800 bg-neutral-950/60">
-								<th className="sticky left-0 bg-neutral-900 px-2 py-2 text-left font-medium text-neutral-300">
+								<th className="sticky left-0 w-16 bg-neutral-900 px-2 py-2 text-left font-medium text-neutral-300">
 									Time
 								</th>
-								{rooms
-									.filter((room) => roomFilter === "all" || room === roomFilter)
-									.map((room) => (
+								{visibleDayRooms.map((room) => (
 										<th
 											key={room}
-											className="min-w-40 px-2 py-2 text-left font-medium text-neutral-300"
+											className="px-2 py-2 text-left font-medium text-neutral-300"
 										>
 											{room}
 										</th>
@@ -745,18 +793,15 @@ export function ScheduleBoard({
 						<tbody>
 							{timeRows.map((startMinutes) => {
 								const labelMs = wallTimeToUtcMs(dayKey, startMinutes, timeZone);
-								const visibleRooms = rooms.filter(
-									(room) => roomFilter === "all" || room === roomFilter,
-								);
 								return (
 									<tr
 										key={startMinutes}
 										className="border-b border-dotted border-neutral-800"
 									>
-										<td className="sticky left-0 bg-neutral-900 px-2 py-1 font-mono text-xs tabular-nums text-neutral-500">
+										<td className="sticky left-0 w-16 bg-neutral-900 px-2 py-1 font-mono text-xs tabular-nums text-neutral-500">
 											{formatClock(labelMs, timeZone)}
 										</td>
-										{visibleRooms.map((room) => {
+										{visibleDayRooms.map((room) => {
 											const cellStartMs = wallTimeToUtcMs(
 												dayKey,
 												startMinutes,
@@ -766,22 +811,24 @@ export function ScheduleBoard({
 											const isStart =
 												occupant?.slot?.startsAtMs === cellStartMs;
 											const droppableId = slotDroppableId(room, startMinutes);
+											const slotSpan = occupant
+												? Math.max(
+														1,
+														Math.ceil(
+															occupant.durationMinutes / slotDurationMinutes,
+														),
+													)
+												: 1;
 											return (
-												<td key={room} className="p-0 align-top">
+												<td key={room} className="w-[1%] p-0 align-top">
 												{occupant && !isStart ? (
 													<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
 												) : occupant && isStart ? (
+													<div className="h-full" style={{ minHeight: `${slotSpan * 2.5}rem` }}>
 													<PlacedDraggableCard
 														session={occupant}
 														selected={selectedId === occupant.id}
-														minHeightRem={
-															Math.max(
-																1,
-																Math.ceil(
-																	occupant.durationMinutes / slotDurationMinutes,
-																),
-															) * 2.5
-														}
+														minHeightRem={slotSpan * 2.5}
 														timeLabel={`${formatClock(occupant.slot!.startsAtMs, timeZone)}–${formatClock(occupant.slot!.endsAtMs, timeZone)}`}
 														onSelect={() =>
 															setSelectedId((prev) =>
@@ -790,6 +837,7 @@ export function ScheduleBoard({
 														}
 														onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
 													/>
+													</div>
 													) : (
 														<DroppableSlot
 															id={droppableId}

@@ -84,13 +84,18 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 				speaker.status === "confirmed" || speaker.status === "pending",
 		);
 		const slot = slotsBySubmission.get(row.id) ?? null;
+		const slotDurationMinutes = slot
+			? Math.max(1, Math.round((slot.ends_at - slot.starts_at) / 60_000))
+			: null;
 		sessions.push({
 			id: row.id,
 		title: titleFromAnswers(answers),
 		category: displayCategory(row.category),
 			status: row.status,
 			submitterName: row.submitter_name,
-			durationMinutes: durationMinutesFromAnswers(answers),
+			// Placed sessions must size from the agenda slot, not CFP answers
+			// (answers often default to 30m while the slot is 90m).
+			durationMinutes: slotDurationMinutes ?? durationMinutesFromAnswers(answers),
 			speakerKeys: active.map((speaker) =>
 				normalizeSpeakerKey(speaker.email),
 			),
