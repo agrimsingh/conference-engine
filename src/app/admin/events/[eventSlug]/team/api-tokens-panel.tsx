@@ -125,16 +125,59 @@ export function ApiTokensPanel({ eventSlug }: Props) {
 		}
 	}
 
+	const openApiHref = "/api/admin/openapi.json";
+	const exampleCurl = `export CE_PAT='ce_pat_…'
+curl -sS "https://conference-engine.65labs.org/api/admin/events/${eventSlug}/submissions?queue=pending" \\
+  -H "Authorization: Bearer $CE_PAT"`;
+
 	return (
 		<div className="space-y-6">
+			<div className="space-y-3 text-sm text-neutral-400">
+				<p>
+					Use a token as{" "}
+					<code className="text-neutral-300">Authorization: Bearer ce_pat_…</code> on{" "}
+					<code className="text-neutral-300">/api/admin/events/{eventSlug}/**</code>. Same
+					JSON routes as the organizer cookie — list/decide submissions, create speakers and
+					sessions, place talks, mint or revoke tokens. Scope is this event only.
+				</p>
+				<p>
+					Machine-readable contract:{" "}
+					<a
+						href={openApiHref}
+						target="_blank"
+						rel="noreferrer"
+						className="text-neutral-200 underline decoration-neutral-600 underline-offset-2 hover:decoration-neutral-300"
+					>
+						OpenAPI
+					</a>
+					{" · "}
+					<a
+						href="https://github.com/agrimsingh/conference-engine#admin-agent-api-apiadmin"
+						target="_blank"
+						rel="noreferrer"
+						className="text-neutral-200 underline decoration-neutral-600 underline-offset-2 hover:decoration-neutral-300"
+					>
+						README
+					</a>
+				</p>
+				<pre className="overflow-x-auto rounded border border-neutral-800 bg-neutral-950/80 p-3 text-xs leading-relaxed text-neutral-300">
+					{exampleCurl}
+				</pre>
+			</div>
+
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}
 			{notice ? <p className={noticeClasses("positive")}>{notice}</p> : null}
 			{plaintext ? (
 				<div className="space-y-2 rounded border border-amber-900/60 bg-amber-950/30 p-3">
 					<p className="text-xs text-amber-200/90">
-						Plaintext token (shown once)
+						Plaintext token (shown once) — store it now; we only keep a hash.
 					</p>
 					<code className="block break-all text-sm text-amber-100">{plaintext}</code>
+					<pre className="overflow-x-auto text-xs leading-relaxed text-amber-100/80">
+						{`export CE_PAT='${plaintext}'
+curl -sS "https://conference-engine.65labs.org/api/admin/events/${eventSlug}/submissions?queue=all" \\
+  -H "Authorization: Bearer $CE_PAT"`}
+					</pre>
 					<button
 						type="button"
 						onClick={() => void copyPlaintext()}

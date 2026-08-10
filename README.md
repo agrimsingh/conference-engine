@@ -168,8 +168,18 @@ Jobs covered today include listing and deciding submissions, placing a talk on t
 
 ```bash
 # after minting a token in Settings → API tokens
+export CE_PAT='ce_pat_…'
+export EVENT_SLUG='your-event-slug'
+
+# local preview
 curl -sS "http://127.0.0.1:8787/api/admin/events/$EVENT_SLUG/submissions?queue=pending" \
   -H "Authorization: Bearer $CE_PAT"
+
+# production
+curl -sS "https://conference-engine.65labs.org/api/admin/events/$EVENT_SLUG/speakers" \
+  -H "Authorization: Bearer $CE_PAT" \
+  -H "content-type: application/json" \
+  -d '{"email":"speaker@example.com","name":"Ada Lovelace","bio":"…"}'
 ```
 
 ## Develop and test
