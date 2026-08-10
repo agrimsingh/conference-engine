@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "portalUrl": "http://localhost:3042/portal/authorize?token=<redacted>",
+  "expiresAt": 1786388110233,
+  "tokenRedacted": true
+}

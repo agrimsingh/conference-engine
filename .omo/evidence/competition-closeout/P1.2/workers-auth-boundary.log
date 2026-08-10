@@ -1,0 +1,10 @@
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p1.2-judge-runnability
+
+Using secrets defined in .dev.vars
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  02:39:20
+   Duration  1.17s (transform 200ms, setup 297ms, import 204ms, tests 32ms, environment 1ms)
+

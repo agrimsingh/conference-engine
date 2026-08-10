@@ -317,6 +317,36 @@ export function SpeakerRoster({
 
 	async function invite(personId: string) { setPending(true); setNotice(null); try { const response = await fetch(`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(personId)}/invite`, { method: "POST" }); const value = await response.json() as { ok?: boolean; error?: string }; setNotice(response.ok && value.ok ? "Portal invitation sent and logged in Communications." : value.error ?? "Invite failed"); } catch { setNotice("Network error"); } finally { setPending(false); } }
 
+	async function copyPortalSignInLink(personId: string) {
+		setPending(true);
+		setNotice(null);
+		try {
+			const response = await fetch(
+				`/api/admin/events/${eventSlug}/speakers/${encodeURIComponent(personId)}/portal-link`,
+				{ method: "POST" },
+			);
+			const value = (await response.json()) as {
+				ok?: boolean;
+				portalUrl?: string;
+				error?: string;
+			};
+			if (!response.ok || !value.ok || !value.portalUrl) {
+				setNotice(value.error ?? "Could not mint portal sign-in link");
+				return;
+			}
+			try {
+				await navigator.clipboard.writeText(value.portalUrl);
+				setNotice("Portal sign-in link copied. It is one-time and expires soon.");
+			} catch {
+				setNotice(`Copy manually: ${value.portalUrl}`);
+			}
+		} catch {
+			setNotice("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
 	async function openCrm(speaker: RosterSpeaker) {
 		setPending(true);
 		setNotice(null);
@@ -710,6 +740,14 @@ export function SpeakerRoster({
 													className={buttonClasses("secondary")}
 												>
 													Send portal invite
+												</button>
+												<button
+													type="button"
+													disabled={pending}
+													onClick={() => void copyPortalSignInLink(speaker.personId)}
+													className={buttonClasses("secondary")}
+												>
+													Copy portal sign-in link
 												</button>
 											</div>
 										</div>

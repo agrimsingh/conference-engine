@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p1.2-judge-runnability
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  02:39:21
+   Duration  180ms (transform 24ms, setup 0ms, import 33ms, tests 10ms, environment 0ms)
+

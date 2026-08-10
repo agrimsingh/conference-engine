@@ -139,6 +139,14 @@ export function OrganizerLoginForm({ initialEmail, next, initialError }: Props) 
 					{pending ? "Sending…" : "Continue with email"}
 				</button>
 			</form>
+			<aside className="mt-6 rounded-lg border border-neutral-800 bg-neutral-950/60 px-4 py-4 text-sm text-neutral-400">
+				<p className="font-medium text-neutral-200">Evaluating without inbox access?</p>
+				<p className="mt-1.5 leading-relaxed">
+					Organizers sign in with a one-time email link. Once inside an event, you can mint
+					speaker portal sign-in links from Speakers and personal reviewer links from Review —
+					copy them into another browser window without waiting on email.
+				</p>
+			</aside>
 			<p className="mt-8 text-sm text-neutral-500">
 				<Link
 					className="underline underline-offset-2 hover:text-neutral-300"
