@@ -204,11 +204,15 @@ export function ReviewWorkspace({
 	}
 
 	async function copyReviewPath(path: string) {
+		const absolute =
+			path.startsWith("http://") || path.startsWith("https://")
+				? path
+				: new URL(path, window.location.origin).toString();
 		try {
-			await navigator.clipboard.writeText(path);
+			await navigator.clipboard.writeText(absolute);
 			setMessage("Review link copied.");
 		} catch {
-			setError("Copy the review link manually.");
+			setError(`Copy the review link manually: ${absolute}`);
 		}
 	}
 
@@ -384,7 +388,9 @@ export function ReviewWorkspace({
 										if (result) {
 											setReviewerName("");
 											setReviewerEmail("");
-											setIssuedReviewPath(result.reviewer?.reviewPath ?? null);
+											const path = result.reviewer?.reviewPath ?? null;
+											setIssuedReviewPath(path);
+											if (path) await copyReviewPath(path);
 										}
 									}}
 								>
@@ -402,7 +408,7 @@ export function ReviewWorkspace({
 										<p className="mt-0.5 text-xs text-neutral-500">{reviewer.email ?? "no email"} · {reviewer.assigned} assigned · {reviewer.scored} submitted reviews</p>
 									</div>
 									{active && reviewer.revokedAt === null ? (
-										<div className="flex gap-2">
+										<div className="flex flex-wrap gap-2">
 											<Button
 												size="sm"
 												variant="secondary"
@@ -414,10 +420,12 @@ export function ReviewWorkspace({
 														action: "regenerate",
 														email: reviewer.email,
 													});
-													if (result) setIssuedReviewPath(result.reviewer?.reviewPath ?? null);
+													const path = result?.reviewer?.reviewPath ?? null;
+													setIssuedReviewPath(path);
+													if (path) await copyReviewPath(path);
 												}}
 											>
-												Regenerate
+												Regenerate &amp; copy link
 											</Button>
 											<Button size="sm" variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/reviewers`, "PATCH", { planId: plan.id, reviewerId: reviewer.id, action: "revoke" })}>Revoke</Button>
 										</div>
