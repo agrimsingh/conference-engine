@@ -142,9 +142,11 @@ const UNSCHEDULED: {
 	},
 ];
 
-type PipelineAction =
-	| { kind: "play"; href: string; label: string }
-	| { kind: "own" };
+type PipelineAction = {
+	kind: "play" | "own";
+	href: string;
+	label: string;
+};
 
 const PIPELINE: {
 	stage: string;
@@ -165,19 +167,31 @@ const PIPELINE: {
 		stage: "Review",
 		description:
 			"Reviewers score only what they're assigned, 1–5 against the rubric. The board stays empty until you assign; the chair reads scores, not an email chain.",
-		action: { kind: "own" },
+		action: {
+			kind: "own",
+			href: "/demo?perspective=reviewer",
+			label: "How review works",
+		},
 	},
 	{
 		stage: "Accept",
 		description:
 			"Triage into accepted, waitlisted, or rejected without sending a single email. Bulk-notify when the programme is settled.",
-		action: { kind: "own" },
+		action: {
+			kind: "own",
+			href: "/demo?perspective=organizer",
+			label: "See the full walkthrough",
+		},
 	},
 	{
 		stage: "Speaker ops",
 		description:
 			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. Outstanding work stays on the cockpit until it lands.",
-		action: { kind: "own" },
+		action: {
+			kind: "own",
+			href: "/demo?perspective=speaker",
+			label: "How the portal works",
+		},
 	},
 	{
 		stage: "Schedule",
@@ -552,14 +566,15 @@ export default function Home() {
 						The whole program pipeline, one system
 					</h2>
 					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
-						Six stages that usually live in six tools. Green links are live demo
-						routes. Everything else needs your own event — no brochure dead ends.
+						Six stages that usually live in six tools. Green links open the live
+						demo; the rest show how each stage runs once you create your own
+						event — no brochure dead ends.
 					</p>
 					<ol className="mt-10 border-t border-neutral-800">
 						{PIPELINE.map((item, index) => (
 							<li
 								key={item.stage}
-								className="grid gap-2 border-b border-neutral-800 py-6 sm:grid-cols-[56px_200px_1fr_auto] sm:items-baseline sm:gap-6"
+								className="grid gap-2 border-b border-neutral-800 py-6 sm:grid-cols-[56px_200px_1fr_220px] sm:items-baseline sm:gap-6"
 							>
 								<span className="text-sm tabular-nums text-neutral-500">
 									{String(index + 1).padStart(2, "0")}
@@ -570,17 +585,28 @@ export default function Home() {
 								<p className="max-w-xl text-pretty text-sm leading-relaxed text-neutral-400">
 									{item.description}
 								</p>
-								{item.action.kind === "play" ? (
+								<span className="sm:justify-self-end sm:text-right">
 									<Link
 										href={item.action.href}
-										className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+										className={
+											item.action.kind === "play"
+												? "inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+												: "inline-flex items-center gap-1.5 text-sm font-medium text-neutral-400 hover:text-neutral-200"
+										}
 									>
 										{item.action.label}
 										<ArrowIcon />
 									</Link>
-								) : (
-									<span className="text-sm text-neutral-600">Needs your event</span>
-								)}
+									{item.action.kind === "own" ? (
+										<span className="mt-1 hidden text-xs text-neutral-600 sm:block">
+											runs in your event
+										</span>
+									) : (
+										<span className="mt-1 hidden text-xs text-emerald-500/70 sm:block">
+											live demo
+										</span>
+									)}
+								</span>
 							</li>
 						))}
 					</ol>
