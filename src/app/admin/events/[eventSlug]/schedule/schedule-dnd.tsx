@@ -90,6 +90,13 @@ export function PlacedDraggableCard({
 		minHeight: `${minHeightRem}rem`,
 	};
 
+	const speakers =
+		session.speakerLabels.length === 0
+			? null
+			: session.speakerLabels.length <= 2
+				? session.speakerLabels.join(", ")
+				: `${session.speakerLabels.slice(0, 2).join(", ")} +${session.speakerLabels.length - 2}`;
+
 	return (
 		<div
 			ref={setNodeRef}
@@ -98,14 +105,19 @@ export function PlacedDraggableCard({
 			{...attributes}
 			role="button"
 			tabIndex={0}
-			aria-label={`Move ${session.title}; press Enter then choose a schedule cell`}
+			aria-label={`Move ${session.title}${speakers ? `, ${speakers}` : ""}; press Enter then choose a schedule cell`}
 			aria-pressed={selected}
 			onKeyDown={onKeyDown}
 			onClick={onSelect}
 			className="m-0.5 cursor-grab rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100 active:cursor-grabbing"
 		>
-			<p className="font-medium">{session.title}</p>
-			<p className="font-mono tabular-nums opacity-80">{timeLabel}</p>
+			<p className="font-medium leading-snug">{session.title}</p>
+			{speakers ? (
+				<p className="mt-0.5 truncate text-[11px] text-neutral-300">{speakers}</p>
+			) : null}
+			<p className="mt-0.5 font-mono tabular-nums text-[11px] text-neutral-400">
+				{timeLabel}
+			</p>
 		</div>
 	);
 }
