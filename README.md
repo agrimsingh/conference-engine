@@ -6,6 +6,7 @@ Run a conference programme without renting a $40k suite.
 
 - **Live product:** [conference-engine.65labs.org](https://conference-engine.65labs.org) — create a real event from the homepage
 - **Read-only demo:** [conference-engine.65labs.org/demo](https://conference-engine.65labs.org/demo)
+- **Compare / self-host:** [conference-engine.65labs.org/compare](https://conference-engine.65labs.org/compare) — vs Sessionboard/Sessionize, what we skip, deploy sketch
 - **Parity map:** [PARITY.md](./PARITY.md) — brief requirements mapped to live routes
 
 ```text
