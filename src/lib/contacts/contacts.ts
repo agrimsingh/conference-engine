@@ -271,11 +271,20 @@ async function listContactEventLinks(
 			`SELECT esc.event_id, e.slug AS event_slug, e.name AS event_name, esc.person_id, esc.created_at AS linked_at
 			 FROM event_speaker_contacts esc
 			 JOIN events e ON e.id = esc.event_id
-			 JOIN event_ownership o ON o.event_id = e.id AND o.account_id = ?
 			 WHERE esc.contact_id = ?
+			   AND (
+			     EXISTS (
+			       SELECT 1 FROM event_ownership o
+			       WHERE o.event_id = e.id AND o.account_id = ?
+			     )
+			     OR EXISTS (
+			       SELECT 1 FROM event_memberships m
+			       WHERE m.event_id = e.id AND m.account_id = ?
+			     )
+			   )
 			 ORDER BY esc.created_at DESC`,
 		)
-		.bind(accountId, contactId)
+		.bind(contactId, accountId, accountId)
 		.all<{
 			event_id: string;
 			event_slug: string;
@@ -294,21 +303,30 @@ async function listContactEventLinks(
 		}));
 	}
 
-	// Fallback: same email appearing on owned-event speaker profiles.
+	// Fallback: same email on speaker profiles for events this account can manage.
 	const byEmail = await db
 		.prepare(
 			`SELECT e.id AS event_id, e.slug AS event_slug, e.name AS event_name, p.id AS person_id,
 				COALESCE(esp.created_at, sp.created_at, p.created_at) AS linked_at
 			 FROM people p
-			 JOIN event_ownership o ON o.account_id = ?
-			 JOIN events e ON e.id = o.event_id
+			 JOIN events e
 			 LEFT JOIN event_speaker_profiles esp ON esp.event_id = e.id AND esp.person_id = p.id
 			 LEFT JOIN speaker_profiles sp ON sp.event_id = e.id AND sp.person_id = p.id
 			 WHERE lower(p.email) = lower(?)
 			   AND (esp.id IS NOT NULL OR sp.id IS NOT NULL)
+			   AND (
+			     EXISTS (
+			       SELECT 1 FROM event_ownership o
+			       WHERE o.event_id = e.id AND o.account_id = ?
+			     )
+			     OR EXISTS (
+			       SELECT 1 FROM event_memberships m
+			       WHERE m.event_id = e.id AND m.account_id = ?
+			     )
+			   )
 			 ORDER BY linked_at DESC`,
 		)
-		.bind(accountId, email)
+		.bind(email, accountId, accountId)
 		.all<{
 			event_id: string;
 			event_slug: string;

@@ -1,8 +1,16 @@
 import {
 	detectConflicts,
+	intervalsOverlap,
 	type ScheduleInterval,
 } from "@/lib/domain";
 import { wallTimeToUtcMs } from "@/lib/schedule/time";
+
+export type TrackPlacementInterval = {
+	submissionId: string;
+	trackId: string | null;
+	startsAtMs: number;
+	endsAtMs: number;
+};
 
 export type UnplacedSearchable = {
 	title: string;
@@ -79,6 +87,26 @@ export function filterUnplacedRail<T extends UnplacedSearchable & { slot: unknow
 	);
 }
 
+function hasHardTrackConflict(input: {
+	submissionId: string;
+	startsAtMs: number;
+	endsAtMs: number;
+	trackConflictPolicy: "hard" | "allow";
+	placementTrackId: string | null;
+	trackIntervals: readonly TrackPlacementInterval[];
+}): boolean {
+	if (input.trackConflictPolicy !== "hard" || !input.placementTrackId) return false;
+	return input.trackIntervals.some(
+		(other) =>
+			other.submissionId !== input.submissionId &&
+			other.trackId === input.placementTrackId &&
+			intervalsOverlap(
+				{ startsAtMs: input.startsAtMs, endsAtMs: input.endsAtMs },
+				other,
+			),
+	);
+}
+
 export function findAvailableSlot(input: {
 	session: SlotSearchSession;
 	dayKey: string;
@@ -88,9 +116,15 @@ export function findAvailableSlot(input: {
 	roomIds: Readonly<Record<string, string>>;
 	dayEndMinutes: number;
 	intervals: readonly ScheduleInterval[];
+	trackConflictPolicy?: "hard" | "allow";
+	placementTrackId?: string | null;
+	trackIntervals?: readonly TrackPlacementInterval[];
 }): AvailableSlot | null {
 	const { session, dayKey, timeZone, timeRows, rooms, roomIds, dayEndMinutes, intervals } =
 		input;
+	const trackConflictPolicy = input.trackConflictPolicy ?? "allow";
+	const placementTrackId = input.placementTrackId ?? null;
+	const trackIntervals = input.trackIntervals ?? [];
 	if (session.durationMinutes <= 0 || rooms.length === 0 || timeRows.length === 0) {
 		return null;
 	}
@@ -99,6 +133,18 @@ export function findAvailableSlot(input: {
 		if (startMinutes + session.durationMinutes > dayEndMinutes) continue;
 		const startsAtMs = wallTimeToUtcMs(dayKey, startMinutes, timeZone);
 		const endsAtMs = startsAtMs + session.durationMinutes * 60_000;
+		if (
+			hasHardTrackConflict({
+				submissionId: session.id,
+				startsAtMs,
+				endsAtMs,
+				trackConflictPolicy,
+				placementTrackId,
+				trackIntervals,
+			})
+		) {
+			continue;
+		}
 
 		for (const roomName of rooms) {
 			const candidate: ScheduleInterval = {
@@ -140,8 +186,14 @@ export function planAutoPlace(input: {
 	roomIds: Readonly<Record<string, string>>;
 	dayEndMinutes: number;
 	intervals: readonly ScheduleInterval[];
+	trackConflictPolicy?: "hard" | "allow";
+	placementTrackId?: string | null;
+	trackIntervals?: readonly TrackPlacementInterval[];
 }): AutoPlacePlan {
 	const working: ScheduleInterval[] = [...input.intervals];
+	const workingTracks: TrackPlacementInterval[] = [...(input.trackIntervals ?? [])];
+	const trackConflictPolicy = input.trackConflictPolicy ?? "allow";
+	const placementTrackId = input.placementTrackId ?? null;
 	const placements: AutoPlaceAssignment[] = [];
 	const skippedIds: string[] = [];
 
@@ -155,6 +207,9 @@ export function planAutoPlace(input: {
 			roomIds: input.roomIds,
 			dayEndMinutes: input.dayEndMinutes,
 			intervals: working,
+			trackConflictPolicy,
+			placementTrackId,
+			trackIntervals: workingTracks,
 		});
 		if (!slot) {
 			skippedIds.push(session.id);
@@ -168,6 +223,12 @@ export function planAutoPlace(input: {
 			startsAtMs: slot.startsAtMs,
 			endsAtMs: slot.endsAtMs,
 			speakerKeys: session.speakerKeys,
+		});
+		workingTracks.push({
+			submissionId: session.id,
+			trackId: placementTrackId,
+			startsAtMs: slot.startsAtMs,
+			endsAtMs: slot.endsAtMs,
 		});
 	}
 

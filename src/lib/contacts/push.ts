@@ -65,7 +65,6 @@ export async function pushContactToEvent(
 			jobTitle: contact.title,
 			company: contact.company,
 			bio: contact.bio,
-			workflowStatus: "invited",
 		},
 		now,
 	});

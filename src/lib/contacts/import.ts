@@ -11,6 +11,21 @@ export type ContactImportResult =
 	  }
 	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> };
 
+type ValidatedImportRow = {
+	rowNumber: number;
+	email: string;
+	name: string;
+	title: string;
+	company: string;
+	bio: string;
+	notes: string;
+	tags: string[];
+};
+
+/**
+ * Validate every CSV row first. Persist only when the whole file is valid so
+ * `ok: false` never leaves a partial import.
+ */
 export async function importAccountContactsCsv(
 	db: D1Database,
 	args: { accountId: string; csv: string; authorAccountId?: string | null; now?: number },
@@ -26,9 +41,8 @@ export async function importAccountContactsCsv(
 
 	const now = args.now ?? Date.now();
 	const issues: Array<{ row: number; error: string }> = [];
-	const actions: Array<{ row: number; email: string; action: "created" | "updated" }> = [];
-	let imported = 0;
-	let updated = 0;
+	const validated: ValidatedImportRow[] = [];
+	const emailsInFile = new Set<string>();
 
 	for (const [index, record] of parsed.rows.entries()) {
 		const rowNumber = index + 2;
@@ -71,13 +85,38 @@ export async function importAccountContactsCsv(
 			issues.push({ row: rowNumber, error: tagsResult.error });
 			continue;
 		}
+		if (emailsInFile.has(email)) {
+			issues.push({ row: rowNumber, error: "Duplicate email in CSV" });
+			continue;
+		}
+		emailsInFile.add(email);
+		validated.push({
+			rowNumber,
+			email,
+			name,
+			title,
+			company,
+			bio,
+			notes,
+			tags: tagsResult.value,
+		});
+	}
 
+	if (issues.length) {
+		return { ok: false, error: "Fix CSV validation errors before importing", rows: issues };
+	}
+
+	const actions: Array<{ row: number; email: string; action: "created" | "updated" }> = [];
+	let imported = 0;
+	let updated = 0;
+
+	for (const row of validated) {
 		const existing = await db
 			.prepare(
 				`SELECT id, custom_fields_json FROM account_contacts
 				 WHERE account_id = ? AND email = ? COLLATE NOCASE`,
 			)
-			.bind(args.accountId, email)
+			.bind(args.accountId, row.email)
 			.first<{ id: string; custom_fields_json: string }>();
 
 		if (existing) {
@@ -91,20 +130,20 @@ export async function importAccountContactsCsv(
 					 WHERE id = ? AND account_id = ?`,
 				)
 				.bind(
-					name,
-					title || null,
-					company || null,
-					bio || null,
-					notes,
-					notes,
+					row.name,
+					row.title || null,
+					row.company || null,
+					row.bio || null,
+					row.notes,
+					row.notes,
 					JSON.stringify(customFields),
 					now,
 					existing.id,
 					args.accountId,
 				)
 				.run();
-			if (tagsResult.value.length) {
-				for (const tag of tagsResult.value) {
+			if (row.tags.length) {
+				for (const tag of row.tags) {
 					await db
 						.prepare(
 							`INSERT OR IGNORE INTO account_contact_tags (account_id, contact_id, tag, created_at)
@@ -115,7 +154,7 @@ export async function importAccountContactsCsv(
 				}
 			}
 			updated += 1;
-			actions.push({ row: rowNumber, email, action: "updated" });
+			actions.push({ row: row.rowNumber, email: row.email, action: "updated" });
 		} else {
 			const id = crypto.randomUUID();
 			await db
@@ -127,17 +166,17 @@ export async function importAccountContactsCsv(
 				.bind(
 					id,
 					args.accountId,
-					email,
-					name,
-					title || null,
-					company || null,
-					bio || null,
-					notes || null,
+					row.email,
+					row.name,
+					row.title || null,
+					row.company || null,
+					row.bio || null,
+					row.notes || null,
 					now,
 					now,
 				)
 				.run();
-			for (const tag of tagsResult.value) {
+			for (const tag of row.tags) {
 				await db
 					.prepare(
 						`INSERT INTO account_contact_tags (account_id, contact_id, tag, created_at)
@@ -154,12 +193,9 @@ export async function importAccountContactsCsv(
 				occurredAt: now,
 			});
 			imported += 1;
-			actions.push({ row: rowNumber, email, action: "created" });
+			actions.push({ row: row.rowNumber, email: row.email, action: "created" });
 		}
 	}
 
-	if (issues.length) {
-		return { ok: false, error: "Fix CSV validation errors before importing", rows: issues };
-	}
 	return { ok: true, imported, updated, rows: actions };
 }

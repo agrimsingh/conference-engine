@@ -514,8 +514,8 @@ export async function upsertEventSpeakerProfile(
 	if (company && company.length > 160) return { ok: false, error: "Company is too long", status: 400 };
 	if (bio && bio.length > 10_000) return { ok: false, error: "Bio is too long", status: 400 };
 	if (logisticsText && logisticsText.length > 4000) return { ok: false, error: "Travel and logistics is too long", status: 400 };
-	const workflowStatus = args.input.workflowStatus ?? "invited";
-	if (!isSpeakerWorkflowStatus(workflowStatus)) {
+	const requestedWorkflow = args.input.workflowStatus;
+	if (requestedWorkflow !== undefined && !isSpeakerWorkflowStatus(requestedWorkflow)) {
 		return { ok: false, error: "Invalid workflow status", status: 400 };
 	}
 	const socialJson = serializeSpeakerSocials(args.input.socials ?? {});
@@ -576,15 +576,27 @@ export async function upsertEventSpeakerProfile(
 		.bind(args.eventId, personId)
 		.first<{ id: string }>();
 	if (existing) {
-		await db
-			.prepare(
-				`UPDATE event_speaker_profiles
-				 SET job_title = NULL, company = NULL, social_json = NULL, workflow_status = ?, updated_at = ?
-				 WHERE id = ?`,
-			)
-			.bind(workflowStatus, now, existing.id)
-			.run();
+		if (requestedWorkflow !== undefined) {
+			await db
+				.prepare(
+					`UPDATE event_speaker_profiles
+					 SET job_title = NULL, company = NULL, social_json = NULL, workflow_status = ?, updated_at = ?
+					 WHERE id = ?`,
+				)
+				.bind(requestedWorkflow, now, existing.id)
+				.run();
+		} else {
+			await db
+				.prepare(
+					`UPDATE event_speaker_profiles
+					 SET job_title = NULL, company = NULL, social_json = NULL, updated_at = ?
+					 WHERE id = ?`,
+				)
+				.bind(now, existing.id)
+				.run();
+		}
 	} else {
+		const workflowStatus = requestedWorkflow ?? "invited";
 		await db
 			.prepare(
 				`INSERT INTO event_speaker_profiles (

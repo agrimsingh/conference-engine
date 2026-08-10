@@ -142,6 +142,17 @@ export function ScheduleBoard({
 			}));
 	}, [sessions]);
 
+	const trackIntervals = useMemo(() => {
+		return sessions
+			.filter((session) => session.slot)
+			.map((session) => ({
+				submissionId: session.id,
+				trackId: session.slot!.trackId,
+				startsAtMs: session.slot!.startsAtMs,
+				endsAtMs: session.slot!.endsAtMs,
+			}));
+	}, [sessions]);
+
 	const daySessions = useMemo(() => {
 		return sessions.filter((session) => {
 			if (!session.slot) return false;
@@ -494,6 +505,9 @@ export function ScheduleBoard({
 			roomIds,
 			dayEndMinutes,
 			intervals,
+			trackConflictPolicy,
+			placementTrackId: trackId || null,
+			trackIntervals,
 		});
 		if (!slot) {
 			setError("No open slot on this day for the selected session.");
@@ -525,6 +539,9 @@ export function ScheduleBoard({
 			roomIds,
 			dayEndMinutes,
 			intervals,
+			trackConflictPolicy,
+			placementTrackId: trackId || null,
+			trackIntervals,
 		});
 
 		const summary = formatAutoPlaceSummary(plan.placed, plan.needAttention);
