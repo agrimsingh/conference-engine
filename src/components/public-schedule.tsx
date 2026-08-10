@@ -16,10 +16,7 @@ import {
 	publicScheduleTrackColumns,
 	type PublicScheduleTrack,
 } from "@/lib/schedule/public-tracks";
-import {
-	SEGMENTED_CONTAINER_CLASSES,
-	EmptyState,
-} from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { PublicItinerary } from "@/components/public-itinerary";
 import {
@@ -370,8 +367,8 @@ export async function PublicSchedule({
 
 	return (
 		<main className="mx-auto max-w-5xl px-4 py-10">
-			<header className="mb-8 space-y-4 border-b border-neutral-800 pb-5">
-				<div className="space-y-2">
+			<header className="mb-8 border-b border-neutral-800">
+				<div className="space-y-2 pb-5">
 					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 						Public schedule
 					</p>
@@ -388,40 +385,38 @@ export async function PublicSchedule({
 					</p>
 				</div>
 
-				<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-					<div
-						role="tablist"
-						aria-label="Schedule view"
-						className={SEGMENTED_CONTAINER_CLASSES}
-					>
-						{views.map((v) => {
-							const active = view === v;
-							return (
-								<Link
-									key={v}
-									role="tab"
-									aria-selected={active}
-										href={hrefFor(basePath, event.slug, {
-											day:
-												(v === "itinerary" || v === "my-schedule") && allDaysSelected
-													? "all"
-													: dayKey,
-											view: v,
-											room: roomFilter,
-											embed: itineraryEmbed?.slug,
-										})}
-									className={
-										active
-											? "rounded-md bg-neutral-800 px-3 py-1.5 text-sm font-medium text-neutral-100"
-											: "rounded-md px-3 py-1.5 text-sm font-medium text-neutral-400 hover:text-neutral-100"
-									}
-								>
-									{viewLabel(v)}
-								</Link>
-							);
-						})}
-					</div>
-				</div>
+				<nav
+					role="tablist"
+					aria-label="Schedule view"
+					className="-mb-px flex gap-1 overflow-x-auto"
+				>
+					{views.map((v) => {
+						const active = view === v;
+						return (
+							<Link
+								key={v}
+								role="tab"
+								aria-selected={active}
+								href={hrefFor(basePath, event.slug, {
+									day:
+										(v === "itinerary" || v === "my-schedule") && allDaysSelected
+											? "all"
+											: dayKey,
+									view: v,
+									room: roomFilter,
+									embed: itineraryEmbed?.slug,
+								})}
+								className={
+									active
+										? "shrink-0 border-b-2 border-neutral-100 px-3 py-2.5 text-sm font-medium text-neutral-100"
+										: "shrink-0 border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-neutral-500 hover:border-neutral-700 hover:text-neutral-200"
+								}
+							>
+								{viewLabel(v)}
+							</Link>
+						);
+					})}
+				</nav>
 			</header>
 
 			<nav aria-label="Event days" className="mb-6 flex flex-wrap items-center gap-2">
