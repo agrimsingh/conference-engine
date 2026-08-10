@@ -180,13 +180,13 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 					</p>
 				) : null}
 
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-					<header className="border-b border-neutral-800 pb-4">
+				<section>
+					<header className="mb-6 border-b border-neutral-800 pb-4">
 						<h2 className="text-lg font-semibold text-neutral-100">{active.label}</h2>
 						<p className="mt-1 text-sm text-neutral-400">{active.description}</p>
 					</header>
 
-					<div className="mt-5">
+					<div>
 						{section === "details" ? (
 							<form
 								className="grid gap-4 sm:grid-cols-2"
@@ -266,8 +266,8 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 										<option value="allow">Allow: permit overlapping sessions in the same track</option>
 									</select>
 								</label>
-								<fieldset className="space-y-2 rounded-md border border-neutral-800 p-3 sm:col-span-2">
-									<legend className="px-1 text-sm font-medium text-neutral-200">
+								<fieldset className="space-y-3 border-t border-neutral-800 pt-4 sm:col-span-2">
+									<legend className="text-sm font-medium text-neutral-200">
 										Organizer submission emails
 									</legend>
 									<p className="text-xs text-neutral-500">
@@ -299,9 +299,9 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 						) : null}
 
 						{section === "rooms" ? (
-							<div className="space-y-4">
+							<div className="space-y-6">
 								<form
-									className="flex flex-wrap gap-2"
+									className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
 									onSubmit={(e) => {
 										e.preventDefault();
 										const f = new FormData(e.currentTarget);
@@ -310,7 +310,7 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 									}}
 								>
 									<Field label="New room name" name="name" />
-									<button disabled={pending} className={`self-end ${buttonClasses("secondary")}`}>
+									<button disabled={pending} className={buttonClasses("secondary")}>
 										Add room
 									</button>
 								</form>
@@ -333,9 +333,9 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 						) : null}
 
 						{section === "tracks" ? (
-							<div className="space-y-4">
+							<div className="space-y-6">
 								<form
-									className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+									className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
 									onSubmit={(e) => {
 										e.preventDefault();
 										const f = new FormData(e.currentTarget);
@@ -353,10 +353,7 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 										placeholder="workshops"
 										pattern="(?:[a-z0-9]|-)+"
 									/>
-									<button
-										disabled={pending}
-										className={`self-end ${buttonClasses("secondary")}`}
-									>
+									<button disabled={pending} className={buttonClasses("secondary")}>
 										Add track
 									</button>
 								</form>
@@ -389,9 +386,9 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 						) : null}
 
 						{section === "tasks" ? (
-							<div className="space-y-4">
+							<div className="space-y-6">
 								<form
-									className="grid gap-2 sm:grid-cols-2"
+									className="grid gap-4 sm:grid-cols-2"
 									onSubmit={(e) => {
 										e.preventDefault();
 										const f = new FormData(e.currentTarget);
@@ -406,6 +403,9 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 										});
 									}}
 								>
+									<p className="text-sm font-medium text-neutral-300 sm:col-span-2">
+										Add a task template
+									</p>
 									<Field
 										label="Task key"
 										name="key"
@@ -424,15 +424,14 @@ export function SettingsEditor({ eventSlug, configuration }: Props) {
 											placeholder="What speakers should upload, write, or answer"
 										/>
 									</label>
-									<label className="flex items-end gap-2 pb-2 text-sm text-neutral-200">
+									<label className="flex items-center gap-2 text-sm text-neutral-200">
 										<input name="required" type="checkbox" defaultChecked /> Required
 									</label>
-									<button
-										disabled={pending}
-										className={`sm:col-span-2 justify-self-start ${buttonClasses("secondary")}`}
-									>
-										Add task
-									</button>
+									<div className="sm:col-span-2">
+										<button disabled={pending} className={buttonClasses("secondary")}>
+											Add task
+										</button>
+									</div>
 								</form>
 								<Rows
 									rows={configuration.tasks}
@@ -528,12 +527,16 @@ function Rows<T extends { id: string }>({
 	onDelete: (id: string) => Promise<boolean>;
 	render: (row: T) => ReactNode;
 }) {
+	if (rows.length === 0) {
+		return <p className="text-sm text-neutral-500">Nothing here yet.</p>;
+	}
+
 	return (
-		<ul className="space-y-3">
+		<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
 			{rows.map((row, index) => (
-				<li key={row.id} className="rounded-md border border-neutral-800 p-3">
+				<li key={row.id} className="py-5">
 					<form
-						className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
+						className="space-y-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							const values = Object.fromEntries(
@@ -542,8 +545,8 @@ function Rows<T extends { id: string }>({
 							void onSave(row.id, values);
 						}}
 					>
-						{render(row)}
-						<div className="flex items-end gap-2">
+						<div className="grid gap-4 sm:grid-cols-2">{render(row)}</div>
+						<div className="flex flex-wrap gap-2">
 							<button type="submit" disabled={pending} className={buttonClasses("secondary")}>
 								Save
 							</button>
@@ -551,17 +554,17 @@ function Rows<T extends { id: string }>({
 								type="button"
 								disabled={pending || index === 0}
 								onClick={() => onMove(index, -1)}
-								className={buttonClasses("secondary", "sm")}
+								className={buttonClasses("secondary")}
 							>
-								Up
+								Move up
 							</button>
 							<button
 								type="button"
 								disabled={pending || index === rows.length - 1}
 								onClick={() => onMove(index, 1)}
-								className={buttonClasses("secondary", "sm")}
+								className={buttonClasses("secondary")}
 							>
-								Down
+								Move down
 							</button>
 							<button
 								type="button"
@@ -571,7 +574,7 @@ function Rows<T extends { id: string }>({
 										void onDelete(row.id);
 									}
 								}}
-								className="rounded-md px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-950/50 disabled:opacity-50"
+								className={`${buttonClasses("secondary")} text-red-300 hover:border-red-500/40 hover:bg-red-950/40 hover:text-red-200 disabled:opacity-40`}
 							>
 								Retire
 							</button>
@@ -619,8 +622,8 @@ function TaskKindEditor({
 				</select>
 			</label>
 			{kind === "form" ? (
-				<div className="rounded-md border border-neutral-800 bg-neutral-950/50 p-3">
-					<div className="flex items-center justify-between gap-3">
+				<div className="space-y-3 sm:col-span-2">
+					<div className="flex flex-wrap items-end justify-between gap-3">
 						<div>
 							<p className="text-sm font-medium text-neutral-200">Questions</p>
 							<p className="text-xs text-neutral-500">
@@ -640,17 +643,14 @@ function TaskKindEditor({
 									},
 								])
 							}
-							className={buttonClasses("secondary", "sm")}
+							className={buttonClasses("secondary")}
 						>
 							Add question
 						</button>
 					</div>
-					<div className="mt-3 space-y-3">
+					<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
 						{fields.map((field, index) => (
-							<div
-								key={index}
-								className="grid gap-2 rounded border border-neutral-800 p-3 sm:grid-cols-2"
-							>
+							<li key={index} className="grid gap-3 py-4 sm:grid-cols-2">
 								<Field
 									label="Question label"
 									name={`label-${index}`}
@@ -699,7 +699,7 @@ function TaskKindEditor({
 										}
 									/>
 								) : (
-									<span />
+									<span className="hidden sm:block" />
 								)}
 								<label className="flex items-center gap-2 text-sm text-neutral-300">
 									<input
@@ -711,21 +711,23 @@ function TaskKindEditor({
 									/>
 									Required
 								</label>
-								<button
-									type="button"
-									disabled={fields.length === 1}
-									onClick={() =>
-										setFields((current) =>
-											current.filter((_, fieldIndex) => fieldIndex !== index),
-										)
-									}
-									className="justify-self-start text-sm text-red-300 disabled:opacity-40"
-								>
-									Remove
-								</button>
-							</div>
+								<div>
+									<button
+										type="button"
+										disabled={fields.length === 1}
+										onClick={() =>
+											setFields((current) =>
+												current.filter((_, fieldIndex) => fieldIndex !== index),
+											)
+										}
+										className={`${buttonClasses("secondary")} text-red-300 hover:border-red-500/40 hover:bg-red-950/40 hover:text-red-200 disabled:opacity-40`}
+									>
+										Remove
+									</button>
+								</div>
+							</li>
 						))}
-					</div>
+					</ul>
 				</div>
 			) : null}
 			<input type="hidden" name="formSchema" value={JSON.stringify(fields)} />
