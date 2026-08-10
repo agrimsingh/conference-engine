@@ -32,7 +32,7 @@ describe("self-service configuration", () => {
 		expect(configuration.tracks).toMatchObject([{ name: "General", slug: "general" }]);
 		expect(configuration.tasks).toHaveLength(4);
 		expect(configuration.review).toMatchObject({ criteriaCount: 1 });
-		expect(configuration.cfp).toMatchObject({ slug: "cfp", fieldCount: 3 });
+		expect(configuration.cfp).toMatchObject({ slug: "cfp", fieldCount: 9 });
 
 		await updateEventConfiguration(env.DB, created.eventId, { name: "Updated event", startDay: "2026-10-03", endDay: "2026-10-04", timezone: "Asia/Tokyo", dayStartMinutes: 600, dayEndMinutes: 1140, slotDurationMinutes: 45, trackConflictPolicy: "allow" });
 		await createRoom(env.DB, created.eventId, "Workshop");

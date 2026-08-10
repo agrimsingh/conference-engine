@@ -136,7 +136,7 @@ curl -sS "https://conference-engine.65labs.org/api/admin/events/${eventSlug}/sub
 				<p>
 					Use a token as{" "}
 					<code className="text-neutral-300">Authorization: Bearer ce_pat_…</code> on{" "}
-					<code className="text-neutral-300">/api/admin/events/{eventSlug}/**</code>. Same
+					<code className="text-neutral-300">{`/api/admin/events/${eventSlug}/**`}</code>. Same
 					JSON routes as the organizer cookie — list/decide submissions, create speakers and
 					sessions, place talks, mint or revoke tokens. Scope is this event only.
 				</p>
