@@ -363,7 +363,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{total === 0 ? (
 				<EmptyState
 					title="All caught up"
-					description="No pipeline blockers. Accept talks, wait for speakers, or open the schedule when the next wave lands."
+					description="No pipeline blockers. Placed sessions stay private until you Publish on the schedule — public /e/…/schedule only shows published talks."
 				/>
 			) : null}
 

@@ -22,3 +22,36 @@ export function isCfpPastClosesAt(
 export function isCfpOpenNow(form: LifecycleForm, nowMs: number = Date.now()): boolean {
 	return !isCfpBeforeOpensAt(form, nowMs) && !isCfpPastClosesAt(form, nowMs);
 }
+
+/** Human-readable deadline in the event timezone for public CFP banners. */
+export function formatCfpDeadline(
+	closesAtMs: number,
+	timeZone: string,
+): string {
+	const zone = timeZone || "UTC";
+	const date = new Date(closesAtMs);
+	try {
+		return new Intl.DateTimeFormat("en-US", {
+			timeZone: zone,
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+			hour: "numeric",
+			minute: "2-digit",
+			timeZoneName: "short",
+		}).format(date);
+	} catch {
+		try {
+			return new Intl.DateTimeFormat("en-US", {
+				timeZone: zone,
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				hour: "numeric",
+				minute: "2-digit",
+			}).format(date);
+		} catch {
+			return date.toISOString();
+		}
+	}
+}

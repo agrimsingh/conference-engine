@@ -42,6 +42,34 @@ const title: FormFieldDef = {
 	config: { kind: "text", maxLength: 10, placeholder: "Session title" },
 };
 
+describe("CfpForm deadline banner", () => {
+	it("shows the close deadline in the event timezone", async () => {
+		await act(async () => {
+			root.render(
+				<CfpForm
+					eventSlug="test-event"
+					formSlug="cfp"
+					eventName="Test event"
+					formTitle="Test CFP"
+					formDescription={null}
+					welcomeCopy={null}
+					thankYouCopy={null}
+					draftToken=""
+					draftsEnabled={false}
+					submissionLimit={3}
+					closesAt={Date.UTC(2026, 8, 15, 6, 59)}
+					timezone="America/Los_Angeles"
+					fields={[title]}
+					sections={[]}
+				/>,
+			);
+		});
+		expect(container.textContent).toMatch(/Deadline:/);
+		expect(container.textContent).toMatch(/Sep/);
+		expect(container.textContent).toMatch(/Submission limit: 3/);
+	});
+});
+
 describe("CfpForm required multiselect validation", () => {
 	it("links and announces the focused group error before sending a submission", async () => {
 		await act(async () => {

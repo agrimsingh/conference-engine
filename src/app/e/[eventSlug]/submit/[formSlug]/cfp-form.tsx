@@ -7,6 +7,7 @@ import { buttonClasses, INPUT_CLASSES } from "@/components/ui";
 import { evaluateVisibilityRule, type AnswerMap } from "@/lib/domain/visibility";
 import { groupFieldsBySection, type FormSection } from "@/lib/domain/form-sections";
 import { type FormFieldDef, type SpeakerAnswer } from "@/lib/domain/form-fields";
+import { formatCfpDeadline } from "@/lib/cfp/closes-at";
 import { renderFormCopy } from "@/lib/cfp/form-copy";
 import { computeCfpProgress } from "@/lib/cfp/form-progress";
 import { missingRequiredVisibleMultiselect } from "@/lib/cfp/form-validation";
@@ -29,6 +30,8 @@ type Props = {
 	draftToken: string;
 	draftsEnabled: boolean;
 	submissionLimit: number;
+	closesAt?: number | null;
+	timezone?: string;
 	fields: FormFieldDef[];
 	sections?: FormSection[];
 	readOnly?: boolean;
@@ -127,6 +130,8 @@ export function CfpForm({
 	draftToken: initialDraftToken,
 	draftsEnabled,
 	submissionLimit,
+	closesAt = null,
+	timezone = "UTC",
 	fields,
 	sections = [],
 	readOnly = false,
@@ -469,6 +474,18 @@ export function CfpForm({
 					</p>
 				)}
 				{welcomeCopy ? <p className="text-pretty text-sm text-neutral-300">{welcomeCopy}</p> : null}
+				{closesAt ? (
+					<p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+						Deadline: submissions accepted until{" "}
+						<span className="font-medium">{formatCfpDeadline(closesAt, timezone)}</span>.
+					</p>
+				) : null}
+				{submissionLimit > 0 && !readOnly ? (
+					<p className="text-xs text-neutral-500">
+						Submission limit: {submissionLimit} proposal
+						{submissionLimit === 1 ? "" : "s"} per submitter.
+					</p>
+				) : null}
 				<p className="text-xs text-neutral-500">Submit in English. There is no fee to submit a proposal.</p>
 			</header>
 
@@ -587,8 +604,6 @@ export function CfpForm({
 					<span className="text-neutral-500">Drafts are tied to this email and can be resumed securely.</span>
 				</div>
 			) : null}
-			{submissionLimit > 0 && !readOnly ? <p className="text-xs text-neutral-500">This call accepts up to {submissionLimit} submitted proposals. Availability is confirmed when you submit.</p> : null}
-
 			<button
 				type="submit"
 				disabled={busy}

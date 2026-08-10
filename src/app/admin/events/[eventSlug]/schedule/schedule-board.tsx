@@ -366,6 +366,11 @@ export function ScheduleBoard({
 					ok: boolean;
 					error?: string;
 					status?: string;
+					email?:
+						| { ok: true; status: string }
+						| { ok: false; status: string; error?: string }
+						| null;
+					icsBytesLength?: number;
 					slot?: {
 						room_id: string | null;
 						room_name: string;
@@ -408,6 +413,19 @@ export function ScheduleBoard({
 							: row,
 					),
 				);
+				if (result.email?.ok && result.email.status === "sent") {
+					setMessage("Placed · calendar invite emailed to speaker(s).");
+				} else if (result.email?.ok && result.email.status === "skipped") {
+					setMessage("Placed · calendar invite skipped (demo or mail disabled).");
+				} else if (result.email && !result.email.ok) {
+					setMessage(
+						`Placed · calendar invite failed: ${result.email.error ?? "send error"}. Session is still on the grid.`,
+					);
+				} else if ((result.icsBytesLength ?? 0) > 0) {
+					setMessage("Placed · calendar invite prepared.");
+				} else {
+					setMessage("Placed on the grid. Publish when you want it public.");
+				}
 			} catch {
 				setSessions((prev) =>
 					prev.map((row) => (row.id === submissionId ? previous : row)),

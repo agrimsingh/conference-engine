@@ -434,6 +434,22 @@ export function ReviewWorkspace({
 					<EmptyState title="No evaluation plan yet" description="Create a draft plan before assigning proposals." />
 				) : (
 					<div className="space-y-4">
+						{liveReviewers.length === 0 ? (
+							<div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+								No live reviewers yet. Open the Reviewers tab, add someone, copy their{" "}
+								<code className="text-amber-50">/review?token=…</code> link, then come back
+								here to assign proposals. An empty assignment list means an empty scoring board.
+							</div>
+						) : null}
+						{liveReviewers.length > 0 &&
+						submissions.length > 0 &&
+						submissions.every((submission) => submission.assignedReviewerIds.length === 0) ? (
+							<div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+								Reviewers exist, but nothing is assigned. Select proposals below, tick reviewers,
+								and Apply assignments — otherwise{" "}
+								<code className="text-amber-50">/review</code> stays empty.
+							</div>
+						) : null}
 						<div className="flex flex-wrap items-end gap-2">
 							<input value={query} onChange={(event) => setQuery(event.target.value)} className={INPUT_CLASSES} placeholder="Search proposals" aria-label="Search proposals" />
 							<select value={status} onChange={(event) => setStatus(event.target.value)} className={INPUT_CLASSES} aria-label="Filter proposals">

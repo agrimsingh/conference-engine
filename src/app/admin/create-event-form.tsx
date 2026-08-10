@@ -28,7 +28,7 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 	const timezone = timezoneOverride ?? browserTimezone;
 	const [startDay, setStartDay] = useState("");
 	const [endDay, setEndDay] = useState("");
-	const [preset, setPreset] = useState<"minimal" | "conference">("minimal");
+	const [preset, setPreset] = useState<"minimal" | "conference">("conference");
 	const [cloneFrom, setCloneFrom] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
@@ -145,12 +145,16 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 					<span className="font-medium text-neutral-200">CFP preset</span>
 					<select
 						value={preset}
-						onChange={(e) => setPreset(e.target.value === "conference" ? "conference" : "minimal")}
+						onChange={(e) => setPreset(e.target.value === "minimal" ? "minimal" : "conference")}
 						className={`w-full ${INPUT_CLASSES}`}
 					>
-						<option value="minimal">Minimal (title, abstract, speakers)</option>
 						<option value="conference">Conference (format-conditional fields)</option>
+						<option value="minimal">Minimal (title, abstract, speakers)</option>
 					</select>
+					<span className="block text-xs text-neutral-500">
+						Conference is the walkthrough default — format changes which fields appear. The CFP still
+						starts as draft until you open it on Setup.
+					</span>
 				</label>
 			) : null}
 			{error ? <p className={noticeClasses("negative")}>{error}</p> : null}

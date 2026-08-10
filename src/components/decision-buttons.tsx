@@ -43,7 +43,7 @@ export function DecisionButtons({
 }: Props) {
 	const router = useRouter();
 	const [openAction, setOpenAction] = useState<DecisionAction | null>(null);
-	const [sendEmail, setSendEmail] = useState(false);
+	const [sendEmail, setSendEmail] = useState(true);
 	const [subject, setSubject] = useState("");
 	const [text, setText] = useState("");
 	const [pending, setPending] = useState(false);
@@ -59,7 +59,7 @@ export function DecisionButtons({
 
 	function openConfirm(action: DecisionAction) {
 		setOpenAction(action);
-		setSendEmail(false);
+		setSendEmail(true);
 		setSubject(previews[action].subject);
 		setText(previews[action].text);
 		setError(null);
@@ -119,15 +119,41 @@ export function DecisionButtons({
 					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 						Confirm {DECISION_REGISTRY[openAction].label.toLowerCase()}
 					</p>
-					<label className="flex items-center gap-2 text-sm text-neutral-300">
-						<input
-							type="checkbox"
-							checked={sendEmail}
-							onChange={(e) => setSendEmail(e.target.checked)}
-							className="accent-emerald-500"
-						/>
-						Send email to submitter
-					</label>
+					<fieldset className="space-y-2">
+						<legend className="text-sm font-medium text-neutral-200">
+							Email the submitter?
+						</legend>
+						<label className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm ${sendEmail ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100" : "border-neutral-800 text-neutral-300"}`}>
+							<input
+								type="radio"
+								name={`decision-email-${submissionId}`}
+								checked={sendEmail}
+								onChange={() => setSendEmail(true)}
+								className="mt-0.5 accent-emerald-500"
+							/>
+							<span>
+								<span className="font-medium">Send email now</span>
+								<span className="mt-0.5 block text-xs opacity-80">
+									Recommended — they get the decision and portal link immediately.
+								</span>
+							</span>
+						</label>
+						<label className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm ${!sendEmail ? "border-amber-500/40 bg-amber-500/10 text-amber-100" : "border-neutral-800 text-neutral-300"}`}>
+							<input
+								type="radio"
+								name={`decision-email-${submissionId}`}
+								checked={!sendEmail}
+								onChange={() => setSendEmail(false)}
+								className="mt-0.5 accent-amber-500"
+							/>
+							<span>
+								<span className="font-medium">Change status only</span>
+								<span className="mt-0.5 block text-xs opacity-80">
+									No email. Find them later under Submissions → To notify.
+								</span>
+							</span>
+						</label>
+					</fieldset>
 					{sendEmail ? (
 						<div className="space-y-2">
 							<label className="block text-xs text-neutral-400">
@@ -149,9 +175,9 @@ export function DecisionButtons({
 							</label>
 						</div>
 					) : (
-						<p className="text-xs text-neutral-500">
-							The status changes without sending any email. You can email the
-							submitter later.
+						<p className={noticeClasses("warning")}>
+							Status updates without mail. Open the to-notify queue when you are ready
+							to email.
 						</p>
 					)}
 					{error ? <p className={noticeClasses("negative")}>{error}</p> : null}

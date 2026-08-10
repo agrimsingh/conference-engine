@@ -7,11 +7,12 @@ Replace `[eventSlug]` with your event slug, `demo-cfp-to-stage` for the public r
 ## Firm requirements
 
 1. Custom CFP submission forms with conditional logic and category-based routing
-   - Public submit: `/e/[eventSlug]/submit/[formSlug]`
+   - Public submit: `/e/[eventSlug]/submit/[formSlug]` (open forms show close deadline + per-submitter limit)
    - Form list: `/admin/events/[eventSlug]/forms`
    - Form builder: `/admin/events/[eventSlug]/forms/[formSlug]`
    - Form APIs: `/api/admin/events/[eventSlug]/forms`, `/api/admin/events/[eventSlug]/forms/[formSlug]/fields`
    - Public submit APIs: `/api/e/[eventSlug]/submit/[formSlug]`, `.../draft`, `.../draft/save`, `.../draft/finalize`, `.../upload`
+   - New events default to the **conference** (conditional) CFP preset; CFP still starts `draft` until Setup → Open
 
 2. Self-service speaker portal (bios, headshots, slides, supporting docs)
    - Portal: `/portal`

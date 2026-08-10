@@ -27,16 +27,28 @@ export default async function EventSetupPage({ params }: Props) {
 				/>
 
 				{nextIncomplete ? (
-					<div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-						<span className="font-medium">Next up · Step {nextIndex + 1}:</span>{" "}
-						{nextIncomplete.label}. {nextIncomplete.detail}{" "}
+					<div
+						className={`mt-6 rounded-lg border px-4 py-3 text-sm ${
+							nextIncomplete.key === "cfp-open"
+								? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+								: "border-amber-500/30 bg-amber-500/10 text-amber-100"
+						}`}
+					>
+						<span className="font-medium">
+							{nextIncomplete.key === "cfp-open"
+								? "Almost live · Open the CFP:"
+								: `Next up · Step ${nextIndex + 1}:`}
+						</span>{" "}
+						{nextIncomplete.key === "cfp-open" ? null : `${nextIncomplete.label}. `}
+						{nextIncomplete.detail}{" "}
 						<Link href={nextIncomplete.href} className="underline underline-offset-2 hover:text-white">
-							Continue →
+							{nextIncomplete.key === "cfp-open" ? "Open Forms →" : "Continue →"}
 						</Link>
 					</div>
 				) : (
 					<div className="mt-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-						Setup essentials are complete. Open the CFP when you are ready for proposals.
+						Setup essentials are complete. Your public CFP is open — share the submit link and
+						watch the cockpit for blockers.
 					</div>
 				)}
 

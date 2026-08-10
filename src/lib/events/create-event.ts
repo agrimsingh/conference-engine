@@ -108,7 +108,7 @@ export async function createEventWithDefaults(
 	const slug = args.slug.trim().toLowerCase();
 	const name = args.name.trim();
 	const timezone = args.timezone?.trim() || DEFAULT_TIMEZONE;
-	const preset = args.preset ?? "minimal";
+	const preset = args.preset ?? "conference";
 	const cfp = resolveCfpPreset(preset);
 	const schedule = validateEventSettings({ startDay: args.startDay, endDay: args.endDay, timezone });
 	if (!schedule.ok) throw new Error(schedule.error);

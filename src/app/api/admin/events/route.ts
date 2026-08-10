@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 		typeof body.timezone === "string" ? body.timezone.trim() : undefined;
 	const startDay = typeof body.startDay === "string" ? body.startDay.trim() : "";
 	const endDay = typeof body.endDay === "string" ? body.endDay.trim() : "";
-	const preset = body.preset === undefined ? "minimal" : body.preset;
+	const preset = body.preset === undefined ? "conference" : body.preset;
 	if (!isEventCfpPresetId(preset)) {
 		return NextResponse.json(
 			{ ok: false, error: "Preset must be minimal or conference" },

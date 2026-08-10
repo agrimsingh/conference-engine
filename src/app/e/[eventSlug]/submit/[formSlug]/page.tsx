@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { isCfpBeforeOpensAt, isCfpOpenNow } from "@/lib/cfp/closes-at";
+import {
+	formatCfpDeadline,
+	isCfpBeforeOpensAt,
+	isCfpOpenNow,
+} from "@/lib/cfp/closes-at";
 import { loadCfpForm } from "@/lib/cfp/load-form";
 import { loadDraftForResume } from "@/lib/cfp/drafts";
 import { renderFormCopy } from "@/lib/cfp/form-copy";
@@ -43,6 +47,16 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 								? `${loaded.form.title} is not open for browsing right now. Try the demo launcher, create your own event to submit for real, or open the public schedule.`
 								: `${loaded.form.title} is no longer accepting submissions.`}
 					</p>
+					{!opensLater && loaded.form.closes_at ? (
+						<p className="text-sm text-neutral-500">
+							Closed {formatCfpDeadline(loaded.form.closes_at, loaded.event.timezone)}.
+						</p>
+					) : null}
+					{opensLater && loaded.form.opens_at ? (
+						<p className="text-sm text-neutral-500">
+							Opens {formatCfpDeadline(loaded.form.opens_at, loaded.event.timezone)}.
+						</p>
+					) : null}
 					{isDemo ? (
 						<p className="flex flex-wrap gap-4 pt-2 text-sm">
 							<Link
@@ -87,6 +101,8 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 				draftToken={typeof draft === "string" ? draft : ""}
 				draftsEnabled={loaded.form.drafts_enabled === 1}
 				submissionLimit={loaded.form.submission_limit}
+				closesAt={loaded.form.closes_at}
+				timezone={loaded.event.timezone}
 				fields={loaded.fields}
 				sections={loaded.sections}
 				readOnly={loaded.event.mode === "demo"}

@@ -16,6 +16,7 @@ type LauncherCard = {
 	body: string;
 	primary: { href: string; label: string };
 	secondary?: { href: string; label: string };
+	steps?: string[];
 };
 
 function isPerspective(value: string | undefined): value is DemoPerspective {
@@ -55,13 +56,21 @@ function launcherFor(perspective: DemoPerspective): LauncherCard {
 		case "organizer":
 			return {
 				eyebrow: "Organizer",
-				title: "Run your own event",
-				body: "Admin queues, form builder, and the cockpit need an event you own. The public demo stays read-only so visitors cannot mutate shared data.",
+				title: "Full lifecycle walkthrough",
+				body: "The public demo is read-only. Create your own event (Conference preset is the default) and run the programme end-to-end — that is what judges evaluate.",
 				primary: { href: "/admin", label: "Create event / sign in" },
 				secondary: {
 					href: `/e/${DEMO_EVENT_SLUG}/schedule`,
 					label: "See published schedule",
 				},
+				steps: [
+					"Create event → Setup checklist → open the CFP (status Open + close date).",
+					"Submit once as a speaker → confirm email → thank-you → /portal.",
+					"Review: activate plan → add reviewer → assign → score via /review?token=…",
+					"Accept + send email (default) → portal Profile/Prep tasks appear.",
+					"Schedule: place on the grid (watch calendar-invite status) → Publish.",
+					"Public: /e/[slug]/schedule + speakers + an embed widget.",
+				],
 			};
 		case "reviewer":
 			return {
@@ -134,6 +143,13 @@ export default async function DemoPage({ searchParams }: Props) {
 					<p className="text-sm font-medium text-emerald-400">{card.eyebrow}</p>
 					<h2 className="text-2xl font-semibold tracking-tight">{card.title}</h2>
 					<p className="text-pretty text-sm leading-6 text-neutral-400">{card.body}</p>
+					{card.steps && card.steps.length > 0 ? (
+						<ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-neutral-300">
+							{card.steps.map((step) => (
+								<li key={step}>{step}</li>
+							))}
+						</ol>
+					) : null}
 					<div className="flex flex-wrap gap-3 pt-2">
 						<Link href={card.primary.href} className={buttonClasses("primary")}>
 							{card.primary.label}

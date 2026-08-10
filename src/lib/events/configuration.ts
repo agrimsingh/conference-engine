@@ -96,7 +96,16 @@ export function eventReadiness(configuration: EventConfiguration, eventSlug: str
 				? `${messageTemplateCount} custom template${messageTemplateCount === 1 ? "" : "s"} saved.`
 				: "Review acceptance, rejection, and portal email copy.",
 		},
-		{ key: "cfp-open", label: "Open for proposals", complete: cfp?.status === "open", href: `${base}/forms`, detail: cfp?.status === "open" ? "The public CFP is accepting submissions." : "Open the CFP when you are ready to accept submissions." },
+		{
+			key: "cfp-open",
+			label: "Open for proposals",
+			complete: cfp?.status === "open",
+			href: `${base}/forms`,
+			detail:
+				cfp?.status === "open"
+					? "The public CFP is accepting submissions."
+					: "Required before anyone can submit: open Forms → set status to Open (and set a close date).",
+		},
 	];
 }
 

@@ -90,7 +90,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 ## Day-to-day use
 
-**Organiser.** Sign in (magic link) → create or open an event → finish setup (dates, rooms, tracks, tasks) → build the form → open the CFP → assign reviewers → decide on the submission detail pages → clear the to-notify queue when you are ready to email → clear blockers on the cockpit → chase speakers → place sessions → publish. Owners and admins also get mail when a submission is created or updated (not on every draft save).
+**Organiser.** Sign in (magic link) → create or open an event (default **Conference** CFP preset) → finish setup (dates, rooms, tracks, tasks) → **open the CFP** (starts draft) → assign reviewers → decide on the submission detail pages (email-now is the default; status-only lands in to-notify) → clear blockers on the cockpit → chase speakers → place sessions (calendar invite status shows after place) → publish. Step-by-step judge path: `/demo?perspective=organizer`. Owners and admins also get mail when a submission is created or updated (not on every draft save).
 
 **Reviewer.** Open the emailed or copied `/review?token=...` link. Score only what you were assigned.
 
