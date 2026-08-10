@@ -56,5 +56,5 @@ Auto sync (migration `0039`): optional daily push at 01:00 UTC from the integrat
 
 ## Admin agent API / per-event PATs (2026-08-10)
 
-Agents need the same organizer jobs without a browser session. Mint per-event personal access tokens under Settings → API tokens (`ce_pat_…`, shown once, hash stored). `Authorization: Bearer ce_pat_…` authorizes admin JSON routes for that event only (cookie sessions still work). Demo events stay write-blocked. Contract: `/api/admin/openapi.json`. Keep `/api/v1` as the keyed read-only operator surface.
+Agents need the same organizer jobs without a browser session. Mint per-event personal access tokens under Settings → API tokens (`ce_pat_…`, shown once, hash stored). `Authorization: Bearer ce_pat_…` authorizes admin JSON routes for that event only (cookie sessions still work). Token-management routes are the exception: they require a cookie session, because a leaked PAT that can mint successors survives its own revocation. Demo events stay write-blocked. Contract: `/api/admin/openapi.json`. Keep `/api/v1` as the keyed read-only operator surface.
 

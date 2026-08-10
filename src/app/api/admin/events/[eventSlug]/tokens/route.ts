@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-	authorizeEventAdminApi,
-	authorizeWritableEventAdminApi,
+	authorizeSessionWritableEventAdminApi,
+	resolveSessionEventAdminAccess,
 } from "@/lib/auth/admin";
 import { createToken, listTokens, revokeToken } from "@/lib/auth/event-api-tokens";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
@@ -14,9 +14,12 @@ type RouteContext = {
 export async function GET(_request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const access = await authorizeEventAdminApi(db, eventSlug);
+	const access = await resolveSessionEventAdminAccess(db, eventSlug);
 	if (!access) {
-		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+		return NextResponse.json(
+			{ ok: false, error: "Organizer session required. API tokens cannot manage tokens." },
+			{ status: 401 },
+		);
 	}
 
 	const tokens = await listTokens(db, access.event.id);
@@ -39,7 +42,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	const authorization = await authorizeSessionWritableEventAdminApi(db, eventSlug);
 	if (!authorization.ok) return authorization.response;
 	const access = authorization.access;
 
@@ -78,7 +81,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
 	const { eventSlug } = await context.params;
 	const db = await getDb();
-	const authorization = await authorizeWritableEventAdminApi(db, eventSlug);
+	const authorization = await authorizeSessionWritableEventAdminApi(db, eventSlug);
 	if (!authorization.ok) return authorization.response;
 	const access = authorization.access;
 

@@ -84,7 +84,12 @@ async function resolveBearerPatAccess(
 	}
 }
 
-export async function resolveEventAdminAccess(
+/**
+ * Cookie-session (or local bypass) access only — never a Bearer PAT. Token
+ * management must use this: if a PAT could authorize here, a leaked token
+ * could mint successors that survive its own revocation.
+ */
+export async function resolveSessionEventAdminAccess(
 	db: D1Database,
 	eventSlug: string,
 ): Promise<EventAdminAccess | null> {
@@ -115,6 +120,15 @@ export async function resolveEventAdminAccess(
 		}
 	}
 
+	return null;
+}
+
+export async function resolveEventAdminAccess(
+	db: D1Database,
+	eventSlug: string,
+): Promise<EventAdminAccess | null> {
+	const sessionAccess = await resolveSessionEventAdminAccess(db, eventSlug);
+	if (sessionAccess) return sessionAccess;
 	return resolveBearerPatAccess(db, eventSlug);
 }
 
@@ -160,6 +174,31 @@ export async function authorizeWritableEventAdminApi(
 			response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
 		};
 	}
+	return checkEventWritable(access);
+}
+
+/**
+ * Session-only variant for PAT management routes. Bearer PATs are rejected so
+ * a leaked token cannot mint or revoke tokens.
+ */
+export async function authorizeSessionWritableEventAdminApi(
+	db: D1Database,
+	eventSlug: string,
+): Promise<WritableEventAdminApiAccess> {
+	const access = await resolveSessionEventAdminAccess(db, eventSlug);
+	if (!access) {
+		return {
+			ok: false,
+			response: NextResponse.json(
+				{ ok: false, error: "Organizer session required. API tokens cannot manage tokens." },
+				{ status: 401 },
+			),
+		};
+	}
+	return checkEventWritable(access);
+}
+
+function checkEventWritable(access: EventAdminAccess): WritableEventAdminApiAccess {
 	try {
 		assertEventWritable(access.event);
 	} catch (error) {

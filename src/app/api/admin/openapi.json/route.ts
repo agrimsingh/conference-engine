@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 const PAT_SECURITY = [{ bearerPat: [] }];
+const SESSION_ONLY_SECURITY = [{ cookieSession: [] }];
 const eventSlugParam = {
 	name: "eventSlug",
 	in: "path",
@@ -31,7 +32,7 @@ const OPENAPI_DOCUMENT = {
 		title: "Conference Engine Admin Agent API",
 		version: "1.0.0",
 		description:
-			"Per-event admin JSON routes. Authenticate with an organizer cookie session or `Authorization: Bearer ce_pat_…` minted under Settings → API tokens. Tokens grant full admin on that event only. Demo events remain read-only for writes.",
+			"Per-event admin JSON routes. Authenticate with an organizer cookie session or `Authorization: Bearer ce_pat_…` minted under Settings → API tokens. Tokens grant full admin on that event only, except the token-management routes themselves, which require a cookie session (a leaked PAT must not be able to mint or revoke tokens). Demo events remain read-only for writes.",
 	},
 	servers: [{ url: "/" }],
 	components: {
@@ -42,6 +43,13 @@ const OPENAPI_DOCUMENT = {
 				bearerFormat: "ce_pat_",
 				description:
 					"Per-event personal access token. Prefix `ce_pat_`. Returned once at mint time; only the hash is stored.",
+			},
+			cookieSession: {
+				type: "apiKey",
+				in: "cookie",
+				name: "ce_organizer_session",
+				description:
+					"Organizer browser session. Required for token-management routes; Bearer PATs are rejected there.",
 			},
 		},
 		parameters: {
@@ -67,8 +75,9 @@ const OPENAPI_DOCUMENT = {
 		"/api/admin/events/{eventSlug}/tokens": {
 			get: {
 				summary: "List API tokens",
-				description: "Metadata only. Never returns plaintext or hash.",
-				security: PAT_SECURITY,
+				description:
+					"Metadata only. Never returns plaintext or hash. Cookie session required; Bearer PATs are rejected.",
+				security: SESSION_ONLY_SECURITY,
 				parameters: [eventSlugParam],
 				responses: {
 					"200": {
@@ -117,8 +126,9 @@ const OPENAPI_DOCUMENT = {
 			},
 			post: {
 				summary: "Mint API token",
-				description: "Returns plaintext token once.",
-				security: PAT_SECURITY,
+				description:
+					"Returns plaintext token once. Cookie session required; Bearer PATs are rejected.",
+				security: SESSION_ONLY_SECURITY,
 				parameters: [eventSlugParam],
 				requestBody: {
 					required: true,
@@ -174,7 +184,8 @@ const OPENAPI_DOCUMENT = {
 			},
 			delete: {
 				summary: "Revoke API token",
-				security: PAT_SECURITY,
+				description: "Cookie session required; Bearer PATs are rejected.",
+				security: SESSION_ONLY_SECURITY,
 				parameters: [eventSlugParam],
 				requestBody: {
 					required: true,
@@ -212,7 +223,8 @@ const OPENAPI_DOCUMENT = {
 		"/api/admin/events/{eventSlug}/tokens/{tokenId}": {
 			delete: {
 				summary: "Revoke API token by id",
-				security: PAT_SECURITY,
+				description: "Cookie session required; Bearer PATs are rejected.",
+				security: SESSION_ONLY_SECURITY,
 				parameters: [
 					eventSlugParam,
 					{

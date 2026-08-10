@@ -160,11 +160,11 @@ curl -sS http://127.0.0.1:8787/api/v1/events/demo-cfp-to-stage/speakers \
 
 ### Admin agent API (`/api/admin/...`)
 
-For clankers and scripts that need to run the programme, not only read it. Mint a per-event personal access token under **Settings → API tokens** (`ce_pat_…` prefix; shown once; only the hash is stored). Send `Authorization: Bearer ce_pat_…`. The token grants full admin on that event only. Organizer cookie sessions still work on the same routes. Demo events stay write-blocked.
+For clankers and scripts that need to run the programme, not only read it. Mint a per-event personal access token under **Settings → API tokens** (`ce_pat_…` prefix; shown once; only the hash is stored). Send `Authorization: Bearer ce_pat_…`. The token grants full admin on that event only — except the token-management routes themselves, which require an organizer cookie session so a leaked PAT cannot mint or revoke tokens. Organizer cookie sessions still work on every route. Demo events stay write-blocked.
 
 OpenAPI (no key): [`/api/admin/openapi.json`](https://conference-engine.65labs.org/api/admin/openapi.json).
 
-Jobs covered today include listing and deciding submissions, placing a talk on the schedule, listing or creating speakers, listing organizers, and minting or revoking tokens.
+Jobs covered today include listing and deciding submissions, placing a talk on the schedule, listing or creating speakers, and listing organizers. Minting and revoking tokens is cookie-session only.
 
 ```bash
 # after minting a token in Settings → API tokens
