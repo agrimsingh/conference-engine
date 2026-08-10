@@ -2,7 +2,7 @@
 
 Reference for the Sessionboard-alternative hackathon brief (`research/brief.md`, not in this repo). Rows follow brief order. Routes verified against this tip.
 
-Replace `[eventSlug]` with a live slug (`aie-sandbox` locally after `npm run db:reset:local`, or your own event). `[formSlug]` is a public form slug (`cfp`, `lightning`, or `workshop` on the local sandbox fixture). Production public walkthrough uses `demo-cfp-to-stage` (read-only), not `aie-sandbox`.
+Replace `[eventSlug]` with your event slug, `demo-cfp-to-stage` for the public read-only demo, or the local-only writable fixture `aie-sandbox` after `npm run db:reset:local`. `[formSlug]` is a public form slug (`cfp` on the demo; `cfp`, `lightning`, or `workshop` on the local fixture).
 
 ## Firm requirements
 
@@ -97,6 +97,8 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
 | Bulk notify decided | `/api/admin/events/[eventSlug]/submissions/notify` |
 | Speaker-initiated withdraw | `/api/portal/submissions/[submissionId]/withdraw` |
 
-## Local screenshot twin
+## Public demo and local fixture
 
-Writable fixture slug stays `aie-sandbox` (**local-only** after `npm run db:reset:local`; stable for URLs and tests). Display name and forms in `scripts/seed.sql` mirror an NYC sandbox shape for screenshot walkthroughs. Public read-only playable surfaces are `/demo` (launcher) and `demo-cfp-to-stage` (real CFP UI + schedule/speakers); mutations blocked by event `mode=demo`.
+Public read-only playable surfaces: `/demo` (launcher) and `demo-cfp-to-stage` (real CFP UI + schedule/speakers); mutations blocked by event `mode=demo`.
+
+Optional local-only writable fixture: `aie-sandbox` after `npm run db:reset:local` (stable for URLs and tests). Display name and forms in `scripts/seed.sql` mirror an NYC sandbox shape for admin clickthrough and screenshots. Not a production playground.
