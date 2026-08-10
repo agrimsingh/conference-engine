@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 
 const SELECT_CLASSES =
-	"mt-1.5 block w-full min-w-[9rem] rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm text-neutral-100 sm:w-auto";
+	"mt-1.5 block w-full rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm text-neutral-100";
 
 const LABEL_CLASSES =
-	"block text-xs font-medium uppercase tracking-wide text-neutral-500";
+	"block w-full text-xs font-medium uppercase tracking-wide text-neutral-500 sm:w-auto sm:min-w-[9rem]";
 
 export function ScheduleQuerySelect({
 	label,

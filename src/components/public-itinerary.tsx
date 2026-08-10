@@ -212,7 +212,7 @@ export function PublicItinerary({
 							className="mt-1.5 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500"
 						/>
 					</label>
-					<div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+					<div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end sm:gap-x-4">
 						{roomOptions && roomOptions.length > 1 ? (
 							<ScheduleQuerySelect
 								label="Room"
