@@ -62,7 +62,13 @@ const COMPARE_ROWS: {
 		sessionize: "Hosted only",
 	},
 	{
-		capability: "CRM, marketing, CMS, ticketing",
+		capability: "Speaker CRM (cross-event contacts)",
+		ours: "Account-scoped directory, pipeline, import, handoff",
+		sessionboard: "Bundled contact database",
+		sessionize: "Limited / separate tools",
+	},
+	{
+		capability: "Marketing, CMS, ticketing",
 		ours: "Out of scope on purpose",
 		sessionboard: "Bundled (Program + more)",
 		sessionize: "Limited / separate tools",
@@ -112,11 +118,17 @@ const SHIPS: { title: string; body: string; href: string; label: string }[] = [
 		href: "/demo?perspective=organizer",
 		label: "See the walkthrough",
 	},
+	{
+		title: "Speaker CRM",
+		body: "Cross-event contacts with tags, segments, a sourcing pipeline, CSV import, and push into an event roster.",
+		href: "/admin/contacts",
+		label: "Open contacts",
+	},
 ];
 
 const DOES_NOT: string[] = [
 	"Ticketing, payments, or registration checkout",
-	"Full CRM, marketing automation, or a conference CMS",
+	"Marketing automation or a conference CMS (speaker CRM ships; the rest stays out)",
 	"AI-assisted review (struck; humans score)",
 	"Pulling Airtable or Accelevents edits back into the programme — those are one-way exits",
 	"Password accounts — organizers sign in with a magic link",
