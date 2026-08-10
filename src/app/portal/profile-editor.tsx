@@ -17,6 +17,8 @@ type Props = {
 	honorific: string;
 	social: SpeakerSocialLinks;
 	hasHeadshot: boolean;
+	/** Profile tab shows the form open; legacy call sites keep a collapsed trigger. */
+	variant?: "collapsed" | "panel";
 };
 
 export function ProfileEditor({
@@ -30,6 +32,7 @@ export function ProfileEditor({
 	honorific,
 	social,
 	hasHeadshot,
+	variant = "collapsed",
 }: Props) {
 	const router = useRouter();
 	const [name, setName] = useState(displayName);
@@ -44,7 +47,7 @@ export function ProfileEditor({
 	const [github, setGithub] = useState(social.github ?? "");
 	const [website, setWebsite] = useState(social.website ?? "");
 	const [facebook, setFacebook] = useState(social.facebook ?? "");
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(variant === "panel");
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	async function save() {
@@ -66,7 +69,10 @@ export function ProfileEditor({
 			});
 			const data = await response.json() as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) setError(data.error ?? "Profile update failed");
-			else { setOpen(false); router.refresh(); }
+			else {
+				if (variant === "collapsed") setOpen(false);
+				router.refresh();
+			}
 		} catch { setError("Network error"); } finally { setPending(false); }
 	}
 	async function upload(file: File) {
@@ -74,7 +80,7 @@ export function ProfileEditor({
 	}
 	if (!open) return <div className="flex items-center gap-3">{hasHeadshot ? <Image unoptimized width={56} height={56} src={`/api/portal/profile/${eventId}/headshot`} alt={`${displayName} headshot`} className="h-14 w-14 rounded-full object-cover" /> : null}<button type="button" onClick={() => setOpen(true)} className={buttonClasses("secondary", "sm")}>Edit event profile</button></div>;
 	return (
-		<div className="mt-3 space-y-2 rounded-md border border-neutral-800 bg-neutral-950/60 p-3">
+		<div className={`space-y-2 rounded-md border border-neutral-800 bg-neutral-950/60 p-3 ${variant === "collapsed" ? "mt-3" : ""}`}>
 			<label className="block text-xs text-neutral-400">Display name<input value={name} onChange={(event) => setName(event.target.value)} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
 			<div className="grid gap-2 sm:grid-cols-3">
 				<label className="block text-xs text-neutral-400">Salutation<input value={salutationValue} onChange={(event) => setSalutationValue(event.target.value)} placeholder="Dr / Mx / …" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
@@ -96,7 +102,9 @@ export function ProfileEditor({
 			{error ? <p className="text-xs text-red-300">{error}</p> : null}
 			<div className="flex gap-2">
 				<button type="button" disabled={pending || !name.trim()} onClick={() => void save()} className={buttonClasses("primary", "sm")}>{pending ? "Saving…" : "Save profile"}</button>
-				<button type="button" disabled={pending} onClick={() => setOpen(false)} className={buttonClasses("secondary", "sm")}>Cancel</button>
+				{variant === "collapsed" ? (
+					<button type="button" disabled={pending} onClick={() => setOpen(false)} className={buttonClasses("secondary", "sm")}>Cancel</button>
+				) : null}
 			</div>
 		</div>
 	);
