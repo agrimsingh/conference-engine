@@ -43,7 +43,13 @@ export default async function AdminHomePage({ searchParams }: Props) {
 							? `Signed in as ${account.email}`
 							: "Pick an event to manage."
 				}
-			/>
+			>
+				<div className="flex flex-wrap gap-2">
+					<Link href="/admin/contacts" className={buttonClasses("secondary")}>
+						Contacts
+					</Link>
+				</div>
+			</PageHeader>
 
 			{bypassActive && !account ? (
 				<p className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
