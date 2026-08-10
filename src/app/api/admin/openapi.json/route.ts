@@ -6,7 +6,7 @@ const eventSlugParam = {
 	in: "path",
 	required: true,
 	schema: { type: "string" },
-	description: "Event slug (for example aie-sandbox)",
+	description: "Event slug (your event, or local fixture after db:reset:local)",
 };
 
 const unauthorized = {

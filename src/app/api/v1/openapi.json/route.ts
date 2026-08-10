@@ -31,8 +31,8 @@ const OPENAPI_DOCUMENT = {
 									ok: true,
 									event: {
 										id: "evt_demo",
-										slug: "aie-sandbox",
-										name: "AI Engineer Sandbox",
+										slug: "demo-cfp-to-stage",
+										name: "Demo: CFP to stage",
 									},
 									submissions: [
 										{
@@ -79,8 +79,8 @@ const OPENAPI_DOCUMENT = {
 									ok: true,
 									event: {
 										id: "evt_demo",
-										slug: "aie-sandbox",
-										name: "AI Engineer Sandbox",
+										slug: "demo-cfp-to-stage",
+										name: "Demo: CFP to stage",
 										timezone: "America/Los_Angeles",
 									},
 									rooms: [{ id: "room_main", name: "Main Hall", position: 0 }],
@@ -94,7 +94,7 @@ const OPENAPI_DOCUMENT = {
 											trackId: "track_core",
 											trackName: "Core",
 											trackRetired: false,
-											detailUrl: "/e/aie-sandbox/sessions/sub_01",
+											detailUrl: "/e/demo-cfp-to-stage/sessions/sub_01",
 											media: {
 												videoUrl: null,
 												googleDocUrl: null,
@@ -131,8 +131,8 @@ const OPENAPI_DOCUMENT = {
 									ok: true,
 									event: {
 										id: "evt_demo",
-										slug: "aie-sandbox",
-										name: "AI Engineer Sandbox",
+										slug: "demo-cfp-to-stage",
+										name: "Demo: CFP to stage",
 										timezone: "America/Los_Angeles",
 									},
 									speakers: [

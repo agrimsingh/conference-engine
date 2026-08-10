@@ -55,27 +55,26 @@ npm run preview
 
 | What | Local URL |
 | --- | --- |
-| **Local-only** writable sandbox (`aie-sandbox`) | `/e/aie-sandbox/submit/cfp` (also `lightning`, `workshop`) |
-| Form builder / admin (sandbox) | `/admin/events/aie-sandbox/…` |
-| Speaker portal | `/portal` |
-| Public demo schedule | `/e/demo-cfp-to-stage/schedule` |
-| Public demo CFP (read-only writes) | `/e/demo-cfp-to-stage/submit/cfp` |
 | Demo launcher | `/demo` |
+| Public demo CFP (read-only writes) | `/e/demo-cfp-to-stage/submit/cfp` |
+| Public demo schedule | `/e/demo-cfp-to-stage/schedule` |
+| Public demo speakers | `/e/demo-cfp-to-stage/speakers` |
+| Speaker portal | `/portal` |
 | Public read OpenAPI | `/api/v1/openapi.json` |
 | Admin agent OpenAPI | `/api/admin/openapi.json` |
-| API tokens (per event) | `/admin/events/aie-sandbox/settings?section=api-tokens` |
+| API tokens (per event) | `/admin/events/[eventSlug]/settings?section=api-tokens` |
 
 With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` once for a local organiser cookie. Keep bypass **off** in production.
 
 **`npm run preview`** builds the OpenNext Worker with local D1, R2, KV, and Durable Objects — best smoke environment. **`npm run dev`** is faster for UI work but does not match the full Cloudflare runtime (the cockpit falls back to polling if the WebSocket is unavailable).
 
-### Sandbox vs `/demo` vs a real event
+### `/demo` vs a real event vs local fixture
 
 | | Purpose |
 | --- | --- |
-| **`aie-sandbox`** | **Local-only** writable fixture (`npm run db:reset:local`). Click through submit → review → schedule without creating an event. Not a production playground; prod forms for this slug should stay closed. |
 | **`/demo` + `demo-cfp-to-stage`** | Public read-only playable surfaces. Launcher at `/demo` deep-links into the real CFP UI (writes blocked), schedule, and speakers. |
 | **Real event** | Primary path in production: **Create your event** on the homepage / `/admin` after magic-link sign-in. Owned by you; never replace with seed scripts. |
+| **`aie-sandbox` (local only)** | Optional writable fixture after `npm run db:reset:local`. Click through submit → review → schedule without creating an event. Not a production playground; prod forms for this slug should stay closed. |
 
 ## What you get
 
@@ -155,7 +154,7 @@ Keyed, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_
 Public, no-key routes under `/api/e/[eventSlug]/...` serve published schedule JSON, headshots, and session `.ics`.
 
 ```bash
-curl -sS http://127.0.0.1:8787/api/v1/events/aie-sandbox/speakers \
+curl -sS http://127.0.0.1:8787/api/v1/events/demo-cfp-to-stage/speakers \
   -H "Authorization: Bearer $PUBLIC_API_KEY"
 ```
 
@@ -169,7 +168,7 @@ Jobs covered today include listing and deciding submissions, placing a talk on t
 
 ```bash
 # after minting a token in Settings → API tokens
-curl -sS "http://127.0.0.1:8787/api/admin/events/aie-sandbox/submissions?queue=pending" \
+curl -sS "http://127.0.0.1:8787/api/admin/events/$EVENT_SLUG/submissions?queue=pending" \
   -H "Authorization: Bearer $CE_PAT"
 ```
 

@@ -53,7 +53,7 @@ Job-to-be-done over enterprise breadth. Sessionboard bundles Program + CRM + Mar
 
 ## Evidence on Hand
 
-- Live production deployment: https://conference-engine.65labs.org. Public playable surfaces: `/demo` launcher into `demo-cfp-to-stage` (interactive read-only CFP form, public schedule/speakers). Writes are blocked by demo mode. Organizer admin, reviewer boards, and speaker portal require creating your own event. Local-only writable fixture: `aie-sandbox` after `npm run db:reset:local` (not a production playground).
+- Live production deployment: https://conference-engine.65labs.org. Public playable surfaces: `/demo` launcher into `demo-cfp-to-stage` (interactive read-only CFP form, public schedule/speakers). Writes are blocked by demo mode. Organizer admin, reviewer boards, speaker portal, and admin agent API require creating your own event. Optional local-only writable fixture `aie-sandbox` exists after `npm run db:reset:local` for tests and admin clickthrough (not a production playground).
 - Real transactional email delivery via Resend (provider IDs logged for submission confirmations, acceptance, magic links, reminders).
 - Public repository with per-slice commit history: https://github.com/agrimsingh/conference-engine.
 - Customer's own requirements doc and video walkthrough (local `research/`, not in repo): six firm requirements, the "$40,000 for this software" quote, and the "very fancy form builder" framing.
