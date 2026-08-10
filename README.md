@@ -19,9 +19,10 @@ An accepted proposal becomes a session. Attendees only see what you publish. Sta
 - **Organisers** — intake, review, speaker chasing, scheduling, and a public agenda. Not another CRM with a schedule bolted on.
 - **Reviewers** — score assigned talks through a token link (no full admin login).
 - **Speakers** — submit, withdraw if plans change, then finish bio / headshot / slides (and other tasks) in a magic-link portal.
+- **Agents** — mint a per-event `ce_pat_…` token and drive the same admin jobs over JSON (list/decide submissions, place talks, manage speakers) from OpenAPI.
 - **Attendees** (and embeds) — read the published schedule; it defaults to today or the next session day.
 
-It deliberately does **not** do ticketing, payments, or marketing. The programme you edit here is the live record. CSV/XLSX exports, a keyed API, optional **Accelevents** sync, and **Airtable** copies are exits for other tools — they update those tools from this app, not the reverse.
+It deliberately does **not** do ticketing, payments, or marketing. The programme you edit here is the live record. CSV/XLSX exports, a public read API, an **admin agent API** (per-event Bearer tokens), optional **Accelevents** sync, and **Airtable** copies are exits and control surfaces for other tools. They update those tools from this app, not the reverse.
 
 More product context: [PRODUCT.md](./PRODUCT.md).
 
@@ -34,6 +35,7 @@ Sessionboard-shaped products often bundle programme + CRM + marketing and move s
 - a live cockpit for “who is blocking the schedule?”, with submission pacing above the board
 - submission detail pages for triage (not an endless spreadsheet row)
 - speaker operations without becoming a full CRM
+- a clanker-friendly admin API so an agent can run the programme without clicking through the UI
 - self-hosting so the data stays on your account
 
 ## Try it in five minutes
@@ -59,7 +61,9 @@ npm run preview
 | Public demo schedule | `/e/demo-cfp-to-stage/schedule` |
 | Public demo CFP (read-only writes) | `/e/demo-cfp-to-stage/submit/cfp` |
 | Demo launcher | `/demo` |
-| OpenAPI | `/api/v1/openapi.json` |
+| Public read OpenAPI | `/api/v1/openapi.json` |
+| Admin agent OpenAPI | `/api/admin/openapi.json` |
+| API tokens (per event) | `/admin/events/aie-sandbox/settings?section=api-tokens` |
 
 With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` once for a local organiser cookie. Keep bypass **off** in production.
 
@@ -82,7 +86,8 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 - **Speaker operations.** Roster, notes, announcements, and task reminders without turning into a CRM. The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific). Speakers can withdraw themselves, including after a talk is placed (the slot clears and calendar invites cancel). Gaps stay on the cockpit until they land.
 - **Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Sessionboard session CSVs import with their column names aliased; publish and content approval stay on the same path.
 - **Public surfaces.** Published schedule (defaults to today or the next session day), speakers, session pages, and an iframe embed. Headshots and `.ics` ship for published sessions.
-- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, or copy submissions into Airtable (manual or nightly). **Accelevents** sync creates or updates speakers and sessions, then attaches speakers on the session itself (preview, manual push, or optional daily at 01:00 UTC). The keyed `/api/v1` covers submissions, schedule, and speakers; OpenAPI is at `/api/v1/openapi.json`, framed against Sessionboard’s public docs without claiming drop-in parity.
+- **Exports and integrations.** Pull submissions as CSV or XLSX, zip CFP uploads or speaker deliverables, or copy submissions into Airtable (manual or nightly). **Accelevents** sync creates or updates speakers and sessions, then attaches speakers on the session itself (preview, manual push, or optional daily at 01:00 UTC).
+- **APIs for tools and agents.** `/api/v1` is a keyed, read-only operator surface (submissions, schedule, speakers). The **admin agent API** uses per-event personal access tokens (`Authorization: Bearer ce_pat_…`, minted under Settings → API tokens) so a clanker can list and decide submissions, place talks, and manage speakers. Contracts: [`/api/v1/openapi.json`](https://conference-engine.65labs.org/api/v1/openapi.json) and [`/api/admin/openapi.json`](https://conference-engine.65labs.org/api/admin/openapi.json).
 
 ## Day-to-day use
 
@@ -128,14 +133,18 @@ Before production migrations, export D1 (and back up R2). Roll back the Worker f
 
 ## API (short)
 
-`/api/v1` is a small, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`. Responses can include emails — keep them out of logs.
+Two surfaces. Keep emails out of logs on both.
+
+### Public read (`/api/v1`)
+
+Keyed, read-only operator API. Authenticate with `Authorization: Bearer <PUBLIC_API_KEY>` or `x-api-key`.
 
 | Docs | URL |
 | --- | --- |
-| OpenAPI (this project) | [`/api/v1/openapi.json`](https://conference-engine.65labs.org/api/v1/openapi.json) (no key) |
+| OpenAPI | [`/api/v1/openapi.json`](https://conference-engine.65labs.org/api/v1/openapi.json) (no key) |
 | Sessionboard public API docs | [apidocs.sessionboard.com](https://apidocs.sessionboard.com/api-reference/overview) |
 
-**Compatibility.** Same operator job as Sessionboard’s keyed programme reads (submissions / sessions / speakers for an event). Not a drop-in: paths are `/api/v1/events/{eventSlug}/...`, auth is Bearer or `x-api-key` (not Sessionboard’s `x-access-token`), and JSON shapes are conference-engine’s own. Point tooling at OpenAPI; do not reuse a Sessionboard client unchanged.
+**Compatibility.** Same operator job as Sessionboard keyed programme reads (submissions / sessions / speakers for an event). Not a drop-in: paths are `/api/v1/events/{eventSlug}/...`, auth is Bearer or `x-api-key` (not Sessionboard `x-access-token`), and JSON shapes are conference-engine's own. Point tooling at OpenAPI; do not reuse a Sessionboard client unchanged.
 
 | Endpoint | Returns |
 | --- | --- |
@@ -148,6 +157,20 @@ Public, no-key routes under `/api/e/[eventSlug]/...` serve published schedule JS
 ```bash
 curl -sS http://127.0.0.1:8787/api/v1/events/aie-sandbox/speakers \
   -H "Authorization: Bearer $PUBLIC_API_KEY"
+```
+
+### Admin agent API (`/api/admin/...`)
+
+For clankers and scripts that need to run the programme, not only read it. Mint a per-event personal access token under **Settings → API tokens** (`ce_pat_…` prefix; shown once; only the hash is stored). Send `Authorization: Bearer ce_pat_…`. The token grants full admin on that event only. Organizer cookie sessions still work on the same routes. Demo events stay write-blocked.
+
+OpenAPI (no key): [`/api/admin/openapi.json`](https://conference-engine.65labs.org/api/admin/openapi.json).
+
+Jobs covered today include listing and deciding submissions, placing a talk on the schedule, listing or creating speakers, listing organizers, and minting or revoking tokens.
+
+```bash
+# after minting a token in Settings → API tokens
+curl -sS "http://127.0.0.1:8787/api/admin/events/aie-sandbox/submissions?queue=pending" \
+  -H "Authorization: Bearer $CE_PAT"
 ```
 
 ## Develop and test
