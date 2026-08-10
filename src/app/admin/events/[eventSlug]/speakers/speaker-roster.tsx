@@ -94,7 +94,8 @@ const SPEAKER_PANELS: Array<{ id: SpeakerPanel; label: string; description: stri
 	{
 		id: "content-sessions",
 		label: "Session content",
-		description: "Edit session copy, approve revisions, and restore prior versions.",
+		description:
+			"Each save is a new draft. Approve to show that version on the public schedule and embeds.",
 	},
 	{
 		id: "content-speakers",

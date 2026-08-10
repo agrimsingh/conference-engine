@@ -184,18 +184,18 @@ export function ContentConsole({ eventSlug, sessions, speakers, view }: Props) {
 							</p>
 						</>
 					)}
-					{view === "sessions" ? (
-						<p className="text-sm text-neutral-400">
-							Each save is a new draft. Approve to show that version on the public schedule
-							and embeds.
-						</p>
-					) : null}
 					{sessions.length === 0 ? (
-						<p className="border-t border-neutral-800 py-8 text-sm text-neutral-500">
+						<p className={`${view ? "py-2" : "border-t border-neutral-800 py-8"} text-sm text-neutral-500`}>
 							No accepted sessions yet.
 						</p>
 					) : (
-						<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
+						<ul
+							className={
+								view
+									? "divide-y divide-neutral-800"
+									: "divide-y divide-neutral-800 border-t border-neutral-800"
+							}
+						>
 							{sessions.map((session) => (
 								<li key={session.id} className="space-y-4 py-4">
 									<div className="flex flex-wrap items-center justify-between gap-2">
@@ -318,11 +318,17 @@ export function ContentConsole({ eventSlug, sessions, speakers, view }: Props) {
 						<h2 className="text-lg font-medium text-neutral-100">Speaker content</h2>
 					)}
 					{speakers.length === 0 ? (
-						<p className="border-t border-neutral-800 py-8 text-sm text-neutral-500">
+						<p className={`${view ? "py-2" : "border-t border-neutral-800 py-8"} text-sm text-neutral-500`}>
 							No speakers on accepted sessions yet.
 						</p>
 					) : (
-						<ul className="divide-y divide-neutral-800 border-t border-neutral-800">
+						<ul
+							className={
+								view
+									? "divide-y divide-neutral-800"
+									: "divide-y divide-neutral-800 border-t border-neutral-800"
+							}
+						>
 							{speakers.map((speaker) => (
 								<li key={speaker.personId} className="space-y-4 py-4">
 									<div className="flex items-center justify-between gap-2">
