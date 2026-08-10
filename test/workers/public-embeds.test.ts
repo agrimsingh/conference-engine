@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { buildPublicEmbedPayload, createEmbed, getPublicEmbedBySlug } from "@/lib/embeds/embed";
+import { buildPublicEmbedPayload, createEmbed, getPublicEmbedBySlug, setEmbedStatus } from "@/lib/embeds/embed";
 import { createEventWithDefaults } from "@/lib/events/create-event";
 import type { AccountRow } from "@/lib/db/types";
 import { approveSessionContent } from "./approve-content";
@@ -64,5 +64,25 @@ describe("public embeds", () => {
 		expect(payload?.sessions).toEqual([
 			expect.objectContaining({ id: "embed-format-stage", format: "Stage", track: "Unassigned" }),
 		]);
+	});
+
+	it("stops serving public payloads when an embed is paused", async () => {
+		const event = await seedEvent("Paused embed");
+		const embed = await createEmbed(env.DB, event.eventId, {
+			name: "Agenda",
+			slug: "agenda",
+			widgetType: "agenda",
+			brandColor: "#2563eb",
+			trackIds: [],
+			formats: [],
+			rooms: [],
+			visibleFields: ["title", "time", "room"],
+		});
+		expect(await buildPublicEmbedPayload(env.DB, event.slug, "agenda")).toMatchObject({ ok: true });
+		expect(await setEmbedStatus(env.DB, event.eventId, embed.id, "paused")).toMatchObject({ status: "paused" });
+		expect(await buildPublicEmbedPayload(env.DB, event.slug, "agenda")).toBeNull();
+		expect(await getPublicEmbedBySlug(env.DB, event.eventId, "agenda")).toMatchObject({ status: "paused" });
+		expect(await setEmbedStatus(env.DB, event.eventId, embed.id, "active")).toMatchObject({ status: "active" });
+		expect(await buildPublicEmbedPayload(env.DB, event.slug, "agenda")).toMatchObject({ ok: true });
 	});
 });

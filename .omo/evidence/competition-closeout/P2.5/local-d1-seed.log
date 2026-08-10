@@ -1,0 +1,205 @@
+
+> conference-engine@0.1.0 db:seed:demo:local
+> wrangler d1 execute conference-engine --local --file=scripts/seed-demo.sql
+
+
+ ⛅️ wrangler 4.120.0 (update available 4.120.1)
+───────────────────────────────────────────────
+Resource location: local 
+
+Use --remote if you want to access the remote instance.
+
+🌀 Executing on local database conference-engine (021b5626-e4ba-44d2-bbfd-69b99d483efb) from .wrangler/state/v3/d1:
+🌀 To execute on your remote database, add a --remote flag to your wrangler command.
+🚣 27 commands executed successfully.
+[
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  }
+]

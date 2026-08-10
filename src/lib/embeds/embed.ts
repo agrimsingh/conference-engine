@@ -11,6 +11,8 @@ import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/p
 
 export const EMBED_WIDGET_TYPES = ["sessions", "speakers", "agenda", "itinerary", "speaker_gallery"] as const;
 export type EmbedWidgetType = (typeof EMBED_WIDGET_TYPES)[number];
+export const EMBED_STATUSES = ["active", "paused"] as const;
+export type EmbedStatus = (typeof EMBED_STATUSES)[number];
 export const EMBED_VISIBLE_FIELDS = ["title", "time", "room", "track", "speakers", "abstract", "format", "bio", "jobTitle", "company", "headshot"] as const;
 export type EmbedVisibleField = (typeof EMBED_VISIBLE_FIELDS)[number];
 
@@ -28,6 +30,7 @@ export type EmbedRow = {
 	name: string;
 	slug: string;
 	widget_type: EmbedWidgetType;
+	status: EmbedStatus;
 	config_json: string;
 	created_at: number;
 	updated_at: number;
@@ -107,6 +110,10 @@ export function parseStoredEmbedConfig(widgetType: EmbedWidgetType, raw: unknown
 	};
 }
 
+function normalizeEmbedStatus(value: unknown): EmbedStatus {
+	return value === "paused" ? "paused" : "active";
+}
+
 function fromRow(row: EmbedRow): EmbedDefinition {
 	let rawConfig: unknown = {};
 	try {
@@ -115,7 +122,17 @@ function fromRow(row: EmbedRow): EmbedDefinition {
 		// Invalid legacy JSON falls back to the safe defaults for this widget.
 	}
 	const config = parseStoredEmbedConfig(row.widget_type, rawConfig);
-	return { id: row.id, event_id: row.event_id, name: row.name, slug: row.slug, widget_type: row.widget_type, created_at: row.created_at, updated_at: row.updated_at, config };
+	return {
+		id: row.id,
+		event_id: row.event_id,
+		name: row.name,
+		slug: row.slug,
+		widget_type: row.widget_type,
+		status: normalizeEmbedStatus(row.status),
+		created_at: row.created_at,
+		updated_at: row.updated_at,
+		config,
+	};
 }
 
 function configFromInput(input: EmbedInput): EmbedConfig {
@@ -134,15 +151,43 @@ export async function getPublicEmbedBySlug(db: D1Database, eventId: string, slug
 
 export async function createEmbed(db: D1Database, eventId: string, input: EmbedInput): Promise<EmbedDefinition> {
 	const id = crypto.randomUUID(); const now = Date.now();
-	await db.prepare("INSERT INTO public_embeds (id, event_id, name, slug, widget_type, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, eventId, input.name, input.slug, input.widgetType, JSON.stringify(configFromInput(input)), now, now).run();
-	return { id, event_id: eventId, name: input.name, slug: input.slug, widget_type: input.widgetType, created_at: now, updated_at: now, config: configFromInput(input) };
+	await db.prepare("INSERT INTO public_embeds (id, event_id, name, slug, widget_type, status, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)").bind(id, eventId, input.name, input.slug, input.widgetType, JSON.stringify(configFromInput(input)), now, now).run();
+	return { id, event_id: eventId, name: input.name, slug: input.slug, widget_type: input.widgetType, status: "active", created_at: now, updated_at: now, config: configFromInput(input) };
 }
 
 export async function updateEmbed(db: D1Database, eventId: string, embedId: string, input: EmbedInput): Promise<EmbedDefinition | null> {
 	const now = Date.now();
+	const existing = await db.prepare("SELECT * FROM public_embeds WHERE id = ? AND event_id = ?").bind(embedId, eventId).first<EmbedRow>();
+	if (!existing) return null;
 	const result = await db.prepare("UPDATE public_embeds SET name = ?, slug = ?, widget_type = ?, config_json = ?, updated_at = ? WHERE id = ? AND event_id = ?").bind(input.name, input.slug, input.widgetType, JSON.stringify(configFromInput(input)), now, embedId, eventId).run();
 	if (!result.meta.changes) return null;
-	return { id: embedId, event_id: eventId, name: input.name, slug: input.slug, widget_type: input.widgetType, created_at: now, updated_at: now, config: configFromInput(input) };
+	return {
+		id: embedId,
+		event_id: eventId,
+		name: input.name,
+		slug: input.slug,
+		widget_type: input.widgetType,
+		status: normalizeEmbedStatus(existing.status),
+		created_at: existing.created_at,
+		updated_at: now,
+		config: configFromInput(input),
+	};
+}
+
+export async function setEmbedStatus(
+	db: D1Database,
+	eventId: string,
+	embedId: string,
+	status: EmbedStatus,
+): Promise<EmbedDefinition | null> {
+	const now = Date.now();
+	const result = await db
+		.prepare("UPDATE public_embeds SET status = ?, updated_at = ? WHERE id = ? AND event_id = ?")
+		.bind(status, now, embedId, eventId)
+		.run();
+	if (!result.meta.changes) return null;
+	const row = await db.prepare("SELECT * FROM public_embeds WHERE id = ? AND event_id = ?").bind(embedId, eventId).first<EmbedRow>();
+	return row ? fromRow(row) : null;
 }
 
 export async function deleteEmbed(db: D1Database, eventId: string, embedId: string): Promise<boolean> {
@@ -168,7 +213,7 @@ function surnameSortKey(name: string): string {
 
 export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string, embedSlug: string): Promise<PublicEmbedPayload | null> {
 	const event = await getEventBySlug(db, eventSlug); if (!event) return null;
-	const embed = await getPublicEmbedBySlug(db, event.id, embedSlug); if (!embed) return null;
+	const embed = await getPublicEmbedBySlug(db, event.id, embedSlug); if (!embed || embed.status !== "active") return null;
 	const [slots, tracks, speakerRows] = await Promise.all([listAgendaSlotsWithSubmissions(db, event.id), listAgendaTracks(db, event.id, { includeRetired: true }), listPublicSpeakersForEvent(db, event.id)]);
 	const published = slots.filter((slot) => isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1);
 	const speakerMap = await listSpeakersForSubmissions(db, published.map((slot) => slot.submission_id));

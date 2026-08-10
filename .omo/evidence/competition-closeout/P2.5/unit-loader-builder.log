@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p2.5-embed-toggle
+
+
+ Test Files  2 passed (2)
+      Tests  3 passed (3)
+   Start at  02:35:00
+   Duration  883ms (transform 211ms, setup 0ms, import 382ms, tests 35ms, environment 421ms)
+
