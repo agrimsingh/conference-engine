@@ -4,6 +4,13 @@
 -- but clear every application table in child-to-parent FK order before creating
 -- the writable aie-sandbox fixture below.
 DELETE FROM email_delivery_envelopes;
+DELETE FROM event_speaker_contacts;
+DELETE FROM account_contact_stage_history;
+DELETE FROM account_contact_pipeline;
+DELETE FROM account_contact_activities;
+DELETE FROM account_contact_tags;
+DELETE FROM account_contact_segments;
+DELETE FROM account_contacts;
 DELETE FROM speaker_crm_activities;
 DELETE FROM speaker_crm_tags;
 DELETE FROM speaker_crm_profiles;
