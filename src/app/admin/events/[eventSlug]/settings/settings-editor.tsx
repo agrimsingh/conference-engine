@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { TimezoneSelect } from "@/components/timezone-select";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
@@ -11,6 +11,7 @@ import {
 	InviteTeamForm,
 	type TeamMember,
 } from "@/app/admin/events/[eventSlug]/team/invite-team-form";
+import { parseSection, type SettingsSectionId } from "./settings-section";
 
 type TeamAccess = {
 	members: TeamMember[];
@@ -24,20 +25,20 @@ type TeamAccess = {
 type Props = {
 	eventSlug: string;
 	configuration: EventConfiguration;
+	initialSection: SettingsSectionId;
 	team: TeamAccess;
 };
 type Message = { kind: "positive" | "negative"; text: string } | null;
-type SectionId = "details" | "team" | "api-tokens" | "rooms" | "tracks" | "tasks";
 
 const SECTIONS: Array<{
-	id: SectionId;
+	id: SettingsSectionId;
 	label: string;
 	description: string;
 }> = [
 	{
 		id: "details",
 		label: "Event details",
-		description: "Name, dates, timezone, contact email, and schedule defaults.",
+		description: "Name, contact email, dates, timezone, and schedule defaults.",
 	},
 	{
 		id: "team",
@@ -84,46 +85,33 @@ function dueLocalValue(dueAt: number | null) {
 	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function parseSection(value: string | null): SectionId {
-	switch (value) {
-		case "team":
-		case "api-tokens":
-		case "rooms":
-		case "tracks":
-		case "tasks":
-		case "details":
-			return value;
-		default:
-			return "details";
-	}
-}
-
-export function SettingsEditor({ eventSlug, configuration, team }: Props) {
+export function SettingsEditor({
+	eventSlug,
+	configuration,
+	initialSection,
+	team,
+}: Props) {
 	const router = useRouter();
-	const searchParams = useSearchParams();
-	const section = parseSection(searchParams.get("section"));
+	const [section, setSectionState] = useState<SettingsSectionId>(initialSection);
 	const [message, setMessage] = useState<Message>(null);
 	const [pending, setPending] = useState(false);
 	const event = configuration.event;
+	const missingEventDates = event.start_day == null || event.end_day == null;
 	const active = useMemo(
 		() => SECTIONS.find((item) => item.id === section) ?? SECTIONS[0]!,
 		[section],
 	);
 
 	const setSection = useCallback(
-		(next: SectionId) => {
-			const params = new URLSearchParams(searchParams.toString());
-			if (next === "details") params.delete("section");
-			else params.set("section", next);
-			const query = params.toString();
-			router.replace(
-				query
-					? `/admin/events/${eventSlug}/settings?${query}`
-					: `/admin/events/${eventSlug}/settings`,
-				{ scroll: false },
-			);
+		(next: SettingsSectionId) => {
+			setSectionState(next);
+			const href =
+				next === "details"
+					? `/admin/events/${eventSlug}/settings`
+					: `/admin/events/${eventSlug}/settings?section=${next}`;
+			router.replace(href, { scroll: false });
 		},
-		[eventSlug, router, searchParams],
+		[eventSlug, router],
 	);
 
 	async function request(path: string, method: string, body: unknown) {
@@ -242,11 +230,16 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 								<p className="sm:col-span-2 text-sm text-neutral-500">
 									The slug is permanent. Changes that would put an existing session outside these dates or hours are rejected.
 								</p>
+								{missingEventDates ? (
+									<p
+										role="status"
+										className="sm:col-span-2 rounded-md border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100"
+									>
+										Set the event start and end dates before schedule bounds apply. Sessions cannot
+										be placed until both dates are saved.
+									</p>
+								) : null}
 								<Field label="Event name" name="name" defaultValue={event.name} />
-								<label className="block space-y-1.5 text-sm">
-									<span className="font-medium text-neutral-200">Timezone</span>
-									<TimezoneSelect name="timezone" required defaultValue={event.timezone} />
-								</label>
 								<label className="block space-y-1.5 text-sm sm:col-span-2">
 									<span className="font-medium text-neutral-200">Contact email</span>
 									<input
@@ -266,14 +259,20 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 									label="Start date"
 									name="startDay"
 									type="date"
+									required
 									defaultValue={event.start_day ?? ""}
 								/>
 								<Field
 									label="End date"
 									name="endDay"
 									type="date"
+									required
 									defaultValue={event.end_day ?? ""}
 								/>
+								<label className="block space-y-1.5 text-sm">
+									<span className="font-medium text-neutral-200">Timezone</span>
+									<TimezoneSelect name="timezone" required defaultValue={event.timezone} />
+								</label>
 								<Field
 									label="Day starts"
 									name="dayStart"
@@ -565,12 +564,13 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 
 function Field({
 	label,
+	required = true,
 	...props
 }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
 	return (
 		<label className="block space-y-1.5 text-sm">
 			<span className="font-medium text-neutral-200">{label}</span>
-			<input required {...props} className={`w-full ${INPUT_CLASSES}`} />
+			<input {...props} required={required} className={`w-full ${INPUT_CLASSES}`} />
 		</label>
 	);
 }
