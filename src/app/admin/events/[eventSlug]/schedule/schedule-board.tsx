@@ -250,9 +250,8 @@ export function ScheduleBoard({
 					: row,
 			),
 		);
-		setMessage(`Placed “${session.title}” in ${roomName}`);
 
-		startTransition(async () => {
+		void (async () => {
 			try {
 				const response = await fetch(
 					`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`,
@@ -277,7 +276,6 @@ export function ScheduleBoard({
 						prev.map((row) => (row.id === submissionId ? previous : row)),
 					);
 					setError("Schedule failed");
-					setMessage(null);
 					return;
 				}
 				const result = payload as {
@@ -297,7 +295,6 @@ export function ScheduleBoard({
 						prev.map((row) => (row.id === submissionId ? previous : row)),
 					);
 					setError(result.error ?? "Schedule failed");
-					setMessage(null);
 					return;
 				}
 
@@ -328,9 +325,8 @@ export function ScheduleBoard({
 				setError(
 					"Couldn’t save this schedule change. Check your connection and try again.",
 				);
-				setMessage(null);
 			}
-		});
+		})();
 	}
 
 	function onClickCell(roomName: string, startMinutes: number) {
@@ -572,9 +568,6 @@ export function ScheduleBoard({
 				</p>
 			) : null}
 			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
-			{pending ? (
-				<p className="text-sm text-neutral-500">Saving…</p>
-			) : null}
 
 			<section className="border-b border-neutral-800 pb-4">
 				<div className="mb-2 flex flex-wrap items-center gap-2">
