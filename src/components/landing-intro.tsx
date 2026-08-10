@@ -110,7 +110,7 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 				</Link>
 			</div>
 			<p className="mt-4 text-xs text-neutral-500">
-				Public demo is read-only · review and portal need your own event · writable
+				Public demo is read-only · agents use per-event API tokens · writable
 				sandbox is local (see README)
 			</p>
 		</section>
