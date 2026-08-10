@@ -118,7 +118,7 @@ export default async function DemoPage({ searchParams }: Props) {
 						schedule are interactive; writes stay blocked. Organizer, reviewer, and speaker
 						workflows need your own event.
 					</p>
-					<nav aria-label="Demo perspective" className="mt-5 flex gap-2 overflow-x-auto pb-1">
+					<nav aria-label="Demo perspective" className="mt-5 flex flex-wrap gap-2">
 						{DEMO_PERSPECTIVES.map((item) => {
 							const active = item.id === perspective;
 							return (

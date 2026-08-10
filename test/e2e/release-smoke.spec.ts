@@ -37,15 +37,26 @@ test.describe("release smoke: public surfaces", () => {
 		await expect(page.getByText("Playable read-only surfaces")).toBeVisible();
 
 		const perspectiveNav = page.getByRole("navigation", { name: "Demo perspective" });
-		for (const [label, perspective] of [
-			["Organizer", "organizer"],
-			["Reviewer", "reviewer"],
-			["Speaker", "speaker"],
-			["Attendee", "attendee"],
-		]) {
-			await perspectiveNav.getByRole("link", { name: label }).click();
-			await expect(page).toHaveURL(new RegExp(`/demo\\?perspective=${perspective}`));
-			await expect(perspectiveNav.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+		for (const [label, perspective, title] of [
+			["Organizer", "organizer", "Full lifecycle walkthrough"],
+			["Reviewer", "reviewer", "Review needs your event"],
+			["Speaker", "speaker", "Portal needs your invite"],
+			["Attendee", "attendee", "Published program"],
+		] as const) {
+			// Click by href + wait for the card title. WebKit was flaking on
+			// name-matched soft-nav after the taller organizer walkthrough card:
+			// URL stayed on ?perspective=organizer while the next click raced the RSC.
+			const tab = perspectiveNav.locator(`a[href="/demo?perspective=${perspective}"]`);
+			await Promise.all([
+				page.waitForURL(new RegExp(`/demo\\?perspective=${perspective}`)),
+				tab.click(),
+			]);
+			await expect(tab).toHaveAttribute("aria-current", "page");
+			await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
+			await expect(perspectiveNav.getByRole("link", { name: label, exact: true })).toHaveAttribute(
+				"aria-current",
+				"page",
+			);
 		}
 		await expect(page.getByText("Published program")).toBeVisible();
 		await screenshot("03-demo-attendee", testInfo, page);
