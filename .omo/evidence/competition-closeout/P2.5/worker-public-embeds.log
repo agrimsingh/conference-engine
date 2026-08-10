@@ -1,0 +1,14 @@
+
+> conference-engine@0.1.0 test:workers
+> vitest run --config vitest.workers.config.mts test/workers/public-embeds.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p2.5-embed-toggle
+
+Using secrets defined in process.env
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  02:34:57
+   Duration  1.89s (transform 382ms, setup 849ms, import 100ms, tests 106ms, environment 0ms)
+

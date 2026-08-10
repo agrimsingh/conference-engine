@@ -1,7 +1,20 @@
+import { NextResponse } from "next/server";
+import { getDb } from "@/lib/db/cloudflare";
+import { getEventBySlug } from "@/lib/db/queries";
+import { getPublicEmbedBySlug } from "@/lib/embeds/embed";
+
 type Context = { params: Promise<{ eventSlug: string; embedSlug: string }> };
 
 export async function GET(_request: Request, context: Context) {
 	const { eventSlug, embedSlug } = await context.params;
+	const db = await getDb();
+	const event = await getEventBySlug(db, eventSlug);
+	if (!event) return NextResponse.json({ ok: false, error: "Embed not found" }, { status: 404 });
+	const embed = await getPublicEmbedBySlug(db, event.id, embedSlug);
+	if (!embed || embed.status !== "active") {
+		return NextResponse.json({ ok: false, error: "Embed not found" }, { status: 404 });
+	}
+
 	const targetPath = `/embed/${encodeURIComponent(eventSlug)}/widgets/${encodeURIComponent(embedSlug)}`;
 	const script = `(() => {
   if (customElements.get("conference-engine-embed")) return;

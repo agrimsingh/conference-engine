@@ -31,6 +31,7 @@ describe("embed builder preview", () => {
 					name: "Sessions",
 					slug: "sessions",
 					widget_type: "sessions",
+					status: "active",
 					created_at: 1,
 					updated_at: 1,
 					config: { brandColor: "#2563eb", trackIds: [], formats: [], rooms: [], visibleFields: ["title"] },

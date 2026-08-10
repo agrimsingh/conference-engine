@@ -150,6 +150,45 @@ export function EmbedBuilder({
 		}
 	}
 
+	async function toggleStatus(embed: EmbedView) {
+		const nextStatus = embed.status === "paused" ? "active" : "paused";
+		setSaving(true);
+		setMessage(null);
+		try {
+			const response = await fetch(
+				`/api/admin/events/${eventSlug}/embeds/${embed.id}`,
+				{
+					method: "PATCH",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ status: nextStatus }),
+				},
+			);
+			const body = (await response.json()) as {
+				ok: boolean;
+				embed?: EmbedView;
+				error?: string;
+			};
+			if (!response.ok || !body.embed) throw new Error(body.error ?? "Update failed");
+			setEmbeds((current) =>
+				current.map((item) => (item.id === body.embed!.id ? body.embed! : item)),
+			);
+			setMessage({
+				kind: "positive",
+				text:
+					nextStatus === "paused"
+						? "Embed paused. Public widgets stop serving until you resume it."
+						: "Embed resumed. Public widgets are serving again.",
+			});
+		} catch (error) {
+			setMessage({
+				kind: "negative",
+				text: error instanceof Error ? error.message : "Update failed",
+			});
+		} finally {
+			setSaving(false);
+		}
+	}
+
 	return (
 		<div className="mt-8 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
 			<aside className="mb-6 lg:mb-0">
@@ -346,6 +385,53 @@ export function EmbedBuilder({
 
 				{panel === "preview" ? (
 					<div className="space-y-4">
+						<div className="border-b border-neutral-800 pb-4">
+							<p className="text-sm font-medium text-neutral-200">Your embeds</p>
+							<p className="mt-1 text-xs text-neutral-500">
+								Pause an embed to stop serving its public widget and data endpoints.
+							</p>
+							{embeds.length === 0 ? (
+								<p className="mt-3 text-sm text-neutral-500">No embeds yet.</p>
+							) : (
+								<ul className="mt-3 divide-y divide-neutral-800 border-t border-neutral-800">
+									{embeds.map((embed) => {
+										const isSelected = embed.id === selectedId;
+										const paused = embed.status === "paused";
+										return (
+											<li
+												key={embed.id}
+												className="flex flex-wrap items-center justify-between gap-3 py-3"
+											>
+												<button
+													type="button"
+													onClick={() => setSelectedId(embed.id)}
+													className={
+														isSelected
+															? "text-left text-sm font-medium text-neutral-100"
+															: "text-left text-sm text-neutral-400 hover:text-neutral-200"
+													}
+												>
+													<span>{embed.name}</span>
+													<span className="mt-0.5 block text-xs font-normal text-neutral-500">
+														/{embed.slug}
+														{paused ? " · Paused" : " · Live"}
+													</span>
+												</button>
+												<button
+													type="button"
+													disabled={saving}
+													onClick={() => void toggleStatus(embed)}
+													aria-pressed={paused}
+													className={buttonClasses(paused ? "primary" : "secondary")}
+												>
+													{paused ? "Resume" : "Pause"}
+												</button>
+											</li>
+										);
+									})}
+								</ul>
+							)}
+						</div>
 						<label className="block text-sm text-neutral-300">
 							Generated embed
 							<select
@@ -357,6 +443,7 @@ export function EmbedBuilder({
 								{embeds.map((embed) => (
 									<option key={embed.id} value={embed.id}>
 										{embed.name}
+										{embed.status === "paused" ? " (paused)" : ""}
 									</option>
 								))}
 							</select>
