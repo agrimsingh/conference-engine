@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
 	createAccountContact,
 	enrollContactInPipeline,
+	getAccountContact,
 	importAccountContactsCsv,
 	listAccountContacts,
 	mergeAccountContacts,
 	moveContactPipelineStage,
 	pushContactToEvent,
 } from "@/lib/contacts";
+import { upsertEventSpeakerProfile } from "@/lib/speakers/roster";
 
 const now = 1_790_600_000_000;
 
@@ -226,5 +228,202 @@ describe("account contacts CRM", () => {
 		expect(again.ok).toBe(true);
 		if (!again.ok) return;
 		expect(again.value.personId).toBe(pushed.value.personId);
+	});
+
+	it("rejects invalid CSV rows without persisting earlier valid rows", async () => {
+		const { accountId } = await seedAccount("import-atomic");
+		const mixed = `name,email
+Valid Speaker,valid.speaker@sbek-test.example.com
+,not-an-email
+`;
+		const result = await importAccountContactsCsv(env.DB, {
+			accountId,
+			csv: mixed,
+			now,
+		});
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.rows?.some((row) => row.row === 3)).toBe(true);
+		expect(await listAccountContacts(env.DB, accountId)).toHaveLength(0);
+	});
+
+	it("dedupes overlapping event_speaker_contacts when merging duplicates", async () => {
+		const { accountId, eventId } = await seedAccount("merge-links");
+		const primary = await createAccountContact(env.DB, {
+			accountId,
+			now,
+			input: {
+				name: "Priya Raman",
+				email: "priya.primary@sbek-test.example.com",
+			},
+		});
+		const secondary = await createAccountContact(env.DB, {
+			accountId,
+			now: now + 1,
+			input: {
+				name: "Priya Raman",
+				email: "priya.secondary@sbek-test.example.com",
+			},
+		});
+		expect(primary.ok && secondary.ok).toBe(true);
+		if (!primary.ok || !secondary.ok) return;
+
+		const first = await pushContactToEvent(env.DB, {
+			accountId,
+			contactId: primary.value.id,
+			eventId,
+			now: now + 2,
+		});
+		const second = await pushContactToEvent(env.DB, {
+			accountId,
+			contactId: secondary.value.id,
+			eventId,
+			now: now + 3,
+		});
+		expect(first.ok && second.ok).toBe(true);
+
+		const merged = await mergeAccountContacts(env.DB, {
+			accountId,
+			primaryContactId: primary.value.id,
+			secondaryContactId: secondary.value.id,
+			now: now + 4,
+		});
+		expect(merged.ok).toBe(true);
+		if (!merged.ok) return;
+
+		const links = await env.DB
+			.prepare(
+				`SELECT contact_id, person_id FROM event_speaker_contacts
+				 WHERE event_id = ? ORDER BY person_id`,
+			)
+			.bind(eventId)
+			.all<{ contact_id: string; person_id: string }>();
+		expect(links.results).toHaveLength(1);
+		expect(links.results[0]?.contact_id).toBe(primary.value.id);
+		expect(merged.value.eventLinks).toHaveLength(1);
+	});
+
+	it("keeps the later pipeline stage when merging enrolled contacts", async () => {
+		const { accountId } = await seedAccount("merge-stage");
+		const primary = await createAccountContact(env.DB, {
+			accountId,
+			now,
+			input: {
+				name: "Marcus Okafor",
+				email: "marcus.primary@sbek-test.example.com",
+			},
+		});
+		const secondary = await createAccountContact(env.DB, {
+			accountId,
+			now: now + 1,
+			input: {
+				name: "Marcus Okafor",
+				email: "marcus.secondary@sbek-test.example.com",
+			},
+		});
+		expect(primary.ok && secondary.ok).toBe(true);
+		if (!primary.ok || !secondary.ok) return;
+
+		await enrollContactInPipeline(env.DB, {
+			accountId,
+			contactId: primary.value.id,
+			stage: "research",
+			now: now + 2,
+		});
+		await enrollContactInPipeline(env.DB, {
+			accountId,
+			contactId: secondary.value.id,
+			stage: "negotiating",
+			now: now + 3,
+		});
+
+		const merged = await mergeAccountContacts(env.DB, {
+			accountId,
+			primaryContactId: primary.value.id,
+			secondaryContactId: secondary.value.id,
+			now: now + 4,
+		});
+		expect(merged.ok).toBe(true);
+		if (!merged.ok) return;
+		expect(merged.value.stage).toBe("negotiating");
+	});
+
+	it("includes membership-managed events in contact event history", async () => {
+		const owner = await seedAccount("hist-owner");
+		const memberId = "acc-hist-member";
+		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO accounts (id, email, name, created_at, updated_at)
+				 VALUES (?, 'member@example.test', 'Member', ?, ?)`,
+			).bind(memberId, now, now),
+			env.DB.prepare(
+				`INSERT INTO event_memberships (id, event_id, account_id, role, created_at)
+				 VALUES ('mem-hist-member', ?, ?, 'admin', ?)`,
+			).bind(owner.eventId, memberId, now),
+		]);
+
+		const created = await createAccountContact(env.DB, {
+			accountId: memberId,
+			now,
+			input: {
+				name: "Dana Kowalski",
+				email: "dana.member@sbek-test.example.com",
+			},
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const pushed = await pushContactToEvent(env.DB, {
+			accountId: memberId,
+			contactId: created.value.id,
+			eventId: owner.eventId,
+			now: now + 1,
+		});
+		expect(pushed.ok).toBe(true);
+
+		const detail = await getAccountContact(env.DB, memberId, created.value.id);
+		expect(detail?.eventLinks.map((link) => link.eventId)).toEqual([owner.eventId]);
+	});
+
+	it("does not reset an existing speaker workflow_status on push", async () => {
+		const { accountId, eventId } = await seedAccount("push-status");
+		const seeded = await upsertEventSpeakerProfile(env.DB, {
+			eventId,
+			input: {
+				email: "confirmed.speaker@sbek-test.example.com",
+				name: "Confirmed Speaker",
+				workflowStatus: "confirmed",
+			},
+			now,
+		});
+		expect(seeded.ok).toBe(true);
+
+		const created = await createAccountContact(env.DB, {
+			accountId,
+			now: now + 1,
+			input: {
+				name: "Confirmed Speaker",
+				email: "confirmed.speaker@sbek-test.example.com",
+			},
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const pushed = await pushContactToEvent(env.DB, {
+			accountId,
+			contactId: created.value.id,
+			eventId,
+			now: now + 2,
+		});
+		expect(pushed.ok).toBe(true);
+
+		const status = await env.DB
+			.prepare(
+				`SELECT workflow_status FROM event_speaker_profiles
+				 WHERE event_id = ? AND person_id = ?`,
+			)
+			.bind(eventId, pushed.ok ? pushed.value.personId : "")
+			.first<{ workflow_status: string }>();
+		expect(status?.workflow_status).toBe("confirmed");
 	});
 });

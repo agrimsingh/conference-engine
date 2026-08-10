@@ -421,8 +421,9 @@ export function ReviewWorkspace({
 														email: reviewer.email,
 													});
 													const path = result?.reviewer?.reviewPath ?? null;
+													if (!path) return;
 													setIssuedReviewPath(path);
-													if (path) await copyReviewPath(path);
+													await copyReviewPath(path);
 												}}
 											>
 												Regenerate &amp; copy link

@@ -38,6 +38,11 @@ describe("product foundation migration", () => {
 			mode: "live",
 			track_conflict_policy: "hard",
 		});
+		expect(
+			await env.DB.prepare("SELECT contact_email FROM events WHERE id = ?")
+				.bind(created.eventId)
+				.first<{ contact_email: string | null }>(),
+		).toEqual({ contact_email: null });
 		expect(await env.DB.prepare(
 			"SELECT slug, kind, status FROM cfp_forms WHERE event_id = ? ORDER BY kind, slug",
 		).bind(created.eventId).all<{ slug: string; kind: string; status: string }>()).toEqual({

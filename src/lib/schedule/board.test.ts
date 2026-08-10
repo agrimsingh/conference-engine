@@ -320,6 +320,48 @@ describe("planAutoPlace", () => {
 			"2 placed, 1 need attention",
 		);
 	});
+
+	it("skips hard track overlaps the same way placeSession does", () => {
+		const blockingTrack = {
+			submissionId: "placed",
+			trackId: "track-main",
+			startsAtMs: Date.parse("2026-06-10T09:00:00.000Z"),
+			endsAtMs: Date.parse("2026-06-10T09:30:00.000Z"),
+		};
+		const slot = findAvailableSlot({
+			session: { id: "s1", durationMinutes: 30, speakerKeys: ["ada"] },
+			dayKey,
+			timeZone,
+			timeRows,
+			rooms,
+			roomIds,
+			dayEndMinutes: 12 * 60,
+			intervals: [],
+			trackConflictPolicy: "hard",
+			placementTrackId: "track-main",
+			trackIntervals: [blockingTrack],
+		});
+		expect(slot?.startMinutes).toBe(9 * 60 + 30);
+
+		const plan = planAutoPlace({
+			sessions: [
+				{ id: "s1", durationMinutes: 30, speakerKeys: ["ada"] },
+				{ id: "s2", durationMinutes: 30, speakerKeys: ["bob"] },
+			],
+			dayKey,
+			timeZone,
+			timeRows: [9 * 60],
+			rooms,
+			roomIds,
+			dayEndMinutes: 12 * 60,
+			intervals: [],
+			trackConflictPolicy: "hard",
+			placementTrackId: "track-main",
+			trackIntervals: [],
+		});
+		expect(plan.placed).toBe(1);
+		expect(plan.skippedIds).toEqual(["s2"]);
+	});
 });
 
 describe("publish confirm target", () => {

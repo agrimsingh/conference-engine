@@ -131,6 +131,17 @@ export async function acceptEventInvitation(
 	if (!invitation) return null;
 	const now = args.now ?? Date.now();
 	const membershipId = crypto.randomUUID();
+	const previousOwner = invitation.role === "owner"
+		? await db
+				.prepare(
+					`SELECT a.email AS email
+					 FROM event_ownership o
+					 JOIN accounts a ON a.id = o.account_id
+					 WHERE o.event_id = ?`,
+				)
+				.bind(invitation.event_id)
+				.first<{ email: string }>()
+		: null;
 	const result = await db.batch([
 		db.prepare(
 			`UPDATE event_invitations
@@ -171,6 +182,25 @@ export async function acceptEventInvitation(
            WHERE id = ? AND role = 'owner' AND status = 'accepted' AND accepted_at = ?
          )`,
 		).bind(invitation.account_id, now, invitation.event_id, invitation.id, now),
+		db.prepare(
+			`UPDATE events
+       SET contact_email = NULL, updated_at = ?
+       WHERE id = ?
+         AND ? IS NOT NULL
+         AND contact_email IS NOT NULL
+         AND lower(trim(contact_email)) = lower(trim(?))
+         AND EXISTS (
+           SELECT 1 FROM event_invitations
+           WHERE id = ? AND role = 'owner' AND status = 'accepted' AND accepted_at = ?
+         )`,
+		).bind(
+			now,
+			invitation.event_id,
+			previousOwner?.email ?? null,
+			previousOwner?.email ?? "",
+			invitation.id,
+			now,
+		),
 		db.prepare(
 			`UPDATE auth_challenges
        SET state = 'consumed', consumed_at = ?
