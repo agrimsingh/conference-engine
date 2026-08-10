@@ -1,3 +1,4 @@
+import { parseContactEmail } from "@/lib/email/reply-to";
 import { parseTrackConflictPolicy, validateEventSettings, type TrackConflictPolicy } from "./settings";
 import { validateEventScheduleBounds } from "../schedule/date-bounds";
 import { parseSavedTaskFormFields, parseTaskFormFields, type TaskFormField } from "../speakers/task-forms";
@@ -14,6 +15,9 @@ export type ConfigurationEvent = {
 	track_conflict_policy: TrackConflictPolicy;
 	notify_on_submission_create: number;
 	notify_on_submission_update: number;
+	contact_email: string | null;
+	/** Owner account email used when contact_email is empty. */
+	owner_email: string | null;
 };
 
 export type ConfigurationRoom = { id: string; name: string; position: number };
@@ -52,7 +56,15 @@ function activeRows<T>(result: D1Result<T>): T[] { return result.results; }
 
 export async function loadEventConfiguration(db: D1Database, eventId: string): Promise<EventConfiguration> {
 	const [event, rooms, tracks, tasks, cfp, review, messageTemplates] = await Promise.all([
-		db.prepare(`SELECT id, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy, notify_on_submission_create, notify_on_submission_update FROM events WHERE id = ?`).bind(eventId).first<ConfigurationEvent>(),
+		db.prepare(
+			`SELECT e.id, e.name, e.timezone, e.start_day, e.end_day, e.day_start_minutes, e.day_end_minutes,
+        e.slot_duration_minutes, e.track_conflict_policy, e.notify_on_submission_create, e.notify_on_submission_update,
+        e.contact_email, a.email AS owner_email
+       FROM events e
+       LEFT JOIN event_ownership o ON o.event_id = e.id
+       LEFT JOIN accounts a ON a.id = o.account_id
+       WHERE e.id = ?`,
+		).bind(eventId).first<ConfigurationEvent>(),
 		db.prepare(`SELECT id, name, position FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationRoom>(),
 		db.prepare(`SELECT id, name, slug, position FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, name`).bind(eventId).all<ConfigurationTrack>(),
 		db.prepare(`SELECT id, key, label, CASE WHEN form_schema_json IS NOT NULL THEN 'form' ELSE task_kind END AS task_kind, required, position, instructions, due_at, form_schema_json FROM task_templates WHERE event_id = ? AND soft_deleted = 0 ORDER BY position, label`).bind(eventId).all<Omit<ConfigurationTask, "form_fields"> & { form_schema_json: string | null }>(),
@@ -66,7 +78,11 @@ export async function loadEventConfiguration(db: D1Database, eventId: string): P
 		review ? db.prepare("SELECT COUNT(*) AS count FROM evaluation_criteria WHERE plan_id = ? AND soft_deleted = 0").bind(review.id).first<{ count: number }>() : null,
 	]);
 	return {
-		event,
+		event: {
+			...event,
+			contact_email: event.contact_email ?? null,
+			owner_email: event.owner_email ?? null,
+		},
 		rooms: activeRows(rooms), tracks: activeRows(tracks), tasks: activeRows(tasks).map((task) => ({ ...task, form_fields: parseSavedTaskFormFields(task.form_schema_json) })),
 		cfp: cfp ? { ...cfp, fieldCount: fieldCount?.count ?? 0 } : null,
 		review: review ? { ...review, criteriaCount: criteriaCount?.count ?? 0 } : null,
@@ -129,6 +145,8 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 		input.notifyOnSubmissionUpdate === undefined
 			? null
 			: parseNotifyFlag(input.notifyOnSubmissionUpdate, "Notify on submission update");
+	const contactEmail =
+		input.contactEmail === undefined ? undefined : parseContactEmail(input.contactEmail);
 	const existingSlots = await db
 		.prepare("SELECT starts_at, ends_at FROM agenda_slots WHERE event_id = ?")
 		.bind(eventId)
@@ -150,8 +168,13 @@ export async function updateEventConfiguration(db: D1Database, eventId: string, 
 			throw new Error(`Can't save schedule defaults because an existing session ${boundsError.toLowerCase()}.`);
 		}
 	}
-	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), notify_on_submission_create = COALESCE(?, notify_on_submission_create), notify_on_submission_update = COALESCE(?, notify_on_submission_update), updated_at = ? WHERE id = ?`)
-		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, notifyOnCreate, notifyOnUpdate, Date.now(), eventId).run();
+	if (contactEmail === undefined) {
+		await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), notify_on_submission_create = COALESCE(?, notify_on_submission_create), notify_on_submission_update = COALESCE(?, notify_on_submission_update), updated_at = ? WHERE id = ?`)
+			.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, notifyOnCreate, notifyOnUpdate, Date.now(), eventId).run();
+		return;
+	}
+	await db.prepare(`UPDATE events SET name = ?, start_day = ?, end_day = ?, timezone = ?, day_start_minutes = ?, day_end_minutes = ?, slot_duration_minutes = ?, track_conflict_policy = COALESCE(?, track_conflict_policy), notify_on_submission_create = COALESCE(?, notify_on_submission_create), notify_on_submission_update = COALESCE(?, notify_on_submission_update), contact_email = ?, updated_at = ? WHERE id = ?`)
+		.bind(name, startDay, endDay, timezone, dayStartMinutes, dayEndMinutes, slotDurationMinutes, trackConflictPolicy, notifyOnCreate, notifyOnUpdate, contactEmail, Date.now(), eventId).run();
 }
 
 function parseNotifyFlag(value: unknown, label: string): number {

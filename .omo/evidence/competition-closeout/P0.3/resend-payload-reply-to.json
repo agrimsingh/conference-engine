@@ -1,0 +1,18 @@
+{
+  "source": "src/lib/email/resend-reply-to.test.ts (sendTemplatedEmail reply_to by template family)",
+  "from": "team@65labs.org",
+  "to": [
+    "speaker@example.test"
+  ],
+  "subject": "Hello",
+  "text": "Body",
+  "reply_to": "contact@event.test",
+  "families_asserted": {
+    "confirmation": "submission_received",
+    "decision": "acceptance",
+    "reminders": "task_reminder",
+    "portal_invite": "portal_magic_link",
+    "announcements": "speaker_announcement",
+    "calendar_invites": "calendar_invite"
+  }
+}

@@ -37,7 +37,7 @@ const SECTIONS: Array<{
 	{
 		id: "details",
 		label: "Event details",
-		description: "Name, dates, timezone, and schedule defaults.",
+		description: "Name, dates, timezone, contact email, and schedule defaults.",
 	},
 	{
 		id: "team",
@@ -233,6 +233,7 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 										dayEndMinutes: minutes(f.get("dayEnd")),
 										slotDurationMinutes: Number(f.get("slotDuration")),
 										trackConflictPolicy: f.get("trackConflictPolicy"),
+										contactEmail: f.get("contactEmail"),
 										notifyOnSubmissionCreate: f.get("notifyOnSubmissionCreate") === "on",
 										notifyOnSubmissionUpdate: f.get("notifyOnSubmissionUpdate") === "on",
 									});
@@ -245,6 +246,21 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 								<label className="block space-y-1.5 text-sm">
 									<span className="font-medium text-neutral-200">Timezone</span>
 									<TimezoneSelect name="timezone" required defaultValue={event.timezone} />
+								</label>
+								<label className="block space-y-1.5 text-sm sm:col-span-2">
+									<span className="font-medium text-neutral-200">Contact email</span>
+									<input
+										name="contactEmail"
+										type="email"
+										defaultValue={event.contact_email ?? ""}
+										placeholder={event.owner_email ?? "owner@example.com"}
+										className={`w-full ${INPUT_CLASSES}`}
+										autoComplete="email"
+									/>
+									<span className="block text-xs text-neutral-500">
+										Reply-To on speaker and reviewer emails. Leave blank to use the event owner account
+										{event.owner_email ? ` (${event.owner_email})` : ""}.
+									</span>
 								</label>
 								<Field
 									label="Start date"

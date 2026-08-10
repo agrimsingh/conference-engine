@@ -121,9 +121,10 @@ export async function createEventWithDefaults(
 	// A draft cannot issue a committee link. Store a non-secret marker and a
 	// random digest in the creation batch so no raw bearer ever reaches D1.
 	const reviewerTokenDigest = await digestReviewToken(newReviewToken());
+	const contactEmail = owner?.email?.trim().toLowerCase() || null;
 	const statements: D1PreparedStatement[] = [
-		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, now, now),
+		db.prepare(`INSERT INTO events (id, slug, name, timezone, start_day, end_day, ownership_claimable, contact_email, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(eventId, slug, name, timezone, args.startDay, args.endDay, owner ? 0 : 1, contactEmail, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, opens_at, closes_at, created_at, updated_at)
       VALUES (?, ?, 'cfp', ?, ?, 'draft', NULL, NULL, ?, ?)`).bind(formId, eventId, cfp.title, cfp.description, now, now),
 		db.prepare(`INSERT INTO cfp_forms (id, event_id, slug, title, description, status, kind, opens_at, closes_at, created_at, updated_at)

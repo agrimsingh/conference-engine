@@ -1,6 +1,7 @@
 import { getAuthSecret, getCloudflareEnv } from "@/lib/db/cloudflare";
 import { getEventById } from "@/lib/db/queries";
 import { renderEventMessageTemplate } from "./templates";
+import { resolveEventReplyTo, templateUsesReplyTo } from "./reply-to";
 import { hmacHash } from "@/lib/security/crypto";
 import { fetchWithBoundedRetry } from "@/lib/security/fetch";
 import {
@@ -291,19 +292,31 @@ export async function sendTemplatedEmail(
 		await markEmailDeliveryFailed(db, { deliveryKey, error: message });
 		return { ok: false, status: "failed", error: message, messageId: deliveryKey, failureKind: "confirmed" };
 	}
+	const replyTo = templateUsesReplyTo(args.templateKey)
+		? await resolveEventReplyTo(db, args.eventId)
+		: null;
 	return sendReservedEnvelope(db, {
 		deliveryKey,
 		toEmail,
 		subject: rendered.subject,
 		text: rendered.text,
 		attachments: args.attachments ?? [],
+		replyTo,
 		runtime,
 	});
 }
 
 async function sendReservedEnvelope(
 	db: D1Database,
-	args: { deliveryKey: string; toEmail: string; subject: string; text: string; attachments: Attachment[]; runtime: EmailDeliveryRuntime },
+	args: {
+		deliveryKey: string;
+		toEmail: string;
+		subject: string;
+		text: string;
+		attachments: Attachment[];
+		replyTo?: string | null;
+		runtime: EmailDeliveryRuntime;
+	},
 ): Promise<OutboundSendResult> {
 	const apiKey = args.runtime.resendApiKey;
 	const fromEmail = args.runtime.resendFromEmail || "team@65labs.org";
@@ -319,6 +332,7 @@ async function sendReservedEnvelope(
 		subject: args.subject,
 		text: args.text,
 	};
+	if (args.replyTo) payload.reply_to = args.replyTo;
 	if (args.attachments.length) {
 		payload.attachments = args.attachments.map((file) => ({
 			filename: file.filename,
@@ -392,7 +406,18 @@ export async function retryEmailDelivery(
 	if (reservation.action !== "send") return { ok: true, status: "skipped", providerId: reservation.providerId, messageId: envelope.delivery_key };
 	const runtime = args.runtime ?? await loadDeliveryRuntime();
 	if (!runtime.authSecret) return { ok: false, status: "failed", error: "AUTH_SECRET missing", messageId: envelope.delivery_key, failureKind: "confirmed" };
-	return sendReservedEnvelope(db, { deliveryKey: envelope.delivery_key, toEmail: envelope.to_email, subject: envelope.subject, text: envelope.text_body, attachments, runtime });
+	const replyTo = templateUsesReplyTo(envelope.template_key)
+		? await resolveEventReplyTo(db, envelope.event_id)
+		: null;
+	return sendReservedEnvelope(db, {
+		deliveryKey: envelope.delivery_key,
+		toEmail: envelope.to_email,
+		subject: envelope.subject,
+		text: envelope.text_body,
+		attachments,
+		replyTo,
+		runtime,
+	});
 }
 
 async function loadDeliveryRuntime(): Promise<EmailDeliveryRuntime> {
