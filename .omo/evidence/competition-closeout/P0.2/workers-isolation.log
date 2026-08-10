@@ -1,0 +1,14 @@
+
+> conference-engine@0.1.0 test:workers
+> vitest run --config vitest.workers.config.mts test/workers/multi-event-isolation.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p0.2-multi-event
+
+Using secrets defined in .dev.vars
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  02:37:21
+   Duration  2.07s (transform 249ms, setup 307ms, import 277ms, tests 353ms, environment 0ms)
+
