@@ -24,6 +24,7 @@ DELETE FROM evaluation_criterion_scores;
 DELETE FROM review_assignments;
 DELETE FROM evaluation_scores;
 DELETE FROM event_invitations;
+DELETE FROM event_api_tokens;
 DELETE FROM submission_draft_tokens;
 DELETE FROM session_materialization_claims;
 DELETE FROM speaker_tasks;
