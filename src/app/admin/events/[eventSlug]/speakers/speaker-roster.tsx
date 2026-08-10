@@ -2,9 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
+import {
+	ContentConsole,
+	type ContentSession,
+	type ContentSpeaker,
+} from "../content/content-console";
 import {
 	SPEAKER_WORKFLOW_STATUSES,
 	SOCIAL_KEYS,
@@ -24,6 +29,8 @@ type Props = {
 	initialQuery: string;
 	eventName: string;
 	crmOwners: SpeakerCrmOwnerOption[];
+	contentSessions: ContentSession[];
+	contentSpeakers: ContentSpeaker[];
 };
 
 type Draft = {
@@ -66,20 +73,52 @@ function workflowTone(status: SpeakerWorkflowStatus): "neutral" | "positive" | "
 	}
 }
 
-type SpeakerPanel = "roster" | "add" | "import";
+type SpeakerPanel = "roster" | "add" | "import" | "content-sessions" | "content-speakers";
+
+function parsePanel(value: string | null): SpeakerPanel {
+	switch (value) {
+		case "add":
+		case "import":
+		case "content-sessions":
+		case "content-speakers":
+			return value;
+		default:
+			return "roster";
+	}
+}
 
 const SPEAKER_PANELS: Array<{ id: SpeakerPanel; label: string; description: string }> = [
 	{ id: "roster", label: "Roster", description: "Search, filter, email, and open CRM." },
 	{ id: "add", label: "Add / edit", description: "Create a roster entry or edit the selected speaker." },
 	{ id: "import", label: "Import CSV", description: "Bulk import speaker profiles." },
+	{
+		id: "content-sessions",
+		label: "Session content",
+		description: "Edit session copy, approve revisions, and restore prior versions.",
+	},
+	{
+		id: "content-speakers",
+		label: "Speaker content",
+		description: "Edit bios and headshots with revision history.",
+	},
 ];
 
-export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialStatus, initialQuery, crmOwners }: Props) {
+export function SpeakerRoster({
+	eventSlug,
+	eventName,
+	initialSpeakers,
+	initialStatus,
+	initialQuery,
+	crmOwners,
+	contentSessions,
+	contentSpeakers,
+}: Props) {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const panel = parsePanel(searchParams.get("panel"));
 	const [speakers, setSpeakers] = useState(initialSpeakers);
 	const [status, setStatus] = useState(initialStatus);
 	const [q, setQ] = useState(initialQuery);
-	const [panel, setPanel] = useState<SpeakerPanel>("roster");
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
 	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website,facebook\n");
 	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
@@ -113,12 +152,35 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 		});
 	}, [speakers, status, q]);
 
+	const setPanel = useCallback(
+		(next: SpeakerPanel) => {
+			const params = new URLSearchParams(searchParams.toString());
+			if (next === "roster") params.delete("panel");
+			else params.set("panel", next);
+			const query = params.toString();
+			router.replace(
+				query
+					? `/admin/events/${eventSlug}/speakers?${query}`
+					: `/admin/events/${eventSlug}/speakers`,
+				{ scroll: false },
+			);
+		},
+		[eventSlug, router, searchParams],
+	);
+
 	function syncUrl(nextStatus: string, nextQ: string) {
-		const params = new URLSearchParams();
+		const params = new URLSearchParams(searchParams.toString());
 		if (nextStatus !== "all") params.set("status", nextStatus);
+		else params.delete("status");
 		if (nextQ.trim()) params.set("q", nextQ.trim());
-		const suffix = params.toString();
-		router.replace(`/admin/events/${eventSlug}/speakers${suffix ? `?${suffix}` : ""}`);
+		else params.delete("q");
+		const query = params.toString();
+		router.replace(
+			query
+				? `/admin/events/${eventSlug}/speakers?${query}`
+				: `/admin/events/${eventSlug}/speakers`,
+			{ scroll: false },
+		);
 	}
 
 	async function refresh() {
@@ -798,6 +860,24 @@ export function SpeakerRoster({ eventSlug, eventName, initialSpeakers, initialSt
 							Import speakers
 						</button>
 					</div>
+				) : null}
+
+				{panel === "content-sessions" ? (
+					<ContentConsole
+						eventSlug={eventSlug}
+						sessions={contentSessions}
+						speakers={contentSpeakers}
+						view="sessions"
+					/>
+				) : null}
+
+				{panel === "content-speakers" ? (
+					<ContentConsole
+						eventSlug={eventSlug}
+						sessions={contentSessions}
+						speakers={contentSpeakers}
+						view="speakers"
+					/>
 				) : null}
 			</div>
 

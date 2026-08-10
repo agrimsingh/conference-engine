@@ -1,12 +1,186 @@
 "use client";
+
 import { useMemo, useState } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
 import type { RosterSpeaker } from "@/lib/speakers/roster";
 import type { SpeakerActionAssignment } from "@/lib/speakers/operations";
 
-export function ActionTasksDashboard({ eventSlug, speakers, rows }: { eventSlug: string; speakers: RosterSpeaker[]; rows: SpeakerActionAssignment[] }) {
-	const [selected, setSelected] = useState<string[]>([]); const [status, setStatus] = useState("all"); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
-	const visible = useMemo(() => rows.filter((row) => status === "all" || row.status === status), [rows, status]);
-	async function create(form: HTMLFormElement) { const data = new FormData(form); setBusy(true); setNotice(null); try { const response = await fetch(`/api/admin/events/${eventSlug}/action-tasks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: data.get("title"), instructions: data.get("instructions"), dueDate: data.get("dueDate"), personIds: selected }) }); const value = await response.json() as { ok?: boolean; error?: string; assigned?: number }; if (!response.ok || !value.ok) setNotice({ message: value.error ?? "Task creation failed", error: true }); else { setNotice({ message: `Assigned to ${value.assigned ?? 0} speakers.`, error: false }); window.location.reload(); } } catch { setNotice({ message: "Network error", error: true }); } finally { setBusy(false); } }
-	return <section className="space-y-5 rounded-lg border border-neutral-800 bg-neutral-900 p-4"><div><h2 className="font-medium text-neutral-100">General action tasks</h2><p className="mt-1 text-sm text-neutral-400">Plain mark-complete onboarding actions, separate from file requests.</p></div><form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void create(event.currentTarget); }}><label className="text-sm">Task title<input required name="title" maxLength={160} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label><label className="text-sm">Due date<input required name="dueDate" type="date" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label><label className="text-sm md:col-span-2">Instructions<textarea name="instructions" rows={2} maxLength={4000} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label><fieldset className="md:col-span-2"><legend className="text-sm text-neutral-300">Assign speakers</legend><div className="mt-2 flex flex-wrap gap-3">{speakers.map((speaker) => <label key={speaker.personId} className="text-sm"><input type="checkbox" checked={selected.includes(speaker.personId)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, speaker.personId] : current.filter((id) => id !== speaker.personId))} className="mr-2" />{speaker.name}</label>)}</div></fieldset><button disabled={busy || selected.length === 0} className={`${buttonClasses("primary", "sm")} justify-self-start`}>Create for {selected.length} speaker{selected.length === 1 ? "" : "s"}</button></form>{notice ? <p className={noticeClasses(notice.error ? "negative" : "positive")}>{notice.message}</p> : null}<div className="flex items-end justify-between gap-3"><label className="text-sm">Progress filter<select value={status} onChange={(event) => setStatus(event.target.value)} className={`mt-1 block ${INPUT_CLASSES}`}><option value="all">All</option><option value="pending">Incomplete</option><option value="completed">Complete</option></select></label><span className="text-xs text-neutral-500">{visible.length} assignment{visible.length === 1 ? "" : "s"}</span></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-xs uppercase text-neutral-500"><tr><th className="p-2">Speaker</th><th className="p-2">Action</th><th className="p-2">Due</th><th className="p-2">Status</th></tr></thead><tbody>{visible.map((row) => <tr key={row.id} className="border-t border-neutral-800"><td className="p-2">{row.speakerName}</td><td className="p-2">{row.title}</td><td className="p-2">{row.dueAt ? new Date(row.dueAt).toISOString().slice(0, 10) : "—"}</td><td className="p-2"><StatusPill tone={row.status === "completed" ? "positive" : "warning"}>{row.status === "completed" ? "Complete" : "Incomplete"}</StatusPill></td></tr>)}</tbody></table></div></section>;
+export function ActionTasksDashboard({
+	eventSlug,
+	speakers,
+	rows,
+}: {
+	eventSlug: string;
+	speakers: RosterSpeaker[];
+	rows: SpeakerActionAssignment[];
+}) {
+	const [selected, setSelected] = useState<string[]>([]);
+	const [status, setStatus] = useState("all");
+	const [busy, setBusy] = useState(false);
+	const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
+	const visible = useMemo(
+		() => rows.filter((row) => status === "all" || row.status === status),
+		[rows, status],
+	);
+
+	async function create(form: HTMLFormElement) {
+		const data = new FormData(form);
+		setBusy(true);
+		setNotice(null);
+		try {
+			const response = await fetch(`/api/admin/events/${eventSlug}/action-tasks`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					title: data.get("title"),
+					instructions: data.get("instructions"),
+					dueDate: data.get("dueDate"),
+					personIds: selected,
+				}),
+			});
+			const value = (await response.json()) as {
+				ok?: boolean;
+				error?: string;
+				assigned?: number;
+			};
+			if (!response.ok || !value.ok) {
+				setNotice({ message: value.error ?? "Task creation failed", error: true });
+			} else {
+				setNotice({
+					message: `Assigned to ${value.assigned ?? 0} speakers.`,
+					error: false,
+				});
+				window.location.reload();
+			}
+		} catch {
+			setNotice({ message: "Network error", error: true });
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return (
+		<div className="space-y-6">
+			<form
+				className="grid gap-3 border-b border-neutral-800 pb-6 md:grid-cols-2"
+				onSubmit={(event) => {
+					event.preventDefault();
+					void create(event.currentTarget);
+				}}
+			>
+				<label className="text-sm text-neutral-300">
+					Task title
+					<input
+						required
+						name="title"
+						maxLength={160}
+						className={`mt-1 w-full ${INPUT_CLASSES}`}
+					/>
+				</label>
+				<label className="text-sm text-neutral-300">
+					Due date
+					<input
+						required
+						name="dueDate"
+						type="date"
+						className={`mt-1 w-full ${INPUT_CLASSES}`}
+					/>
+				</label>
+				<label className="text-sm text-neutral-300 md:col-span-2">
+					Instructions
+					<textarea
+						name="instructions"
+						rows={2}
+						maxLength={4000}
+						className={`mt-1 w-full ${INPUT_CLASSES}`}
+					/>
+				</label>
+				<fieldset className="md:col-span-2">
+					<legend className="text-sm text-neutral-300">Assign speakers</legend>
+					<div className="mt-2 max-h-48 overflow-y-auto border border-neutral-800">
+						<ul className="divide-y divide-neutral-800">
+							{speakers.map((speaker) => (
+								<li key={speaker.personId}>
+									<label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-900">
+										<input
+											type="checkbox"
+											checked={selected.includes(speaker.personId)}
+											onChange={(event) =>
+												setSelected((current) =>
+													event.target.checked
+														? [...current, speaker.personId]
+														: current.filter((id) => id !== speaker.personId),
+												)
+											}
+										/>
+										<span className="text-neutral-200">{speaker.name}</span>
+										<span className="text-neutral-500">{speaker.email}</span>
+									</label>
+								</li>
+							))}
+						</ul>
+					</div>
+				</fieldset>
+				<button
+					disabled={busy || selected.length === 0}
+					className={`${buttonClasses("primary", "sm")} justify-self-start`}
+				>
+					Create for {selected.length} speaker{selected.length === 1 ? "" : "s"}
+				</button>
+			</form>
+
+			{notice ? (
+				<p className={noticeClasses(notice.error ? "negative" : "positive")}>
+					{notice.message}
+				</p>
+			) : null}
+
+			<div className="flex items-end justify-between gap-3">
+				<label className="text-sm text-neutral-300">
+					Progress filter
+					<select
+						value={status}
+						onChange={(event) => setStatus(event.target.value)}
+						className={`mt-1 block ${INPUT_CLASSES}`}
+					>
+						<option value="all">All</option>
+						<option value="pending">Incomplete</option>
+						<option value="completed">Complete</option>
+					</select>
+				</label>
+				<span className="text-xs text-neutral-500">
+					{visible.length} assignment{visible.length === 1 ? "" : "s"}
+				</span>
+			</div>
+
+			<div className="overflow-x-auto border-t border-neutral-800">
+				<table className="w-full text-left text-sm">
+					<thead className="text-xs uppercase text-neutral-500">
+						<tr>
+							<th className="p-2">Speaker</th>
+							<th className="p-2">Action</th>
+							<th className="p-2">Due</th>
+							<th className="p-2">Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						{visible.map((row) => (
+							<tr key={row.id} className="border-t border-neutral-800">
+								<td className="p-2">{row.speakerName}</td>
+								<td className="p-2">{row.title}</td>
+								<td className="p-2">
+									{row.dueAt ? new Date(row.dueAt).toISOString().slice(0, 10) : "—"}
+								</td>
+								<td className="p-2">
+									<StatusPill tone={row.status === "completed" ? "positive" : "warning"}>
+										{row.status === "completed" ? "Complete" : "Incomplete"}
+									</StatusPill>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
 }

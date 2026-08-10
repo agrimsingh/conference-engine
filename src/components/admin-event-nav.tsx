@@ -31,8 +31,6 @@ export const ADMIN_EVENT_GROUPS = [
 		links: [
 			{ segment: "speakers", label: "Speakers" },
 			{ segment: "tasks", label: "Tasks" },
-			{ segment: "content", label: "Content" },
-			{ segment: "files", label: "Files" },
 			{ segment: "communications", label: "Comms" },
 			{ segment: "resources", label: "Resources" },
 		],

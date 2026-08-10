@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type DragEvent, type KeyboardEvent } from "react";
-import { noticeClasses, SegmentedControl } from "@/components/ui";
+import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import {
 	detectConflicts,
 	formatScheduleConflicts,
@@ -71,6 +71,7 @@ export function ScheduleBoard({
 	slotDurationMinutes,
 	sessions: initialSessions,
 }: Props) {
+	const router = useRouter();
 	const [sessions, setSessions] = useState(initialSessions);
 	const [view, setView] = useState<ViewMode>("day");
 	const [roomFilter, setRoomFilter] = useState<string>("all");
@@ -415,28 +416,41 @@ export function ScheduleBoard({
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
-				<SegmentedControl
-					label="Schedule view"
-					value={view}
-					options={[
-						{ value: "day", label: "Day" },
-						{ value: "list", label: "List" },
-						{ value: "week", label: "Week" },
-						{ value: "track", label: "Track" },
-						{ value: "room", label: "Room" },
-					]}
-					onChange={setView}
-				/>
-					<p className="text-sm text-neutral-400">
-						{formatDayLabel(dayKey, timeZone)} · {timeZone}
-					</p>
-					<nav className="flex flex-wrap gap-1" aria-label="Schedule day">
-						{days.map((day) => <Link key={day} href={`/admin/events/${eventSlug}/schedule?day=${day}`} className={day === dayKey ? "rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-medium text-neutral-950" : "rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"}>{formatDayLabel(day, timeZone)}</Link>)}
-					</nav>
+				<label className="flex items-center gap-2 text-sm text-neutral-300">
+					View
+					<select
+						value={view}
+						onChange={(event) => setView(event.target.value as ViewMode)}
+						className={INPUT_CLASSES}
+						aria-label="Schedule view"
+					>
+						<option value="day">Day grid</option>
+						<option value="list">List</option>
+						<option value="week">Week</option>
+						<option value="track">Track</option>
+						<option value="room">Room</option>
+					</select>
+				</label>
+				<label className="flex items-center gap-2 text-sm text-neutral-300">
+					Day
+					<select
+						value={dayKey}
+						onChange={(event) => router.push(`/admin/events/${eventSlug}/schedule?day=${event.target.value}`)}
+						className={INPUT_CLASSES}
+						aria-label="Schedule day"
+					>
+						{days.map((day) => (
+							<option key={day} value={day}>{formatDayLabel(day, timeZone)}</option>
+						))}
+					</select>
+				</label>
+				<p className="text-sm text-neutral-400">
+					{formatDayLabel(dayKey, timeZone)} · {timeZone}
+				</p>
 				<label className="ml-auto flex items-center gap-2 text-sm text-neutral-300">
 					Room
 					<select
-						className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-neutral-100"
+						className={INPUT_CLASSES}
 						value={roomFilter}
 						onChange={(event) => setRoomFilter(event.target.value)}
 					>
@@ -450,7 +464,7 @@ export function ScheduleBoard({
 				</label>
 				<label className="flex items-center gap-2 text-sm text-neutral-300">
 					Track for new placements
-					<select className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-neutral-100" value={trackId} onChange={(event) => setTrackId(event.target.value)}>
+					<select className={INPUT_CLASSES} value={trackId} onChange={(event) => setTrackId(event.target.value)}>
 						{tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
 					</select>
 				</label>
@@ -461,19 +475,16 @@ export function ScheduleBoard({
 			</div>
 
 			{error ? (
-				<p
-					role="alert"
-					className="rounded-md border border-red-400/60 bg-red-600 px-3 py-2.5 text-sm font-semibold text-white shadow-lg"
-				>
+				<p role="alert" className={noticeClasses("negative")}>
 					{error}
-					</p>
-				) : null}
+				</p>
+			) : null}
 			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
 			{pending ? (
 				<p className="text-sm text-neutral-500">Saving…</p>
 			) : null}
 
-			<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+			<section className="border-b border-neutral-800 pb-4">
 				<div className="mb-2 flex flex-wrap items-center gap-2">
 					<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
 						Unplaced
@@ -485,14 +496,14 @@ export function ScheduleBoard({
 							value={railQuery}
 							onChange={(event) => setRailQuery(event.target.value)}
 							placeholder="Filter title, speaker…"
-							className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm text-neutral-100 placeholder:text-neutral-600"
+							className={`w-full ${INPUT_CLASSES}`}
 						/>
 					</label>
 					<button
 						type="button"
 						disabled={!selectedSession || pending}
 						onClick={findSlotForSelected}
-						className="rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-200 disabled:opacity-40"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Find available slot
 					</button>
@@ -500,7 +511,7 @@ export function ScheduleBoard({
 						type="button"
 						disabled={dayPublishable.length === 0 || pending}
 						onClick={() => requestPublish(dayPublishable)}
-						className="rounded-md border border-emerald-500/40 px-2.5 py-1 text-xs text-emerald-300 disabled:opacity-40"
+						className={buttonClasses("secondary", "sm")}
 					>
 						Publish day ({dayPublishable.length})
 					</button>
@@ -580,7 +591,7 @@ export function ScheduleBoard({
 								type="button"
 								disabled={pending}
 								onClick={() => setPublishConfirm(null)}
-								className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200"
+								className={buttonClasses("secondary", "sm")}
 							>
 								Cancel
 							</button>
@@ -588,7 +599,7 @@ export function ScheduleBoard({
 								type="button"
 								disabled={pending}
 								onClick={confirmPublish}
-								className="rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-emerald-400"
+								className={buttonClasses("primary", "sm")}
 							>
 								Approve &amp; publish {publishConfirm.sessionIds.length}
 							</button>
@@ -598,11 +609,11 @@ export function ScheduleBoard({
 			) : null}
 
 			{view === "week" || view === "track" || view === "room" ? (
-				<div className={view === "week" ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-7" : "grid gap-3 md:grid-cols-2"}>
+				<div className={view === "week" ? "grid gap-0 divide-x divide-neutral-800 border border-neutral-800 sm:grid-cols-2 lg:grid-cols-7" : "divide-y divide-neutral-800 border border-neutral-800"}>
 					{groupedSessions.map(([label, entries]) => (
-						<section key={label} className="min-h-28 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-							<h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</h2>
-							{entries.length === 0 ? <p className="text-xs text-neutral-500">No sessions</p> : <ul className="space-y-2">{entries.map((session) => <li key={session.id} className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2 py-2 text-xs"><p className="font-medium text-neutral-100">{session.title}</p><p className="mt-0.5 font-mono text-neutral-500">{formatClock(session.slot!.startsAtMs, timeZone)}–{formatClock(session.slot!.endsAtMs, timeZone)} · {session.slot!.roomName}</p><p className="mt-0.5 text-neutral-500">{session.category}</p></li>)}</ul>}
+						<section key={label} className={`min-h-28 p-3 ${view === "week" ? "border-neutral-800 first:border-l-0" : ""}`}>
+							<h2 className="mb-3 border-b border-neutral-800 pb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</h2>
+							{entries.length === 0 ? <p className="text-xs text-neutral-500">No sessions</p> : <ul className="divide-y divide-neutral-800">{entries.map((session) => <li key={session.id} className="py-2 text-xs"><p className="font-medium text-neutral-100">{session.title}</p><p className="mt-0.5 font-mono text-neutral-500">{formatClock(session.slot!.startsAtMs, timeZone)}–{formatClock(session.slot!.endsAtMs, timeZone)} · {session.slot!.roomName}</p><p className="mt-0.5 text-neutral-500">{session.category}</p></li>)}</ul>}
 						</section>
 					))}
 				</div>
@@ -738,11 +749,11 @@ export function ScheduleBoard({
 										: ""}
 								</p>
 								<div className="mt-2 flex flex-wrap gap-2">
-									<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
+									<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
 									{session.status === "published" ? (
-										<button type="button" className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-200" onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button>
+										<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button>
 									) : session.status === "scheduled" ? (
-										<button type="button" className="rounded-md border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300" onClick={() => requestPublish([session])}>Publish</button>
+										<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => requestPublish([session])}>Publish</button>
 									) : null}
 								</div>
 								</li>

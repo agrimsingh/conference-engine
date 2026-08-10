@@ -61,16 +61,13 @@ export function DeliverablesDashboard({ eventSlug, rows }: { eventSlug: string; 
 	return <div className="space-y-6">
 		{notice ? <p role="status" className={noticeClasses("positive")}>{notice}</p> : null}
 		{error ? <p role="alert" className={noticeClasses("negative")}>{error}</p> : null}
-		<section className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-			<h2 className="font-medium text-neutral-100">Create file-request task</h2>
-			<p className="mt-1 text-sm text-neutral-400">Assigns the request to every pending or confirmed speaker on accepted sessions.</p>
-			<form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void createTask(event.currentTarget); }}>
-				<label className="text-sm text-neutral-300">Task name<input required maxLength={160} name="label" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-				<label className="text-sm text-neutral-300">Due date<input required type="date" name="dueDate" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-				<label className="text-sm text-neutral-300 sm:col-span-2">Instructions<textarea maxLength={4000} name="instructions" rows={3} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
-				<button disabled={busy} className={`${buttonClasses("primary")} justify-self-start`}>Create and assign to all speakers</button>
-			</form>
-		</section>
+		<form className="grid gap-3 border-b border-neutral-800 pb-6 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void createTask(event.currentTarget); }}>
+			<p className="text-sm text-neutral-400 sm:col-span-2">Assigns the request to every pending or confirmed speaker on accepted sessions.</p>
+			<label className="text-sm text-neutral-300">Task name<input required maxLength={160} name="label" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+			<label className="text-sm text-neutral-300">Due date<input required type="date" name="dueDate" className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+			<label className="text-sm text-neutral-300 sm:col-span-2">Instructions<textarea maxLength={4000} name="instructions" rows={3} className={`mt-1 w-full ${INPUT_CLASSES}`} /></label>
+			<button disabled={busy} className={`${buttonClasses("primary")} justify-self-start`}>Create and assign to all speakers</button>
+		</form>
 		<section>
 			<div className="flex flex-wrap items-end justify-between gap-3"><div className="flex flex-wrap gap-3"><label className="text-sm">Status<select value={status} onChange={(e) => setStatus(e.target.value)} className={`mt-1 block ${INPUT_CLASSES}`}><option value="all">All statuses</option><option value="pending">Incomplete</option><option value="overdue">Overdue</option><option value="completed">Complete</option></select></label><label className="text-sm">Task<select value={task} onChange={(e) => setTask(e.target.value)} className={`mt-1 block ${INPUT_CLASSES}`}><option value="all">All tasks</option>{labels.map((label) => <option key={label}>{label}</option>)}</select></label></div><div className="flex gap-2"><button disabled={busy || selected.length === 0} onClick={() => void remind("selected")} className={buttonClasses("secondary", "sm")}>Remind selected</button><button disabled={busy || visible.every((row) => row.status !== "pending")} onClick={() => void remind("all")} className={buttonClasses("primary", "sm")}>Remind all pending ({visible.filter((row) => row.status === "pending").length})</button></div></div>
 			<p className="mt-2 text-xs text-neutral-500">Showing {visible.length} of {rows.length} speaker-task pairs.</p>

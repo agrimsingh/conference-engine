@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
@@ -6,7 +8,6 @@ import { getActiveEvaluationPlan, listAssignmentsForPlan, listEvaluationScoresFo
 import { listCriteria, listEvaluationPlans } from "@/lib/evaluation/plan";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
-import dynamic from "next/dynamic";
 
 const ReviewWorkspace = dynamic(
 	() => import("./review-workspace").then((m) => ({ default: m.ReviewWorkspace })),
@@ -31,18 +32,20 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 				<AdminEventNav eventSlug={event.slug} />
 				<main className="mx-auto max-w-6xl px-4 py-10">
 					<PageHeader eyebrow="Organizer · Review" title={event.name} description="Create a rubric before inviting reviewers or assigning proposals." />
-					<ReviewWorkspace
-						eventSlug={event.slug}
-						eventName={event.name}
-						plans={[]}
-						plan={null}
-						criteria={[]}
-						reviewers={[]}
-						submissions={[]}
-						aggregates={[]}
-						criterionScores={[]}
-						summary={{ total: 0, scored: 0, accepted: 0, rejected: 0 }}
-					/>
+					<Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden />}>
+						<ReviewWorkspace
+							eventSlug={event.slug}
+							eventName={event.name}
+							plans={[]}
+							plan={null}
+							criteria={[]}
+							reviewers={[]}
+							submissions={[]}
+							aggregates={[]}
+							criterionScores={[]}
+							summary={{ total: 0, scored: 0, accepted: 0, rejected: 0 }}
+						/>
+					</Suspense>
 				</main>
 			</div>
 		);
@@ -96,6 +99,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 			<AdminEventNav eventSlug={event.slug} />
 			<main className="mx-auto max-w-6xl px-4 py-10">
 				<PageHeader eyebrow="Organizer · Review" title={event.name} description="Build the rubric, issue named review links, balance workload, and decide proposals from one scoped workspace." />
+				<Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden />}>
 				<ReviewWorkspace
 					key={plan.id}
 					eventSlug={event.slug}
@@ -152,6 +156,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 						rejected: submissions.filter((submission) => submission.status === "rejected").length,
 					}}
 				/>
+				</Suspense>
 			</main>
 		</div>
 	);
