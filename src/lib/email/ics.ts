@@ -46,36 +46,87 @@ function escapeText(value: string): string {
 		.replace(/;/g, "\\;");
 }
 
-export function buildIcsInvite(input: IcsEventInput): string {
-	const method = input.method ?? "REQUEST";
-	const now = toIcsUtc(input.dtstampMs ?? Date.now());
-	const cancelled = method === "CANCEL";
+export type IcsPublishEventInput = Omit<IcsEventInput, "method" | "attendeeEmail" | "dtstampMs">;
+
+function veventLines(
+	input: IcsPublishEventInput & {
+		method: "REQUEST" | "CANCEL" | "PUBLISH";
+		attendeeEmail?: string;
+		dtstamp: string;
+	},
+): string[] {
+	const cancelled = input.method === "CANCEL";
 	const attendee =
-		method === "PUBLISH" || !input.attendeeEmail
+		input.method === "PUBLISH" || !input.attendeeEmail
 			? null
 			: `ATTENDEE;CN=${escapeText(input.attendeeEmail)};CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${input.attendeeEmail}`;
-	const lines = [
-		"BEGIN:VCALENDAR",
-		"PRODID:-//conference-engine//EN",
-		"VERSION:2.0",
-		"CALSCALE:GREGORIAN",
-		`METHOD:${method}`,
+	return [
 		"BEGIN:VEVENT",
 		`UID:${input.uid}`,
-		`DTSTAMP:${now}`,
+		`DTSTAMP:${input.dtstamp}`,
 		`DTSTART:${toIcsUtc(input.startsAtMs)}`,
 		`DTEND:${toIcsUtc(input.endsAtMs)}`,
 		`SUMMARY:${escapeText(input.summary)}`,
 		`LOCATION:${escapeText(input.location)}`,
-		input.description
-			? `DESCRIPTION:${escapeText(input.description)}`
-			: null,
+		input.description ? `DESCRIPTION:${escapeText(input.description)}` : null,
 		`ORGANIZER;CN=conference-engine:mailto:${input.organizerEmail}`,
 		attendee,
 		`STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
 		`SEQUENCE:${Math.max(0, Math.floor(input.sequence ?? 0))}`,
 		"TRANSP:OPAQUE",
 		"END:VEVENT",
+	].filter((line): line is string => line !== null);
+}
+
+export function buildIcsInvite(input: IcsEventInput): string {
+	const method = input.method ?? "REQUEST";
+	const dtstamp = toIcsUtc(input.dtstampMs ?? Date.now());
+	const lines = [
+		"BEGIN:VCALENDAR",
+		"PRODID:-//conference-engine//EN",
+		"VERSION:2.0",
+		"CALSCALE:GREGORIAN",
+		`METHOD:${method}`,
+		...veventLines({
+			uid: input.uid,
+			summary: input.summary,
+			description: input.description,
+			location: input.location,
+			startsAtMs: input.startsAtMs,
+			endsAtMs: input.endsAtMs,
+			organizerEmail: input.organizerEmail,
+			sequence: input.sequence,
+			method,
+			attendeeEmail: input.attendeeEmail,
+			dtstamp,
+		}),
+		"END:VCALENDAR",
+	];
+
+	return `${lines.map(foldLine).join("\r\n")}\r\n`;
+}
+
+/** Multi-session METHOD:PUBLISH feed; same UID/SEQUENCE/ORGANIZER rules as {@link buildIcsInvite}. */
+export function buildIcsPublishCalendar(args: {
+	events: readonly IcsPublishEventInput[];
+	calendarName?: string;
+	dtstampMs?: number;
+}): string {
+	const dtstamp = toIcsUtc(args.dtstampMs ?? Date.now());
+	const lines = [
+		"BEGIN:VCALENDAR",
+		"PRODID:-//conference-engine//EN",
+		"VERSION:2.0",
+		"CALSCALE:GREGORIAN",
+		"METHOD:PUBLISH",
+		args.calendarName ? `X-WR-CALNAME:${escapeText(args.calendarName)}` : null,
+		...args.events.flatMap((event) =>
+			veventLines({
+				...event,
+				method: "PUBLISH",
+				dtstamp,
+			}),
+		),
 		"END:VCALENDAR",
 	].filter((line): line is string => line !== null);
 

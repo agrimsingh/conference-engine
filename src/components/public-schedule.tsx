@@ -357,9 +357,17 @@ export async function PublicSchedule({
 					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 						Public schedule
 					</p>
-					<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
-						{event.name}
-					</h1>
+					<div className="flex flex-wrap items-start justify-between gap-3">
+						<h1 className="text-balance text-3xl font-semibold tracking-tight text-neutral-100">
+							{event.name}
+						</h1>
+						<a
+							href={`/api/e/${event.slug}/schedule.ics`}
+							className="shrink-0 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 hover:border-neutral-500"
+						>
+							Subscribe to calendar
+						</a>
+					</div>
 					<p className="text-pretty text-sm text-neutral-400">
 						{allDaysSelected
 							? "All days"
