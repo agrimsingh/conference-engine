@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { TimezoneSelect } from "@/components/timezone-select";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import { detectBrowserTimeZone } from "@/lib/timezones";
@@ -13,11 +13,19 @@ type Props = {
 	cloneSources?: CloneSource[];
 };
 
+const subscribeNoop = () => () => {};
+
 export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 	const router = useRouter();
 	const [name, setName] = useState("");
 	const [slug, setSlug] = useState("");
-	const [timezone, setTimezone] = useState("America/Los_Angeles");
+	const browserTimezone = useSyncExternalStore(
+		subscribeNoop,
+		detectBrowserTimeZone,
+		() => "America/Los_Angeles",
+	);
+	const [timezoneOverride, setTimezoneOverride] = useState<string | null>(null);
+	const timezone = timezoneOverride ?? browserTimezone;
 	const [startDay, setStartDay] = useState("");
 	const [endDay, setEndDay] = useState("");
 	const [preset, setPreset] = useState<"minimal" | "conference">("minimal");
@@ -25,10 +33,6 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 	const cloning = Boolean(cloneFrom);
-
-	useEffect(() => {
-		setTimezone(detectBrowserTimeZone());
-	}, []);
 
 	if (!canCreate) {
 		return (
@@ -130,7 +134,7 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 				<TimezoneSelect
 					required
 					value={timezone}
-					onChange={setTimezone}
+					onChange={setTimezoneOverride}
 				/>
 				<span className="block text-xs text-neutral-500">
 					IANA timezone for the schedule (e.g. Asia/Singapore). Defaults to your browser.
