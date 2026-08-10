@@ -31,7 +31,7 @@ const OPENAPI_DOCUMENT = {
 		title: "Conference Engine Admin Agent API",
 		version: "1.0.0",
 		description:
-			"Per-event admin JSON routes. Authenticate with an organizer cookie session or `Authorization: Bearer ce_pat_…` minted under Settings → Team. Tokens grant full admin on that event only. Demo events remain read-only for writes.",
+			"Per-event admin JSON routes. Authenticate with an organizer cookie session or `Authorization: Bearer ce_pat_…` minted under Settings → API tokens. Tokens grant full admin on that event only. Demo events remain read-only for writes.",
 	},
 	servers: [{ url: "/" }],
 	components: {
