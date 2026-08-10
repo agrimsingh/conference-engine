@@ -26,7 +26,7 @@ export function ActivatePlanButton({ eventSlug, planActive = false }: Props) {
 					href={adminReviewHref}
 					className="font-medium text-neutral-200 underline underline-offset-2"
 				>
-					Open review board
+					Open review workspace
 				</Link>
 				<p className="text-xs text-neutral-500">
 					Plan is active. The committee link is one-shot and cannot be recovered here.
@@ -77,7 +77,7 @@ export function ActivatePlanButton({ eventSlug, planActive = false }: Props) {
 				disabled={pending}
 				className="font-medium text-neutral-200 underline underline-offset-2 disabled:opacity-40"
 			>
-				{pending ? "Opening review…" : "Open review board"}
+				{pending ? "Activating…" : "Activate review plan"}
 			</button>
 			{reviewPath ? (
 				<p className="text-neutral-400">

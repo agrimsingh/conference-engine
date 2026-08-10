@@ -40,14 +40,14 @@ afterEach(async () => {
 });
 
 describe("ActivatePlanButton", () => {
-	it("links to the admin review board when the plan is already active", async () => {
+	it("links to the admin review workspace when the plan is already active", async () => {
 		await act(async () => {
 			root.render(<ActivatePlanButton eventSlug="demo-cfp" planActive />);
 		});
 
 		const link = container.querySelector("a");
 		expect(link?.getAttribute("href")).toBe("/admin/events/demo-cfp/review");
-		expect(link?.textContent).toMatch(/Open review board/i);
+		expect(link?.textContent).toMatch(/Open review workspace/i);
 		expect(container.querySelector("button")).toBeNull();
 	});
 });
