@@ -41,6 +41,7 @@ describe("admin demo write gate", () => {
 			"members.invite-remove-leave-transfer", "reminders", "reviewers", "schedule",
 			"sessions.create-import-clone-publish",
 			"settings.rooms-tracks-tasks-event", "submissions.assignments-decisions-labels-speakers",
+			"tokens.mint-revoke",
 		]);
 	});
 

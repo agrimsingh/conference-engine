@@ -16,4 +16,5 @@ export const ADMIN_EVENT_MUTATION_FAMILIES = [
 	"sessions.create-import-clone-publish",
 	"settings.rooms-tracks-tasks-event",
 	"submissions.assignments-decisions-labels-speakers",
+	"tokens.mint-revoke",
 ] as const;

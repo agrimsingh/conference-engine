@@ -6,6 +6,7 @@ import { TimezoneSelect } from "@/components/timezone-select";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import type { EventConfiguration } from "@/lib/events/configuration";
 import type { TaskFormField, TaskFormFieldType } from "@/lib/speakers/task-forms";
+import { ApiTokensPanel } from "@/app/admin/events/[eventSlug]/team/api-tokens-panel";
 import {
 	InviteTeamForm,
 	type TeamMember,
@@ -322,15 +323,18 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 						) : null}
 
 						{section === "team" ? (
-							<InviteTeamForm
-								eventSlug={eventSlug}
-								canRemove={team.canRemove}
-								canTransfer={team.canTransfer}
-								canInviteAsOwner={team.canInviteAsOwner}
-								currentAccountId={team.currentAccountId}
-								currentRole={team.currentRole}
-								initialMembers={team.members}
-							/>
+							<div className="space-y-8">
+								<InviteTeamForm
+									eventSlug={eventSlug}
+									canRemove={team.canRemove}
+									canTransfer={team.canTransfer}
+									canInviteAsOwner={team.canInviteAsOwner}
+									currentAccountId={team.currentAccountId}
+									currentRole={team.currentRole}
+									initialMembers={team.members}
+								/>
+								<ApiTokensPanel eventSlug={eventSlug} />
+							</div>
 						) : null}
 
 						{section === "rooms" ? (

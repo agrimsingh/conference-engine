@@ -1,7 +1,15 @@
 import { cache } from "react";
 import { NextResponse } from "next/server";
 import { notFound, redirect } from "next/navigation";
-import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import {
+	readBearerToken,
+	resolveTokenAccess,
+} from "@/lib/auth/event-api-tokens";
+import {
+	getOrganizerAccount,
+	readOrganizerSessionFromCookie,
+} from "@/lib/auth/organizer-session";
+import { getAuthSecret, getCloudflareEnv } from "@/lib/db/cloudflare";
 import {
 	getEventBySlug,
 	getEventMembership,
@@ -9,10 +17,6 @@ import {
 	listEventsForAccount,
 } from "@/lib/db/queries";
 import type { AccountRow, EventMembershipRow, EventRow } from "@/lib/db/types";
-import {
-	getOrganizerAccount,
-	readOrganizerSessionFromCookie,
-} from "@/lib/auth/organizer-session";
 import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
 export { ADMIN_EVENT_MUTATION_FAMILIES } from "@/lib/events/admin-mutation-families";
 
@@ -64,6 +68,22 @@ export type WritableEventAdminApiAccess =
 	| { ok: true; access: EventAdminAccess }
 	| { ok: false; response: NextResponse };
 
+async function resolveBearerPatAccess(
+	db: D1Database,
+	eventSlug: string,
+): Promise<EventAdminAccess | null> {
+	const { headers } = await import("next/headers");
+	const headerList = await headers();
+	const rawToken = readBearerToken(headerList.get("authorization"));
+	if (!rawToken) return null;
+	try {
+		const secret = await getAuthSecret();
+		return resolveTokenAccess(db, eventSlug, rawToken, { secret });
+	} catch {
+		return null;
+	}
+}
+
 export async function resolveEventAdminAccess(
 	db: D1Database,
 	eventSlug: string,
@@ -85,15 +105,17 @@ export async function resolveEventAdminAccess(
 	}
 
 	const session = await readOrganizerSessionFromCookie();
-	if (!session) return null;
+	if (session) {
+		const account = await getOrganizerAccount(db, session);
+		if (account) {
+			const membership = await getEventMembership(db, event.id, account.id);
+			if (membership) {
+				return { event, account, membership };
+			}
+		}
+	}
 
-	const account = await getOrganizerAccount(db, session);
-	if (!account) return null;
-
-	const membership = await getEventMembership(db, event.id, account.id);
-	if (!membership) return null;
-
-	return { event, account, membership };
+	return resolveBearerPatAccess(db, eventSlug);
 }
 
 export async function assertCanManageEvent(
