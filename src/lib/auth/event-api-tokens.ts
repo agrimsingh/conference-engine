@@ -1,4 +1,8 @@
-import { getAccountById, getEventBySlug } from "@/lib/db/queries";
+import {
+	getAccountById,
+	getEventBySlug,
+	getEventMembership,
+} from "@/lib/db/queries";
 import type { AccountRow, EventMembershipRow, EventRow } from "@/lib/db/types";
 import { hmacHash, randomToken } from "@/lib/security/crypto";
 
@@ -237,21 +241,26 @@ export async function resolveTokenAccess(
 	if (row.revoked_at != null) return null;
 	if (!tokenGrantsFullEventAdmin(row.scopes_json)) return null;
 
-	let account: AccountRow | null = null;
 	if (row.created_by_account_id) {
-		account = await getAccountById(db, row.created_by_account_id);
+		const membership = await getEventMembership(
+			db,
+			event.id,
+			row.created_by_account_id,
+		);
+		if (!membership) return null;
+		const account = await getAccountById(db, row.created_by_account_id);
+		if (!account) return null;
+
+		void touchLastUsed(db, row.id, now);
+
+		return { event, account, membership };
 	}
 
 	void touchLastUsed(db, row.id, now);
 
 	return {
 		event,
-		account,
-		membership: syntheticMembership(
-			event.id,
-			row.id,
-			row.created_at,
-			account?.id ?? row.created_by_account_id,
-		),
+		account: null,
+		membership: syntheticMembership(event.id, row.id, row.created_at, null),
 	};
 }

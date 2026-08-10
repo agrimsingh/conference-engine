@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-	requirePublicApiKey: vi.fn(),
+	requireV1ReadAccess: vi.fn(),
 	getDb: vi.fn(),
 	getEventBySlug: vi.fn(),
 	listLabelsForEvent: vi.fn(),
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/public-api", () => ({
-	requirePublicApiKey: mocks.requirePublicApiKey,
+	requireV1ReadAccess: mocks.requireV1ReadAccess,
 }));
 
 vi.mock("@/lib/db/cloudflare", () => ({
@@ -45,7 +45,7 @@ const event = {
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	mocks.requirePublicApiKey.mockResolvedValue({ ok: true });
+	mocks.requireV1ReadAccess.mockResolvedValue({ ok: true });
 	mocks.getDb.mockResolvedValue(db);
 	mocks.getEventBySlug.mockResolvedValue(event);
 	mocks.listSpeakersForSubmission.mockRejectedValue(
@@ -134,6 +134,7 @@ describe("public API speaker loading", () => {
 				submission_id: "submission-a",
 				submission_status: "published",
 				answers_json: JSON.stringify({ title: "First talk" }),
+				content_approved: 1,
 				room_name: "Main",
 				track_id: null,
 				starts_at: 1,
@@ -147,6 +148,7 @@ describe("public API speaker loading", () => {
 				submission_id: "submission-b",
 				submission_status: "published",
 				answers_json: JSON.stringify({ title: "Second talk" }),
+				content_approved: 1,
 				room_name: "Main",
 				track_id: null,
 				starts_at: 3,

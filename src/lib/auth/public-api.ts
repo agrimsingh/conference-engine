@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import { EVENT_API_TOKEN_PREFIX, resolveTokenAccess } from "@/lib/auth/event-api-tokens";
+import {
+	getAuthSecret,
+	getCloudflareEnv,
+	getDb,
+} from "@/lib/db/cloudflare";
 
 function extractApiKey(request: Request): string | null {
 	const headerKey = request.headers.get("x-api-key")?.trim();
@@ -20,30 +25,42 @@ function keysEqual(a: string, b: string): boolean {
 	return diff === 0;
 }
 
-export async function requirePublicApiKey(
+function unauthorized(): { ok: false; response: NextResponse } {
+	return {
+		ok: false,
+		response: NextResponse.json(
+			{ ok: false, error: "Unauthorized" },
+			{ status: 401 },
+		),
+	};
+}
+
+export async function requireV1ReadAccess(
 	request: Request,
+	eventSlug: string,
 ): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
-	const env = await getCloudflareEnv();
-	const expected = env.PUBLIC_API_KEY?.trim();
-	if (!expected) {
-		return {
-			ok: false,
-			response: NextResponse.json(
-				{ ok: false, error: "PUBLIC_API_KEY is not configured" },
-				{ status: 503 },
-			),
-		};
+	const provided = extractApiKey(request);
+	if (!provided) return unauthorized();
+
+	if (provided.startsWith(EVENT_API_TOKEN_PREFIX)) {
+		const [db, secret] = await Promise.all([getDb(), getAuthSecret()]);
+		const access = await resolveTokenAccess(db, eventSlug, provided, { secret });
+		return access ? { ok: true } : unauthorized();
 	}
 
-	const provided = extractApiKey(request);
-	if (!provided || !keysEqual(provided, expected)) {
-		return {
-			ok: false,
-			response: NextResponse.json(
-				{ ok: false, error: "Unauthorized" },
-				{ status: 401 },
-			),
-		};
+	const env = await getCloudflareEnv() as CloudflareEnv & {
+		PUBLIC_API_KEY_CROSS_EVENT?: string;
+	};
+	const expected = env.PUBLIC_API_KEY?.trim();
+	const crossEventEnabled = /^(1|true|yes)$/i.test(
+		env.PUBLIC_API_KEY_CROSS_EVENT?.trim() ?? "",
+	);
+	if (
+		!expected ||
+		!crossEventEnabled ||
+		!keysEqual(provided, expected)
+	) {
+		return unauthorized();
 	}
 
 	return { ok: true };

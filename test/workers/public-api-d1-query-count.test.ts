@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ requirePublicApiKey: vi.fn() }));
+const mocks = vi.hoisted(() => ({ requireV1ReadAccess: vi.fn() }));
 
 vi.mock("@/lib/auth/public-api", () => ({
-	requirePublicApiKey: mocks.requirePublicApiKey,
+	requireV1ReadAccess: mocks.requireV1ReadAccess,
 }));
 
 vi.mock("@/lib/db/cloudflare", () => ({
@@ -24,7 +24,7 @@ type PreparedStatementSpy = {
 };
 
 beforeEach(() => {
-	mocks.requirePublicApiKey.mockResolvedValue({ ok: true });
+	mocks.requireV1ReadAccess.mockResolvedValue({ ok: true });
 });
 
 async function seedEvent(): Promise<{ eventId: string; slug: string; formId: string }> {
@@ -103,6 +103,18 @@ describe("v1 public API speaker query count", () => {
 			env.DB.prepare(
 				"INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES ('public-api-query-count-slot-b', ?, 'public-api-query-count-schedule-b', 'Main', ?, ?, 'slot-b@example.test', ?, ?)",
 			).bind(event.eventId, now + 1_800_000, now + 3_600_000, now, now),
+			env.DB.prepare(
+				"INSERT INTO content_revisions (id, event_id, entity_type, entity_id, revision_number, snapshot_json, editor_name, created_at) VALUES ('public-api-query-count-revision-a', ?, 'session', 'public-api-query-count-schedule-a', 1, ?, 'Query count test', ?)",
+			).bind(event.eventId, JSON.stringify({ title: "First schedule talk" }), now),
+			env.DB.prepare(
+				"INSERT INTO content_revisions (id, event_id, entity_type, entity_id, revision_number, snapshot_json, editor_name, created_at) VALUES ('public-api-query-count-revision-b', ?, 'session', 'public-api-query-count-schedule-b', 1, ?, 'Query count test', ?)",
+			).bind(event.eventId, JSON.stringify({ title: "Second schedule talk" }), now),
+			env.DB.prepare(
+				"INSERT INTO content_heads (event_id, entity_type, entity_id, current_revision_id, approved_revision_id, updated_at) VALUES (?, 'session', 'public-api-query-count-schedule-a', 'public-api-query-count-revision-a', 'public-api-query-count-revision-a', ?)",
+			).bind(event.eventId, now),
+			env.DB.prepare(
+				"INSERT INTO content_heads (event_id, entity_type, entity_id, current_revision_id, approved_revision_id, updated_at) VALUES (?, 'session', 'public-api-query-count-schedule-b', 'public-api-query-count-revision-b', 'public-api-query-count-revision-b', ?)",
+			).bind(event.eventId, now),
 			env.DB.prepare(
 				"INSERT INTO submission_speakers (id, submission_id, name, email, status, position, added_after_acceptance) VALUES ('public-api-query-count-schedule-speaker-a', 'public-api-query-count-schedule-a', 'Ari', 'ari@example.test', 'confirmed', 0, 0)",
 			),

@@ -40,7 +40,7 @@ All true with runtime evidence:
 - Dashboard at `/admin/events/[slug]/dashboard`. Groups incomplete `speaker_tasks` by `(submissionId, personId)`.
 - Prefer EventRoom WebSocket (`broadcasted`); 2s poll fallback under `next dev` (`polling`). Worker intercepts `/api/admin/events/*/room` upgrades in production.
 - Broadcast reasons: `tasks.complete`, `tasks.upload`, `tasks.accept`, `schedule.mutate`.
-- Public API: `GET /api/v1/events/[slug]/{submissions,schedule}` behind `PUBLIC_API_KEY` (`Authorization: Bearer` or `x-api-key`).
+- Public API: `GET /api/v1/events/[slug]/{submissions,schedule,speakers}` accepts per-event `ce_pat_…` Bearer tokens. `PUBLIC_API_KEY` is an optional deployment-wide operator escape hatch only when `PUBLIC_API_KEY_CROSS_EVENT` is `1`, `true`, or `yes`; shared multi-tenant deployments have no cross-event key by default.
 
 ## Roadmap phases 0–9 (2026-08-09)
 
@@ -56,5 +56,5 @@ Auto sync (migration `0039`): optional daily push at 01:00 UTC from the integrat
 
 ## Admin agent API / per-event PATs (2026-08-10)
 
-Agents need the same organizer jobs without a browser session. Mint per-event personal access tokens under Settings → API tokens (`ce_pat_…`, shown once, hash stored). `Authorization: Bearer ce_pat_…` authorizes admin JSON routes for that event only (cookie sessions still work). Token-management routes are the exception: they require a cookie session, because a leaked PAT that can mint successors survives its own revocation. Demo events stay write-blocked. Contract: `/api/admin/openapi.json`. Keep `/api/v1` as the keyed read-only operator surface.
+Agents need the same organizer jobs without a browser session. Mint per-event personal access tokens under Settings → API tokens (`ce_pat_…`, shown once, hash stored). `Authorization: Bearer ce_pat_…` authorizes admin JSON routes and `/api/v1` reads for that event only (cookie sessions still work on admin routes). Token-management routes are the exception: they require a cookie session, because a leaked PAT that can mint successors survives its own revocation. Demo events stay write-blocked. Contract: `/api/admin/openapi.json`. `PUBLIC_API_KEY` remains an optional deployment-wide `/api/v1` operator escape hatch only with `PUBLIC_API_KEY_CROSS_EVENT=1` (also `true` or `yes`).
 
