@@ -19,11 +19,13 @@ import {
 import { EmptyState } from "@/components/ui";
 import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
 import { PublicItinerary } from "@/components/public-itinerary";
+import { ScheduleQuerySelect } from "@/components/schedule-query-select";
 import {
 	defaultScheduleDayKey,
 	deriveScheduleDays,
 	dayKeyInTimeZone,
 	formatClock,
+	formatDayChip,
 	formatDayLabel,
 	parseDayKey,
 	weekDayKeys,
@@ -385,10 +387,61 @@ export async function PublicSchedule({
 					</p>
 				</div>
 
+				{/* Mobile: View + Day selects. Desktop keeps the underline tab strip. */}
+				<div className="grid grid-cols-2 gap-3 pb-5 sm:hidden">
+					<ScheduleQuerySelect
+						label="View"
+						value={view}
+						options={views.map((v) => ({
+							value: v,
+							label: viewLabel(v),
+							href: hrefFor(basePath, event.slug, {
+								day:
+									(v === "itinerary" || v === "my-schedule") && allDaysSelected
+										? "all"
+										: dayKey,
+								view: v,
+								room: roomFilter,
+								embed: itineraryEmbed?.slug,
+							}),
+						}))}
+					/>
+					<ScheduleQuerySelect
+						label="Day"
+						value={allDaysSelected ? "all" : dayKey}
+						options={[
+							...(view === "itinerary" || view === "my-schedule"
+								? [
+										{
+											value: "all",
+											label: "All days",
+											href: hrefFor(basePath, event.slug, {
+												day: "all",
+												view,
+												room: roomFilter,
+												embed: itineraryEmbed?.slug,
+											}),
+										},
+									]
+								: []),
+							...days.map((key) => ({
+								value: key,
+								label: formatDayLabel(key, event.timezone),
+								href: hrefFor(basePath, event.slug, {
+									day: key,
+									view,
+									room: roomFilter,
+									embed: itineraryEmbed?.slug,
+								}),
+							})),
+						]}
+					/>
+				</div>
+
 				<nav
 					role="tablist"
 					aria-label="Schedule view"
-					className="-mb-px flex gap-1 overflow-x-auto"
+					className="-mb-px hidden gap-1 sm:flex"
 				>
 					{views.map((v) => {
 						const active = view === v;
@@ -419,8 +472,13 @@ export async function PublicSchedule({
 				</nav>
 			</header>
 
-			<nav aria-label="Event days" className="mb-6 flex flex-wrap items-center gap-2">
-				<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Event days</span>
+			<nav
+				aria-label="Event days"
+				className="mb-6 hidden flex-wrap items-center gap-2 sm:flex"
+			>
+				<span className="mr-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+					Event days
+				</span>
 				{view === "itinerary" || view === "my-schedule" ? (
 					<Link
 						href={hrefFor(basePath, event.slug, {
@@ -432,8 +490,8 @@ export async function PublicSchedule({
 						aria-current={allDaysSelected ? "date" : undefined}
 						className={
 							allDaysSelected
-								? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
-								: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"
+								? "rounded-md bg-neutral-100 px-2.5 py-1.5 text-sm font-medium text-neutral-950"
+								: "rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"
 						}
 					>
 						All days
@@ -442,15 +500,21 @@ export async function PublicSchedule({
 				{days.map((key) => (
 					<Link
 						key={key}
-						href={hrefFor(basePath, event.slug, { day: key, view, room: roomFilter, embed: itineraryEmbed?.slug })}
+						href={hrefFor(basePath, event.slug, {
+							day: key,
+							view,
+							room: roomFilter,
+							embed: itineraryEmbed?.slug,
+						})}
 						aria-current={!allDaysSelected && key === dayKey ? "date" : undefined}
+						title={formatDayLabel(key, event.timezone)}
 						className={
 							!allDaysSelected && key === dayKey
-								? "rounded-full bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950"
-								: "rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm font-medium text-neutral-300 hover:border-neutral-500"
+								? "rounded-md bg-neutral-100 px-2.5 py-1.5 text-sm font-medium tabular-nums text-neutral-950"
+								: "rounded-md border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-sm font-medium tabular-nums text-neutral-300 hover:border-neutral-500"
 						}
 					>
-						{formatDayLabel(key, event.timezone)}
+						{formatDayChip(key, event.timezone)}
 					</Link>
 				))}
 			</nav>

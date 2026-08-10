@@ -85,6 +85,16 @@ export function formatDayLabel(dayKey: string, timeZone: string): string {
 	}).format(new Date(ms));
 }
 
+/** Compact chip label for day pickers ("Sat 10"). */
+export function formatDayChip(dayKey: string, timeZone: string): string {
+	const ms = wallTimeToUtcMs(dayKey, 12 * 60, timeZone);
+	return new Intl.DateTimeFormat("en-US", {
+		timeZone,
+		weekday: "short",
+		day: "numeric",
+	}).format(new Date(ms));
+}
+
 export const DAY_START_MINUTES = 9 * 60;
 export const DAY_END_MINUTES = 18 * 60;
 export const SLOT_STEP_MINUTES = 30;

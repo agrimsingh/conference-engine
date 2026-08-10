@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { defaultScheduleDayKey, deriveScheduleDays } from "./time";
+import {
+	defaultScheduleDayKey,
+	deriveScheduleDays,
+	formatDayChip,
+	formatDayLabel,
+} from "./time";
+
+describe("formatDayChip", () => {
+	it("returns a short weekday + day label", () => {
+		const chip = formatDayChip("2026-10-10", "Asia/Singapore");
+		expect(chip).toContain("Sat");
+		expect(chip).toContain("10");
+		expect(chip.length).toBeLessThan(formatDayLabel("2026-10-10", "Asia/Singapore").length);
+	});
+});
 
 describe("deriveScheduleDays", () => {
 	it("uses every configured event date before scheduled content", () => {
