@@ -80,10 +80,10 @@ export function PublicSpeakersDirectory({
 						const affiliation = speakerAffiliation(speaker);
 						const href = `/e/${eventSlug}/speakers/${speaker.personId}`;
 						return (
-							<li key={speaker.personId}>
+							<li key={speaker.personId} className="min-h-0">
 								<Link
 									href={href}
-									className="flex flex-col items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-4 text-center hover:border-neutral-600"
+									className="flex h-full flex-col items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-4 text-center hover:border-neutral-600"
 								>
 									<PublicSpeakerAvatar
 										eventSlug={eventSlug}
@@ -93,14 +93,12 @@ export function PublicSpeakersDirectory({
 										size="lg"
 										showName={false}
 									/>
-									<span className="text-sm font-medium text-neutral-100">
+									<span className="line-clamp-2 min-h-10 text-sm font-medium leading-5 text-neutral-100">
 										{speaker.displayName}
 									</span>
-									{affiliation ? (
-										<span className="text-xs leading-5 text-neutral-500">
-											{affiliation}
-										</span>
-									) : null}
+									<span className="line-clamp-2 min-h-10 text-xs leading-5 text-neutral-500">
+										{affiliation ?? "\u00a0"}
+									</span>
 								</Link>
 							</li>
 						);

@@ -188,7 +188,10 @@ WITH demo_event AS (
 	('jonas-weber', 'Jonas Weber', 'Principal Platform Engineer', 'Tideway Systems'),
 	('priya-nair', 'Priya Nair', 'Head of AI Quality', 'Signal Works'),
 	('diego-reyes', 'Diego Reyes', 'Developer Experience Lead', 'Contract Cloud'),
-	('maya-chen', 'Maya Chen', 'Protocol Engineer', 'Open Systems Lab')
+	('hana-sato', 'Hana Sato', 'Safety Engineer', 'Northwind Guard'),
+	('maya-chen', 'Maya Chen', 'Protocol Engineer', 'Open Systems Lab'),
+	('ravi-patel', 'Ravi Patel', 'ML Platform Lead', 'Cascade Eval'),
+	('zoe-martin', 'Zoe Martin', 'Developer Advocate', 'Portside Tools')
 )
 INSERT OR IGNORE INTO speaker_profiles (id, event_id, person_id, display_name, bio, job_title, company, headshot_asset_id, created_at, updated_at)
 SELECT 'demo-profile-' || x.n, e.id, p.id, x.name, 'Fictional speaker profile for the public read-only demo.', x.job_title, x.company, NULL, 1790000000000, 1790000000000
@@ -206,7 +209,10 @@ WITH demo_event AS (
 	('jonas-weber', 'Principal Platform Engineer', 'Tideway Systems'),
 	('priya-nair', 'Head of AI Quality', 'Signal Works'),
 	('diego-reyes', 'Developer Experience Lead', 'Contract Cloud'),
-	('maya-chen', 'Protocol Engineer', 'Open Systems Lab')
+	('hana-sato', 'Safety Engineer', 'Northwind Guard'),
+	('maya-chen', 'Protocol Engineer', 'Open Systems Lab'),
+	('ravi-patel', 'ML Platform Lead', 'Cascade Eval'),
+	('zoe-martin', 'Developer Advocate', 'Portside Tools')
 )
 UPDATE speaker_profiles
 SET
