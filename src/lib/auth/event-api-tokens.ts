@@ -207,15 +207,16 @@ export async function revokeToken(
 	return (result.meta.changes ?? 0) > 0;
 }
 
-async function touchLastUsed(db: D1Database, tokenId: string, now: number): Promise<void> {
-	try {
-		await db
-			.prepare(`UPDATE event_api_tokens SET last_used_at = ? WHERE id = ?`)
-			.bind(now, tokenId)
-			.run();
-	} catch {
-		// best-effort; auth must still succeed
-	}
+async function tryRecordLastUsed(
+	db: D1Database,
+	tokenId: string,
+	now: number,
+): Promise<void> {
+	await db
+		.prepare(`UPDATE event_api_tokens SET last_used_at = ? WHERE id = ?`)
+		.bind(now, tokenId)
+		.run()
+		.catch(() => undefined);
 }
 
 export async function resolveTokenAccess(
@@ -251,12 +252,12 @@ export async function resolveTokenAccess(
 		const account = await getAccountById(db, row.created_by_account_id);
 		if (!account) return null;
 
-		void touchLastUsed(db, row.id, now);
+		void tryRecordLastUsed(db, row.id, now);
 
 		return { event, account, membership };
 	}
 
-	void touchLastUsed(db, row.id, now);
+	void tryRecordLastUsed(db, row.id, now);
 
 	return {
 		event,
