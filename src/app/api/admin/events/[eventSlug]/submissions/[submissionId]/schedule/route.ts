@@ -54,7 +54,8 @@ export async function POST(request: Request, context: RouteContext) {
 	const value = result as Record<string, unknown>;
 	if (value.ok !== true) return NextResponse.json({ ok: false, error: typeof value.error === "string" ? value.error : "Schedule mutation failed" }, { status: mutationResponse.status });
 	const slot = value.slot as { room_name: string; starts_at: number; ends_at: number; ics_uid: string; calendar_sequence: number };
-	const emailResult = await notifyCalendarInvite(db, {
+	// Calendar mail is best-effort and must not block the drag/place UI response.
+	void notifyCalendarInvite(db, {
 		submissionId,
 		roomName: slot.room_name,
 		startsAtMs: slot.starts_at,
@@ -62,15 +63,20 @@ export async function POST(request: Request, context: RouteContext) {
 		icsUid: slot.ics_uid,
 		sequence: slot.calendar_sequence,
 		fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
+	}).catch((error) => {
+		console.error("calendar invite failed after schedule place", {
+			submissionId,
+			error: error instanceof Error ? error.message : "unknown",
+		});
 	});
 	return NextResponse.json({
 		ok: true,
 		status: value.status,
 		slot: value.slot,
-		email: emailResult.email,
+		email: null,
 		broadcasted: true,
-		icsPreview: emailResult.icsBytes.slice(0, 200).replace(/\r?\n/g, "\\n"),
-		icsBytesLength: emailResult.icsBytes.length,
+		icsPreview: "",
+		icsBytesLength: 0,
 	});
 }
 

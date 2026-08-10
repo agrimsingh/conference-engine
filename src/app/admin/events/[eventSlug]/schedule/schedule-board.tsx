@@ -1,7 +1,21 @@
 "use client";
 
+import {
+	DndContext,
+	DragOverlay,
+	KeyboardSensor,
+	PointerSensor,
+	closestCenter,
+	pointerWithin,
+	useSensor,
+	useSensors,
+	type CollisionDetection,
+	type DragEndEvent,
+	type DragOverEvent,
+	type DragStartEvent,
+} from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition, type DragEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, useTransition, type KeyboardEvent } from "react";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import {
 	detectConflicts,
@@ -22,25 +36,17 @@ import {
 	weekDayKeys,
 	wallTimeToUtcMs,
 } from "@/lib/schedule/time";
+import {
+	DroppableSlot,
+	PlacedDraggableCard,
+	SessionDragOverlay,
+	UnplacedDraggableChip,
+	parseSlotDroppableId,
+	slotDroppableId,
+} from "./schedule-dnd";
+import type { ScheduleSession } from "./schedule-types";
 
-export type ScheduleSession = {
-	id: string;
-	title: string;
-	category: string;
-	status: string;
-	submitterName: string | null;
-	durationMinutes: number;
-	speakerKeys: string[];
-	speakerLabels: string[];
-	slot: {
-		roomId: string | null;
-		roomName: string;
-		trackId: string | null;
-		trackName: string;
-		startsAtMs: number;
-		endsAtMs: number;
-	} | null;
-};
+export type { ScheduleSession };
 
 type Props = {
 	eventSlug: string;
@@ -83,6 +89,19 @@ export function ScheduleBoard({
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
+	const [activeDragId, setActiveDragId] = useState<string | null>(null);
+	const [overSlotId, setOverSlotId] = useState<string | null>(null);
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+		useSensor(KeyboardSensor),
+	);
+
+	const collisionDetection: CollisionDetection = (args) => {
+		const pointerHits = pointerWithin(args);
+		if (pointerHits.length > 0) return pointerHits;
+		return closestCenter(args);
+	};
 
 	const timeRows = useMemo(() => {
 		const rows: number[] = [];
@@ -187,6 +206,8 @@ export function ScheduleBoard({
 
 		const startsAtMs = wallTimeToUtcMs(dayKey, startMinutes, timeZone);
 		const endsAtMs = startsAtMs + session.durationMinutes * 60_000;
+		const nextTrackId =
+			session.slot && !reassignTrack ? session.slot.trackId : trackId || null;
 		const candidate: ScheduleInterval = {
 			submissionId,
 			roomId: roomIds[roomName] ?? null,
@@ -202,90 +223,153 @@ export function ScheduleBoard({
 			return;
 		}
 
+		const previous = session;
+		const optimisticTrackName =
+			tracks.find((track) => track.id === nextTrackId)?.name ??
+			session.slot?.trackName ??
+			"Unassigned";
+
 		setError(null);
 		setMessage(null);
+		setSelectedId(null);
+		setSessions((prev) =>
+			prev.map((row) =>
+				row.id === submissionId
+					? {
+							...row,
+							status: row.status === "published" ? "published" : "scheduled",
+							slot: {
+								roomId: roomIds[roomName] ?? null,
+								roomName,
+								trackId: nextTrackId,
+								trackName: optimisticTrackName,
+								startsAtMs,
+								endsAtMs,
+							},
+						}
+					: row,
+			),
+		);
+		setMessage(`Placed “${session.title}” in ${roomName}`);
+
 		startTransition(async () => {
 			try {
-			const response = await fetch(
-				`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`,
-				{
-					method: "POST",
-					headers: { "content-type": "application/json" },
-					body: JSON.stringify({
-						startsAt: startsAtMs,
-						endsAt: endsAtMs,
-						roomName,
-						...(session.slot && !reassignTrack ? {} : { trackId: trackId || null }),
-					}),
-				},
-			);
-			const payload = await readJson(response);
-			if (
-				typeof payload !== "object" ||
-				payload === null ||
-				!("ok" in payload)
-			) {
-				setError("Schedule failed");
-				return;
-			}
-			const result = payload as {
-				ok: boolean;
-				error?: string;
-				status?: string;
+				const response = await fetch(
+					`/api/admin/events/${eventSlug}/submissions/${submissionId}/schedule`,
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({
+							startsAt: startsAtMs,
+							endsAt: endsAtMs,
+							roomName,
+							...(session.slot && !reassignTrack ? {} : { trackId: trackId || null }),
+						}),
+					},
+				);
+				const payload = await readJson(response);
+				if (
+					typeof payload !== "object" ||
+					payload === null ||
+					!("ok" in payload)
+				) {
+					setSessions((prev) =>
+						prev.map((row) => (row.id === submissionId ? previous : row)),
+					);
+					setError("Schedule failed");
+					setMessage(null);
+					return;
+				}
+				const result = payload as {
+					ok: boolean;
+					error?: string;
+					status?: string;
 					slot?: {
 						room_id: string | null;
 						room_name: string;
 						track_id: string | null;
-					starts_at: number;
-					ends_at: number;
+						starts_at: number;
+						ends_at: number;
+					};
 				};
-			};
-			if (!result.ok || !result.slot) {
-				setError(result.error ?? "Schedule failed");
-				return;
-			}
+				if (!result.ok || !result.slot) {
+					setSessions((prev) =>
+						prev.map((row) => (row.id === submissionId ? previous : row)),
+					);
+					setError(result.error ?? "Schedule failed");
+					setMessage(null);
+					return;
+				}
 
-			setSessions((prev) =>
-				prev.map((row) =>
-					row.id === submissionId
-						? {
-								...row,
-								status: result.status ?? "scheduled",
-								slot: {
-								roomId: result.slot!.room_id,
-								roomName: result.slot!.room_name,
-								trackId: result.slot!.track_id,
-								trackName: tracks.find((track) => track.id === result.slot!.track_id)?.name ?? "Unassigned",
-									startsAtMs: result.slot!.starts_at,
-									endsAtMs: result.slot!.ends_at,
-								},
-							}
-						: row,
-				),
-			);
-			setSelectedId(null);
-			setMessage(`Placed “${session.title}” in ${roomName}`);
+				setSessions((prev) =>
+					prev.map((row) =>
+						row.id === submissionId
+							? {
+									...row,
+									status: result.status ?? "scheduled",
+									slot: {
+										roomId: result.slot!.room_id,
+										roomName: result.slot!.room_name,
+										trackId: result.slot!.track_id,
+										trackName:
+											tracks.find((track) => track.id === result.slot!.track_id)
+												?.name ?? "Unassigned",
+										startsAtMs: result.slot!.starts_at,
+										endsAtMs: result.slot!.ends_at,
+									},
+								}
+							: row,
+					),
+				);
 			} catch {
-				setError("Couldn’t save this schedule change. Check your connection and try again.");
+				setSessions((prev) =>
+					prev.map((row) => (row.id === submissionId ? previous : row)),
+				);
+				setError(
+					"Couldn’t save this schedule change. Check your connection and try again.",
+				);
+				setMessage(null);
 			}
 		});
-	}
-
-	function onDropCell(
-		event: DragEvent<HTMLButtonElement>,
-		roomName: string,
-		startMinutes: number,
-	) {
-		event.preventDefault();
-		const submissionId = event.dataTransfer.getData("text/submission-id");
-		if (!submissionId) return;
-		placeSession(submissionId, roomName, startMinutes);
 	}
 
 	function onClickCell(roomName: string, startMinutes: number) {
 		if (!selectedId) return;
 		placeSession(selectedId, roomName, startMinutes);
 	}
+
+	function onDragStart(event: DragStartEvent) {
+		const id = String(event.active.id);
+		setActiveDragId(id);
+		setSelectedId(id);
+		setError(null);
+	}
+
+	function onDragOver(event: DragOverEvent) {
+		const overId = event.over?.id;
+		setOverSlotId(
+			typeof overId === "string" && parseSlotDroppableId(overId) ? overId : null,
+		);
+	}
+
+	function onDragEnd(event: DragEndEvent) {
+		const submissionId = String(event.active.id);
+		const slot = parseSlotDroppableId(event.over?.id ?? null);
+		setActiveDragId(null);
+		setOverSlotId(null);
+		if (!slot) return;
+		placeSession(submissionId, slot.roomName, slot.startMinutes);
+	}
+
+	function onDragCancel() {
+		setActiveDragId(null);
+		setOverSlotId(null);
+	}
+
+	const activeDragSession =
+		activeDragId == null
+			? null
+			: (sessions.find((session) => session.id === activeDragId) ?? null);
 
 	function onCardKeyDown(event: KeyboardEvent<HTMLElement>, submissionId: string) {
 		if (event.key !== "Enter" && event.key !== " ") return;
@@ -414,6 +498,14 @@ export function ScheduleBoard({
 	}
 
 	return (
+		<DndContext
+			sensors={sensors}
+			collisionDetection={collisionDetection}
+			onDragStart={onDragStart}
+			onDragOver={onDragOver}
+			onDragEnd={onDragEnd}
+			onDragCancel={onDragCancel}
+		>
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
 				<label className="flex items-center gap-2 text-sm text-neutral-300">
@@ -525,39 +617,16 @@ export function ScheduleBoard({
 				) : (
 					<ul className="flex flex-wrap gap-2">
 						{pool.map((session) => (
-							<li key={session.id}>
-								<button
-									type="button"
-									draggable
-									onDragStart={(event) => {
-										event.dataTransfer.setData(
-											"text/submission-id",
-											session.id,
-										);
-										event.dataTransfer.effectAllowed = "move";
-										setSelectedId(session.id);
-									}}
-									onClick={() =>
-										setSelectedId((prev) =>
-											prev === session.id ? null : session.id,
-										)
-									}
-									className={`max-w-xs rounded-md border px-3 py-2 text-left text-sm ${
-										selectedId === session.id
-											? "border-emerald-500/60 bg-neutral-800 text-neutral-100"
-											: "border-neutral-700 bg-neutral-950/60 text-neutral-200 hover:border-neutral-500"
-									}`}
-									aria-pressed={selectedId === session.id}
-								>
-									<p className="font-medium">{session.title}</p>
-									<p className="mt-0.5 text-xs opacity-80">
-										{session.durationMinutes}m · {session.status}
-										{session.speakerLabels.length
-											? ` · ${session.speakerLabels.join(", ")}`
-											: ""}
-									</p>
-								</button>
-							</li>
+							<UnplacedDraggableChip
+								key={session.id}
+								session={session}
+								selected={selectedId === session.id}
+								onSelect={() =>
+									setSelectedId((prev) =>
+										prev === session.id ? null : session.id,
+									)
+								}
+							/>
 						))}
 					</ul>
 				)}
@@ -662,61 +731,38 @@ export function ScheduleBoard({
 											const occupant = sessionAt(room, cellStartMs);
 											const isStart =
 												occupant?.slot?.startsAtMs === cellStartMs;
+											const droppableId = slotDroppableId(room, startMinutes);
 											return (
 												<td key={room} className="p-0 align-top">
 												{occupant && !isStart ? (
 													<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
 												) : occupant && isStart ? (
-													<div
-														draggable
-														role="button"
-														tabIndex={0}
-														aria-label={`Move ${occupant.title}; press Enter then choose a schedule cell`}
-														aria-pressed={selectedId === occupant.id}
+													<PlacedDraggableCard
+														session={occupant}
+														selected={selectedId === occupant.id}
+														minHeightRem={
+															Math.max(
+																1,
+																Math.ceil(
+																	occupant.durationMinutes / slotDurationMinutes,
+																),
+															) * 2.5
+														}
+														timeLabel={`${formatClock(occupant.slot!.startsAtMs, timeZone)}–${formatClock(occupant.slot!.endsAtMs, timeZone)}`}
+														onSelect={() =>
+															setSelectedId((prev) =>
+																prev === occupant.id ? null : occupant.id,
+															)
+														}
 														onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
-														onDragStart={(event) => {
-																event.dataTransfer.setData(
-																	"text/submission-id",
-																	occupant.id,
-																);
-																event.dataTransfer.effectAllowed = "move";
-																setSelectedId(occupant.id);
-															}}
-															className="m-0.5 cursor-grab rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100"
-															style={{
-																minHeight: `${Math.max(
-																	1,
-																	Math.ceil(
-																				occupant.durationMinutes /
-																					slotDurationMinutes,
-																	),
-																) * 2.5}rem`,
-															}}
-														>
-															<p className="font-medium">{occupant.title}</p>
-															<p className="font-mono tabular-nums opacity-80">
-																{formatClock(
-																	occupant.slot!.startsAtMs,
-																	timeZone,
-																)}
-																–
-																{formatClock(
-																	occupant.slot!.endsAtMs,
-																	timeZone,
-																)}
-															</p>
-														</div>
-													) : (
-														<button
-															type="button"
-															className="flex h-10 w-full items-stretch border border-transparent hover:border-neutral-600 hover:bg-neutral-800/40"
-															onDragOver={(event) => event.preventDefault()}
-															onDrop={(event) =>
-																onDropCell(event, room, startMinutes)
-															}
-															onClick={() => onClickCell(room, startMinutes)}
-														aria-label={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
 													/>
+													) : (
+														<DroppableSlot
+															id={droppableId}
+															isOver={overSlotId === droppableId}
+															onClick={() => onClickCell(room, startMinutes)}
+															ariaLabel={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
+														/>
 													)}
 												</td>
 											);
@@ -762,6 +808,10 @@ export function ScheduleBoard({
 					</ul>
 				) : null}
 		</div>
+		<DragOverlay dropAnimation={null}>
+			<SessionDragOverlay session={activeDragSession} />
+		</DragOverlay>
+		</DndContext>
 	);
 }
 
