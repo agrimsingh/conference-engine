@@ -82,11 +82,11 @@ export function eventReadiness(configuration: EventConfiguration, eventSlug: str
 	const base = `/admin/events/${eventSlug}`;
 	return [
 		{ key: "details", label: "Event details", complete: Boolean(event.name.trim()) && detailCheck.ok, href: `${base}/settings`, detail: detailCheck.ok ? "Dates, timezone, and schedule defaults are set." : "Add valid dates, timezone, and schedule defaults." },
-		{ key: "rooms", label: "Rooms", complete: rooms.length > 0, href: `${base}/settings#rooms`, detail: rooms.length ? `${rooms.length} active room${rooms.length === 1 ? "" : "s"}.` : "Add at least one room." },
-		{ key: "tracks", label: "Agenda tracks", complete: tracks.length > 0, href: `${base}/settings#tracks`, detail: tracks.length ? `${tracks.length} active track${tracks.length === 1 ? "" : "s"}.` : "Add at least one track." },
+		{ key: "rooms", label: "Rooms", complete: rooms.length > 0, href: `${base}/settings?section=rooms`, detail: rooms.length ? `${rooms.length} active room${rooms.length === 1 ? "" : "s"}.` : "Add at least one room." },
+		{ key: "tracks", label: "Agenda tracks", complete: tracks.length > 0, href: `${base}/settings?section=tracks`, detail: tracks.length ? `${tracks.length} active track${tracks.length === 1 ? "" : "s"}.` : "Add at least one track." },
 		{ key: "cfp", label: "Public CFP", complete: Boolean(cfp && cfp.title.trim() && cfp.fieldCount > 0), href: `${base}/forms`, detail: cfp ? `${cfp.fieldCount} active field${cfp.fieldCount === 1 ? "" : "s"}; ${cfp.status}.` : "Create a public CFP." },
 		{ key: "review", label: "Review plan", complete: Boolean(review && review.criteriaCount > 0), href: `${base}/review`, detail: review ? `${review.criteriaCount} active criterion${review.criteriaCount === 1 ? "" : "s"}.` : "Create a review plan and criterion." },
-		{ key: "tasks", label: "Speaker tasks", complete: tasks.length > 0, href: `${base}/settings#tasks`, detail: tasks.length ? `${tasks.length} active template${tasks.length === 1 ? "" : "s"}.` : "Add at least one speaker task template." },
+		{ key: "tasks", label: "Speaker tasks", complete: tasks.length > 0, href: `${base}/settings?section=tasks`, detail: tasks.length ? `${tasks.length} active template${tasks.length === 1 ? "" : "s"}.` : "Add at least one speaker task template." },
 		{
 			key: "communications",
 			label: "Communication templates",

@@ -15,7 +15,7 @@ describe("event readiness", () => {
 	it("reports actual configuration and links incomplete items to their settings", () => {
 		const pending = { ...complete, rooms: [], cfp: { ...complete.cfp!, status: "draft" as const, fieldCount: 0 }, messageTemplateCount: 0 };
 		const items = eventReadiness(pending, "sample");
-		expect(items.find((item) => item.key === "rooms")).toMatchObject({ complete: false, href: "/admin/events/sample/settings#rooms" });
+		expect(items.find((item) => item.key === "rooms")).toMatchObject({ complete: false, href: "/admin/events/sample/settings?section=rooms" });
 		expect(items.find((item) => item.key === "cfp")).toMatchObject({ complete: false, href: "/admin/events/sample/forms" });
 		expect(items.find((item) => item.key === "review")).toMatchObject({ href: "/admin/events/sample/review" });
 		expect(items.find((item) => item.key === "communications")).toMatchObject({

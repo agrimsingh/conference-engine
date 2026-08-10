@@ -13,7 +13,7 @@ test("an organizer can build and save a structured speaker task", async ({ page 
 	await page.getByLabel("Slug").fill(slug);
 	await page.getByLabel("Timezone").fill("UTC");
 	await page.getByRole("button", { name: "Create event" }).click();
-	await page.goto(`/admin/events/${slug}/settings#tasks`);
+	await page.goto(`/admin/events/${slug}/settings?section=tasks`);
 
 	const create = page.locator("#tasks form").first();
 	await create.getByLabel("Task key").fill("travel-details");
