@@ -231,6 +231,18 @@ export function ScheduleBoard({
 		);
 	}
 
+	/** Grid rows covered by a placed session — always from agenda slot times. */
+	function slotRowSpan(session: ScheduleSession): number {
+		if (!session.slot) return 1;
+		const durationMs = session.slot.endsAtMs - session.slot.startsAtMs;
+		return Math.max(
+			1,
+			Math.ceil(durationMs / (slotDurationMinutes * 60_000)),
+		);
+	}
+
+	const ROW_HEIGHT_REM = 2.5;
+
 	function placeSession(submissionId: string, roomName: string, startMinutes: number) {
 		const session = sessions.find((row) => row.id === submissionId);
 		if (!session) return;
@@ -797,6 +809,7 @@ export function ScheduleBoard({
 									<tr
 										key={startMinutes}
 										className="border-b border-dotted border-neutral-800"
+										style={{ height: `${ROW_HEIGHT_REM}rem` }}
 									>
 										<td className="sticky left-0 w-16 bg-neutral-900 px-2 py-1 font-mono text-xs tabular-nums text-neutral-500">
 											{formatClock(labelMs, timeZone)}
@@ -810,42 +823,45 @@ export function ScheduleBoard({
 											const occupant = sessionAt(room, cellStartMs);
 											const isStart =
 												occupant?.slot?.startsAtMs === cellStartMs;
+											// Covered by a rowspan from an earlier row — omit the <td>.
+											if (occupant && !isStart) return null;
+
 											const droppableId = slotDroppableId(room, startMinutes);
-											const slotSpan = occupant
-												? Math.max(
-														1,
-														Math.ceil(
-															occupant.durationMinutes / slotDurationMinutes,
-														),
-													)
-												: 1;
+											if (occupant && isStart) {
+												const span = slotRowSpan(occupant);
+												return (
+													<td
+														key={room}
+														rowSpan={span}
+														className="w-[1%] p-0 align-top"
+														style={{ height: `${span * ROW_HEIGHT_REM}rem` }}
+													>
+														<PlacedDraggableCard
+															session={occupant}
+															selected={selectedId === occupant.id}
+															minHeightRem={span * ROW_HEIGHT_REM}
+															timeLabel={`${formatClock(occupant.slot!.startsAtMs, timeZone)}–${formatClock(occupant.slot!.endsAtMs, timeZone)}`}
+															onSelect={() =>
+																setSelectedId((prev) =>
+																	prev === occupant.id ? null : occupant.id,
+																)
+															}
+															onKeyDown={(event) =>
+																onCardKeyDown(event, occupant.id)
+															}
+														/>
+													</td>
+												);
+											}
+
 											return (
 												<td key={room} className="w-[1%] p-0 align-top">
-												{occupant && !isStart ? (
-													<div className="h-10 border-l border-neutral-800 bg-neutral-800/40" />
-												) : occupant && isStart ? (
-													<div className="h-full" style={{ minHeight: `${slotSpan * 2.5}rem` }}>
-													<PlacedDraggableCard
-														session={occupant}
-														selected={selectedId === occupant.id}
-														minHeightRem={slotSpan * 2.5}
-														timeLabel={`${formatClock(occupant.slot!.startsAtMs, timeZone)}–${formatClock(occupant.slot!.endsAtMs, timeZone)}`}
-														onSelect={() =>
-															setSelectedId((prev) =>
-																prev === occupant.id ? null : occupant.id,
-															)
-														}
-														onKeyDown={(event) => onCardKeyDown(event, occupant.id)}
+													<DroppableSlot
+														id={droppableId}
+														isOver={overSlotId === droppableId}
+														onClick={() => onClickCell(room, startMinutes)}
+														ariaLabel={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
 													/>
-													</div>
-													) : (
-														<DroppableSlot
-															id={droppableId}
-															isOver={overSlotId === droppableId}
-															onClick={() => onClickCell(room, startMinutes)}
-															ariaLabel={`Place in ${room} at ${formatClock(cellStartMs, timeZone)}`}
-														/>
-													)}
 												</td>
 											);
 										})}

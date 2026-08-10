@@ -87,7 +87,7 @@ export function PlacedDraggableCard({
 	});
 	const style: CSSProperties = {
 		opacity: isDragging ? 0.35 : 1,
-		minHeight: `${minHeightRem}rem`,
+		height: `calc(${minHeightRem}rem - 0.25rem)`,
 	};
 
 	const speakers =
@@ -109,7 +109,7 @@ export function PlacedDraggableCard({
 			aria-pressed={selected}
 			onKeyDown={onKeyDown}
 			onClick={onSelect}
-			className="m-0.5 box-border h-full w-full cursor-grab rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100 active:cursor-grabbing"
+			className="m-0.5 box-border w-full cursor-grab overflow-hidden rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100 active:cursor-grabbing"
 		>
 			<p className="line-clamp-3 font-medium leading-snug">{session.title}</p>
 			{speakers ? (
