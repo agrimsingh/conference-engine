@@ -192,7 +192,7 @@ const PIPELINE: {
 	{
 		stage: "Publish",
 		description:
-			"Speakers and session pages ship with the schedule. Embeds and a JSON API cover the conference site.",
+			"Speakers and session pages ship with the schedule. Public JSON and embeds cover the conference site; a separate admin API lets agents run the programme with a per-event token.",
 		action: {
 			kind: "play",
 			href: `/e/${DEMO_EVENT}/speakers`,
@@ -595,6 +595,39 @@ export default function Home() {
 						<p className="text-sm text-neutral-500">
 							Review, accept/notify, speaker portal, and the schedule editor.
 						</p>
+					</div>
+				</section>
+
+				{/* Agent API */}
+				<section
+					id="agents"
+					className="mx-auto max-w-7xl px-4 pb-16 pt-4 sm:px-6 sm:pb-20"
+				>
+					<h2 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+						Clanker-friendly control plane
+					</h2>
+					<p className="mt-3 max-w-xl text-pretty text-neutral-400">
+						Mint a per-event token under Settings → API tokens. Point an agent at
+						the admin OpenAPI, then list submissions, decide, place talks, and
+						manage speakers with{" "}
+						<code className="text-neutral-300">Authorization: Bearer ce_pat_…</code>.
+						Same jobs as the organizer UI, without the click path.
+					</p>
+					<div className="mt-5 flex flex-wrap items-center gap-4">
+						<Link
+							href="/api/admin/openapi.json"
+							className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+						>
+							Open the admin OpenAPI
+							<ArrowIcon />
+						</Link>
+						<Link
+							href="/admin"
+							className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-neutral-200"
+						>
+							Create an event to mint a token
+							<ArrowIcon />
+						</Link>
 					</div>
 				</section>
 
