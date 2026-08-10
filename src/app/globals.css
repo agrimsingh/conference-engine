@@ -60,3 +60,12 @@ input[type="checkbox"],
 input[type="radio"] {
 	accent-color: var(--accent);
 }
+
+/* Native date/time picker chrome (calendar glyphs) is otherwise near-invisible on dark inputs. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+	color-scheme: dark;
+}

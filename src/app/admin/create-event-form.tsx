@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { TimezoneSelect } from "@/components/timezone-select";
 import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
+import { detectBrowserTimeZone } from "@/lib/timezones";
 
 type CloneSource = { slug: string; name: string };
 
@@ -23,6 +25,10 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
 	const cloning = Boolean(cloneFrom);
+
+	useEffect(() => {
+		setTimezone(detectBrowserTimeZone());
+	}, []);
 
 	if (!canCreate) {
 		return (
@@ -121,12 +127,14 @@ export function CreateEventForm({ canCreate, cloneSources = [] }: Props) {
 			</label>
 			<label className="block space-y-1.5 text-sm">
 				<span className="font-medium text-neutral-200">Timezone</span>
-				<input
-					type="text"
+				<TimezoneSelect
+					required
 					value={timezone}
-					onChange={(e) => setTimezone(e.target.value)}
-					className={`w-full ${INPUT_CLASSES}`}
+					onChange={setTimezone}
 				/>
+				<span className="block text-xs text-neutral-500">
+					IANA timezone for the schedule (e.g. Asia/Singapore). Defaults to your browser.
+				</span>
 			</label>
 			{!cloning ? (
 				<label className="block space-y-1.5 text-sm">
