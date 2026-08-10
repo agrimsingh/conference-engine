@@ -94,17 +94,12 @@ export default async function DemoPage({ searchParams }: Props) {
 	const card = launcherFor(perspective);
 
 	return (
-		<main className="min-h-dvh bg-neutral-950 px-4 py-6 text-neutral-100 sm:px-6 sm:py-10">
+		<main className="px-4 py-6 text-neutral-100 sm:px-6 sm:py-10">
 			<div className="mx-auto max-w-3xl">
 				<header className="border-b border-neutral-800 pb-6">
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<Link href="/" className="text-sm text-neutral-400 hover:text-neutral-100">
-							← conference-engine
-						</Link>
-						<span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300">
-							Playable read-only surfaces
-						</span>
-					</div>
+					<span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300">
+						Playable read-only surfaces
+					</span>
 					<h1 className="mt-5 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
 						Demo launcher
 					</h1>
