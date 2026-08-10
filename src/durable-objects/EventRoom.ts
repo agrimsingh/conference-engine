@@ -1,9 +1,19 @@
 import { DurableObject } from "cloudflare:workers";
-import { detectConflicts, formatScheduleConflicts, isSubmissionStatus, normalizeSpeakerKey, transitionSubmission, type ScheduleInterval } from "@/lib/domain";
+import {
+	detectConflicts,
+	formatScheduleConflicts,
+	formatTrackConflict,
+	isSubmissionStatus,
+	normalizeSpeakerKey,
+	titleFromAnswers,
+	transitionSubmission,
+	type ScheduleInterval,
+} from "@/lib/domain";
 import { stableAgendaUid } from "@/lib/email/ics";
 import { deleteRoom, updateEventConfiguration, updateRoom } from "@/lib/events/configuration";
 import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
+import { formatClock } from "@/lib/schedule/time";
 import { publicationSnapshotFromAnswers, restoreSessionRevision, setSessionContentStatus, updateSessionContent, type ContentStatus } from "@/lib/content/revisions";
 
 type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string; trackId?: string | null };
@@ -149,14 +159,47 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		const slots = await this.env.DB.prepare("SELECT submission_id, room_id, room_name, track_id, starts_at, ends_at FROM agenda_slots WHERE event_id = ?").bind(submission.event_id).all<{ submission_id: string; room_id: string | null; room_name: string; track_id: string | null; starts_at: number; ends_at: number }>();
 		if (event.track_conflict_policy === "hard" && track) {
 			const conflict = slots.results.find((slot) => slot.submission_id !== submission.id && slot.track_id === track.id && slot.starts_at < input.endsAtMs && input.startsAtMs < slot.ends_at);
-			if (conflict) return { ok: false, error: `Track conflict: "${track.name}" overlaps (${submission.id} vs ${conflict.submission_id})`, status: 409 };
+			if (conflict) {
+				const [movingTitle, blockingTitle] = await Promise.all([
+					this.submissionTitle(submission.id),
+					this.submissionTitle(conflict.submission_id),
+				]);
+				return {
+					ok: false,
+					error: formatTrackConflict({
+						trackName: track.name,
+						movingTitle,
+						blockingTitle,
+						blockingTimeRange: `${formatClock(conflict.starts_at, event.timezone)}–${formatClock(conflict.ends_at, event.timezone)}`,
+					}),
+					status: 409,
+				};
+			}
 		}
 		const intervals: ScheduleInterval[] = [];
+		const titles = new Map<string, string>();
+		titles.set(submission.id, await this.submissionTitle(submission.id));
 		for (const slot of slots.results) {
 			intervals.push({ submissionId: slot.submission_id, roomId: slot.room_id, roomName: slot.room_name, startsAtMs: slot.starts_at, endsAtMs: slot.ends_at, speakerKeys: await this.speakers(slot.submission_id) });
+			if (!titles.has(slot.submission_id)) {
+				titles.set(slot.submission_id, await this.submissionTitle(slot.submission_id));
+			}
 		}
 		const conflicts = detectConflicts(candidate, intervals);
-		if (conflicts.length) return { ok: false, error: formatScheduleConflicts(conflicts), status: 409 };
+		if (conflicts.length) {
+			return {
+				ok: false,
+				error: formatScheduleConflicts(conflicts, {
+					titleFor: (id) => titles.get(id) ?? `session ${id.slice(0, 8)}`,
+					timeRangeFor: (id) => {
+						const slot = slots.results.find((row) => row.submission_id === id);
+						if (!slot) return null;
+						return `${formatClock(slot.starts_at, event.timezone)}–${formatClock(slot.ends_at, event.timezone)}`;
+					},
+				}),
+				status: 409,
+			};
+		}
 		let status = submission.status;
 		try { if (status !== "scheduled" && status !== "published") status = transitionSubmission(status, "scheduled"); }
 		catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Cannot schedule submission", status: 409 }; }
@@ -322,6 +365,22 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			approved += 1;
 		}
 		return { statements, approved };
+	}
+
+	private async submissionTitle(submissionId: string): Promise<string> {
+		const row = await this.env.DB.prepare("SELECT answers_json FROM submissions WHERE id = ?")
+			.bind(submissionId)
+			.first<{ answers_json: string }>();
+		if (!row) return "Untitled session";
+		try {
+			const parsed: unknown = JSON.parse(row.answers_json);
+			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+				return titleFromAnswers(parsed as Record<string, unknown>);
+			}
+		} catch {
+			// fall through
+		}
+		return "Untitled session";
 	}
 
 	private async speakers(submissionId: string): Promise<string[]> {

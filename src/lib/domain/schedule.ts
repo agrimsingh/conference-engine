@@ -73,22 +73,56 @@ export function detectConflicts(
 	return conflicts;
 }
 
-export function formatScheduleConflicts(conflicts: readonly ScheduleConflict[]): string {
+export type ScheduleConflictLabels = {
+	titleFor: (submissionId: string) => string;
+	/** Optional "09:00–09:30" (or similar) for the conflicting other session. */
+	timeRangeFor?: (submissionId: string) => string | null;
+};
+
+function defaultSessionLabel(submissionId: string): string {
+	return `session ${submissionId.slice(0, 8)}`;
+}
+
+export function formatScheduleConflicts(
+	conflicts: readonly ScheduleConflict[],
+	labels?: ScheduleConflictLabels,
+): string {
 	if (conflicts.length === 0) return "No conflicts";
+	const titleFor = labels?.titleFor ?? defaultSessionLabel;
+	const timeRangeFor = labels?.timeRangeFor;
 	return conflicts
 		.map((conflict) => {
+			const a = titleFor(conflict.submissionIdA);
+			const b = titleFor(conflict.submissionIdB);
+			const when = timeRangeFor?.(conflict.submissionIdB);
+			const whenClause = when ? ` (${when})` : "";
 			switch (conflict.kind) {
 				case "room":
-					return `Room conflict: "${conflict.roomName}" overlaps (${conflict.submissionIdA} vs ${conflict.submissionIdB})`;
-				case "speaker":
-					return `Speaker conflict: "${conflict.speakerKey}" double-booked (${conflict.submissionIdA} vs ${conflict.submissionIdB})`;
+					return `Room conflict in "${conflict.roomName}": "${b}"${whenClause} already occupies that slot, so "${a}" can't go there.`;
+				case "speaker": {
+					const who =
+						conflict.speakerKey.includes("@")
+							? conflict.speakerKey
+							: `"${conflict.speakerKey}"`;
+					return `Speaker conflict: ${who} is already on "${b}"${whenClause}, so they can't also be on "${a}" at the same time.`;
+				}
 				default: {
 					const _exhaustive: never = conflict;
 					return _exhaustive;
 				}
 			}
 		})
-		.join("; ");
+		.join(" ");
+}
+
+/** Human-readable hard track overlap (same track, overlapping times). */
+export function formatTrackConflict(args: {
+	trackName: string;
+	movingTitle: string;
+	blockingTitle: string;
+	blockingTimeRange: string;
+}): string {
+	return `Track conflict on "${args.trackName}": "${args.blockingTitle}" already runs ${args.blockingTimeRange}. "${args.movingTitle}" can't share that track at the same time — pick another track or time.`;
 }
 
 export const PUBLIC_SCHEDULE_STATUSES = ["published"] as const;

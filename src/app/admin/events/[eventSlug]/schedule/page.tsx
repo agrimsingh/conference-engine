@@ -139,6 +139,7 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 						rooms={roomNames}
 						roomIds={roomIds}
 						tracks={tracks.map((track) => ({ id: track.id, name: track.name }))}
+						trackConflictPolicy={event.track_conflict_policy ?? "hard"}
 						dayStartMinutes={event.day_start_minutes ?? 9 * 60}
 						dayEndMinutes={event.day_end_minutes ?? 18 * 60}
 						slotDurationMinutes={event.slot_duration_minutes ?? 30}

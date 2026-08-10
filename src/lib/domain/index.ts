@@ -137,6 +137,7 @@ export {
 	detectConflicts,
 	durationMinutesFromAnswers,
 	formatScheduleConflicts,
+	formatTrackConflict,
 	intervalsOverlap,
 	isPublicScheduleStatus,
 	isSchedulableStatus,
@@ -146,6 +147,7 @@ export {
 	type PublicScheduleStatus,
 	type SchedulableStatus,
 	type ScheduleConflict,
+	type ScheduleConflictLabels,
 	type ScheduleInterval,
 } from "./schedule";
 

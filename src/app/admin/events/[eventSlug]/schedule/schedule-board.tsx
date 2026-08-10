@@ -20,6 +20,8 @@ import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import {
 	detectConflicts,
 	formatScheduleConflicts,
+	formatTrackConflict,
+	intervalsOverlap,
 	type ScheduleInterval,
 } from "@/lib/domain/schedule";
 import {
@@ -56,6 +58,7 @@ type Props = {
 	rooms: string[];
 	roomIds: Record<string, string>;
 	tracks: { id: string; name: string }[];
+	trackConflictPolicy: "hard" | "allow";
 	dayStartMinutes: number;
 	dayEndMinutes: number;
 	slotDurationMinutes: number;
@@ -72,6 +75,7 @@ export function ScheduleBoard({
 	rooms,
 	roomIds,
 	tracks,
+	trackConflictPolicy,
 	dayStartMinutes,
 	dayEndMinutes,
 	slotDurationMinutes,
@@ -216,11 +220,48 @@ export function ScheduleBoard({
 			endsAtMs,
 			speakerKeys: session.speakerKeys,
 		};
+		const conflictLabels = {
+			titleFor: (id: string) =>
+				sessions.find((row) => row.id === id)?.title ?? `session ${id.slice(0, 8)}`,
+			timeRangeFor: (id: string) => {
+				const row = sessions.find((item) => item.id === id);
+				if (!row?.slot) return null;
+				return `${formatClock(row.slot.startsAtMs, timeZone)}–${formatClock(row.slot.endsAtMs, timeZone)}`;
+			},
+		};
+
 		const conflicts = detectConflicts(candidate, intervals);
 		if (conflicts.length > 0) {
-			setError(formatScheduleConflicts(conflicts));
+			setError(formatScheduleConflicts(conflicts, conflictLabels));
 			setMessage(null);
 			return;
+		}
+
+		if (trackConflictPolicy === "hard" && nextTrackId) {
+			const trackName =
+				tracks.find((track) => track.id === nextTrackId)?.name ?? "this track";
+			const blocker = sessions.find(
+				(row) =>
+					row.id !== submissionId &&
+					row.slot != null &&
+					row.slot.trackId === nextTrackId &&
+					intervalsOverlap(candidate, {
+						startsAtMs: row.slot.startsAtMs,
+						endsAtMs: row.slot.endsAtMs,
+					}),
+			);
+			if (blocker?.slot) {
+				setError(
+					formatTrackConflict({
+						trackName,
+						movingTitle: session.title,
+						blockingTitle: blocker.title,
+						blockingTimeRange: `${formatClock(blocker.slot.startsAtMs, timeZone)}–${formatClock(blocker.slot.endsAtMs, timeZone)}`,
+					}),
+				);
+				setMessage(null);
+				return;
+			}
 		}
 
 		const previous = session;

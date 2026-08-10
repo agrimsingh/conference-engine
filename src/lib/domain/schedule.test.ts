@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	detectConflicts,
+	formatScheduleConflicts,
+	formatTrackConflict,
 	isPublicScheduleStatus,
 	PUBLIC_SCHEDULE_STATUSES,
 	resolveRoom,
@@ -73,5 +75,37 @@ describe("detectConflicts", () => {
 			[{ submissionId: "current", roomId: "main", roomName: "Main", startsAtMs: 100, endsAtMs: 200, speakerKeys: [] }],
 		);
 		expect(conflicts).toMatchObject([{ kind: "room", roomName: "Grand Hall", submissionIdA: "next", submissionIdB: "current" }]);
+	});
+});
+
+describe("formatScheduleConflicts", () => {
+	it("explains room overlaps with titles and times instead of raw ids", () => {
+		const message = formatScheduleConflicts(
+			[{ kind: "room", roomName: "Main Stage", submissionIdA: "aaa", submissionIdB: "bbb" }],
+			{
+				titleFor: (id) => (id === "aaa" ? "New talk" : "Existing talk"),
+				timeRangeFor: (id) => (id === "bbb" ? "10:00–10:30" : null),
+			},
+		);
+		expect(message).toContain("Main Stage");
+		expect(message).toContain("Existing talk");
+		expect(message).toContain("10:00–10:30");
+		expect(message).toContain("New talk");
+		expect(message).not.toContain("aaa");
+	});
+});
+
+describe("formatTrackConflict", () => {
+	it("names the track, both talks, and the blocking window", () => {
+		expect(
+			formatTrackConflict({
+				trackName: "Agents",
+				movingTitle: "Morning systems check-in",
+				blockingTitle: "Running a conference with agents",
+				blockingTimeRange: "10:00–10:30",
+			}),
+		).toBe(
+			'Track conflict on "Agents": "Running a conference with agents" already runs 10:00–10:30. "Morning systems check-in" can\'t share that track at the same time — pick another track or time.',
+		);
 	});
 });
