@@ -1,6 +1,17 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
-import { createToken } from "@/lib/auth/event-api-tokens";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/db/cloudflare", () => ({
+	getAuthSecret: async () => env.AUTH_SECRET,
+	getDb: async () => env.DB,
+	getCloudflareEnv: async () => env,
+}));
+
+import { GET as getSpeakers } from "@/app/api/v1/events/[eventSlug]/speakers/route";
+import {
+	createToken,
+	resolveTokenAccess,
+} from "@/lib/auth/event-api-tokens";
 import { removeEventMembership } from "@/lib/db/queries";
 import { createEventWithDefaults } from "@/lib/events/create-event";
 
@@ -52,6 +63,13 @@ describe("event membership token revocation", () => {
 		});
 
 		await expect(
+			resolveTokenAccess(env.DB, event.slug, created.token, {
+				secret: env.AUTH_SECRET,
+				now,
+			}),
+		).resolves.toMatchObject({ event: { id: event.eventId } });
+
+		await expect(
 			removeEventMembership(env.DB, {
 				eventId: event.eventId,
 				accountId: "membership-token-account",
@@ -63,5 +81,24 @@ describe("event membership token revocation", () => {
 			.first<{ revoked_at: number | null }>();
 
 		expect(token?.revoked_at).toEqual(expect.any(Number));
+		await expect(
+			resolveTokenAccess(env.DB, event.slug, created.token, {
+				secret: env.AUTH_SECRET,
+				now: now + 1,
+			}),
+		).resolves.toBeNull();
+
+		const response = await getSpeakers(
+			new Request(
+				`https://conference.example.test/api/v1/events/${event.slug}/speakers`,
+				{ headers: { authorization: `Bearer ${created.token}` } },
+			),
+			{ params: Promise.resolve({ eventSlug: event.slug }) },
+		);
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "Unauthorized",
+		});
 	});
 });
