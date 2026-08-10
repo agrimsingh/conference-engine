@@ -71,6 +71,11 @@ Items the brief struck or listed as stack bonuses, but this tip already exposes.
    - `/api/v1/openapi.json`
    - `/api/v1/events/[eventSlug]/submissions`, `.../schedule`, `.../speakers`
 
+5b. Admin agent API (per-event PAT)
+   - Settings → API tokens (`ce_pat_…` Bearer)
+   - `/api/admin/openapi.json`
+   - Admin JSON: submissions list/decide, schedule place, speakers, members, tokens
+
 6. Organizer export
    - CSV: `/api/admin/events/[eventSlug]/export/submissions.csv`
    - XLSX: `/api/admin/events/[eventSlug]/export/submissions.xlsx`
