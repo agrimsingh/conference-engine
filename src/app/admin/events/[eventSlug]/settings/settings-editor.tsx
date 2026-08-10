@@ -27,7 +27,7 @@ type Props = {
 	team: TeamAccess;
 };
 type Message = { kind: "positive" | "negative"; text: string } | null;
-type SectionId = "details" | "team" | "rooms" | "tracks" | "tasks";
+type SectionId = "details" | "team" | "api-tokens" | "rooms" | "tracks" | "tasks";
 
 const SECTIONS: Array<{
 	id: SectionId;
@@ -43,6 +43,11 @@ const SECTIONS: Array<{
 		id: "team",
 		label: "Team",
 		description: "Invite organizers and transfer ownership.",
+	},
+	{
+		id: "api-tokens",
+		label: "API tokens",
+		description: "Mint Bearer tokens for agents and scripts.",
 	},
 	{
 		id: "rooms",
@@ -81,6 +86,7 @@ function dueLocalValue(dueAt: number | null) {
 function parseSection(value: string | null): SectionId {
 	switch (value) {
 		case "team":
+		case "api-tokens":
 		case "rooms":
 		case "tracks":
 		case "tasks":
@@ -323,18 +329,19 @@ export function SettingsEditor({ eventSlug, configuration, team }: Props) {
 						) : null}
 
 						{section === "team" ? (
-							<div className="space-y-8">
-								<InviteTeamForm
-									eventSlug={eventSlug}
-									canRemove={team.canRemove}
-									canTransfer={team.canTransfer}
-									canInviteAsOwner={team.canInviteAsOwner}
-									currentAccountId={team.currentAccountId}
-									currentRole={team.currentRole}
-									initialMembers={team.members}
-								/>
-								<ApiTokensPanel eventSlug={eventSlug} />
-							</div>
+							<InviteTeamForm
+								eventSlug={eventSlug}
+								canRemove={team.canRemove}
+								canTransfer={team.canTransfer}
+								canInviteAsOwner={team.canInviteAsOwner}
+								currentAccountId={team.currentAccountId}
+								currentRole={team.currentRole}
+								initialMembers={team.members}
+							/>
+						) : null}
+
+						{section === "api-tokens" ? (
+							<ApiTokensPanel eventSlug={eventSlug} />
 						) : null}
 
 						{section === "rooms" ? (

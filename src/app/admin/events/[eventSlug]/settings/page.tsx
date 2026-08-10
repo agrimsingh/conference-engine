@@ -26,7 +26,7 @@ export default async function EventSettingsPage({ params }: Props) {
 				<PageHeader
 					eyebrow="Organizer settings"
 					title={access.event.name}
-					description="Event defaults, team access, rooms, tracks, and speaker task templates."
+					description="Event defaults, team access, API tokens, rooms, tracks, and speaker task templates."
 				/>
 				<Suspense
 					fallback={
