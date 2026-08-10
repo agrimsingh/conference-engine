@@ -1,0 +1,260 @@
+
+> conference-engine@0.1.0 deploy
+> opennextjs-cloudflare build && opennextjs-cloudflare deploy
+
+
+┌─────────────────────────────┐
+│ OpenNext — Cloudflare build │
+└─────────────────────────────┘
+
+App directory: /Users/agrim/Downloads/ai fun projects/conference-engine/p2.3-schedule-ics
+Next.js version : 16.3.0
+@opennextjs/cloudflare version: 1.20.2
+@opennextjs/aws version: 4.1.0
+workerd compatibility_date: 2026-08-08
+
+┌─────────────────────────────────┐
+│ OpenNext — Building Next.js app │
+└─────────────────────────────────┘
+
+
+> conference-engine@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+✓ Running next.config.ts took 471ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 8.3s
+  Running TypeScript ...
+  Finished TypeScript in 7.7s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/19) ...
+  Generating static pages using 9 workers (4/19) 
+  Generating static pages using 9 workers (9/19) 
+  Generating static pages using 9 workers (14/19) 
+✓ Generating static pages using 9 workers (19/19) in 157ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /admin
+├ ƒ /admin/bypass
+├ ƒ /admin/events/[eventSlug]/communications
+├ ƒ /admin/events/[eventSlug]/content
+├ ƒ /admin/events/[eventSlug]/dashboard
+├ ƒ /admin/events/[eventSlug]/embeds
+├ ƒ /admin/events/[eventSlug]/files
+├ ƒ /admin/events/[eventSlug]/forms
+├ ƒ /admin/events/[eventSlug]/forms/[formSlug]
+├ ƒ /admin/events/[eventSlug]/integrations/accelevents
+├ ƒ /admin/events/[eventSlug]/resources
+├ ƒ /admin/events/[eventSlug]/review
+├ ƒ /admin/events/[eventSlug]/schedule
+├ ƒ /admin/events/[eventSlug]/sessions
+├ ƒ /admin/events/[eventSlug]/settings
+├ ƒ /admin/events/[eventSlug]/setup
+├ ƒ /admin/events/[eventSlug]/speakers
+├ ƒ /admin/events/[eventSlug]/submissions
+├ ƒ /admin/events/[eventSlug]/submissions/[submissionId]
+├ ƒ /admin/events/[eventSlug]/tasks
+├ ƒ /admin/events/[eventSlug]/team
+├ ƒ /api/admin/events
+├ ƒ /api/admin/events/[eventSlug]/action-tasks
+├ ƒ /api/admin/events/[eventSlug]/claim
+├ ƒ /api/admin/events/[eventSlug]/clone
+├ ƒ /api/admin/events/[eventSlug]/cockpit
+├ ƒ /api/admin/events/[eventSlug]/communications
+├ ƒ /api/admin/events/[eventSlug]/communications/[deliveryKey]/retry
+├ ƒ /api/admin/events/[eventSlug]/content/sessions/[sessionId]
+├ ƒ /api/admin/events/[eventSlug]/content/sessions/[sessionId]/restore
+├ ƒ /api/admin/events/[eventSlug]/content/speakers/[personId]
+├ ƒ /api/admin/events/[eventSlug]/content/speakers/[personId]/restore
+├ ƒ /api/admin/events/[eventSlug]/embeds
+├ ƒ /api/admin/events/[eventSlug]/embeds/[embedId]
+├ ƒ /api/admin/events/[eventSlug]/evaluation
+├ ƒ /api/admin/events/[eventSlug]/evaluation/[planId]
+├ ƒ /api/admin/events/[eventSlug]/evaluation/[planId]/criteria
+├ ƒ /api/admin/events/[eventSlug]/evaluation/[planId]/criteria/[criterionId]
+├ ƒ /api/admin/events/[eventSlug]/evaluation/activate
+├ ƒ /api/admin/events/[eventSlug]/export/airtable
+├ ƒ /api/admin/events/[eventSlug]/export/airtable/sync
+├ ƒ /api/admin/events/[eventSlug]/export/scores.csv
+├ ƒ /api/admin/events/[eventSlug]/export/submission-uploads.zip
+├ ƒ /api/admin/events/[eventSlug]/export/submissions.csv
+├ ƒ /api/admin/events/[eventSlug]/export/submissions.xlsx
+├ ƒ /api/admin/events/[eventSlug]/files/export
+├ ƒ /api/admin/events/[eventSlug]/forms
+├ ƒ /api/admin/events/[eventSlug]/forms/[formSlug]/fields
+├ ƒ /api/admin/events/[eventSlug]/integrations/accelevents
+├ ƒ /api/admin/events/[eventSlug]/integrations/accelevents/sync
+├ ƒ /api/admin/events/[eventSlug]/members
+├ ƒ /api/admin/events/[eventSlug]/members/leave
+├ ƒ /api/admin/events/[eventSlug]/members/transfer
+├ ƒ /api/admin/events/[eventSlug]/reminders
+├ ƒ /api/admin/events/[eventSlug]/resources
+├ ƒ /api/admin/events/[eventSlug]/resources/[resourceId]
+├ ƒ /api/admin/events/[eventSlug]/review/assignments
+├ ƒ /api/admin/events/[eventSlug]/review/decisions
+├ ƒ /api/admin/events/[eventSlug]/review/labels
+├ ƒ /api/admin/events/[eventSlug]/review/reminders
+├ ƒ /api/admin/events/[eventSlug]/reviewers
+├ ƒ /api/admin/events/[eventSlug]/room
+├ ƒ /api/admin/events/[eventSlug]/sessions
+├ ƒ /api/admin/events/[eventSlug]/sessions/bulk-publish
+├ ƒ /api/admin/events/[eventSlug]/sessions/clone
+├ ƒ /api/admin/events/[eventSlug]/sessions/import/commit
+├ ƒ /api/admin/events/[eventSlug]/sessions/import/preview
+├ ƒ /api/admin/events/[eventSlug]/settings
+├ ƒ /api/admin/events/[eventSlug]/settings/rooms
+├ ƒ /api/admin/events/[eventSlug]/settings/tasks
+├ ƒ /api/admin/events/[eventSlug]/settings/tracks
+├ ƒ /api/admin/events/[eventSlug]/speakers
+├ ƒ /api/admin/events/[eventSlug]/speakers/[personId]
+├ ƒ /api/admin/events/[eventSlug]/speakers/[personId]/crm
+├ ƒ /api/admin/events/[eventSlug]/speakers/[personId]/headshot
+├ ƒ /api/admin/events/[eventSlug]/speakers/[personId]/invite
+├ ƒ /api/admin/events/[eventSlug]/speakers/email
+├ ƒ /api/admin/events/[eventSlug]/submissions
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/assignments
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/decide
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/fields/[fieldKey]/asset
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/labels
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/restore
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/schedule
+├ ƒ /api/admin/events/[eventSlug]/submissions/[submissionId]/speakers
+├ ƒ /api/admin/events/[eventSlug]/submissions/notify
+├ ƒ /api/admin/events/[eventSlug]/tasks
+├ ƒ /api/admin/events/[eventSlug]/tasks/[taskId]/asset
+├ ƒ /api/admin/events/[eventSlug]/tasks/[taskId]/comments
+├ ƒ /api/admin/events/[eventSlug]/tasks/[taskId]/versions/[versionId]
+├ ƒ /api/admin/events/[eventSlug]/tasks/outstanding
+├ ƒ /api/admin/events/[eventSlug]/tokens
+├ ƒ /api/admin/events/[eventSlug]/tokens/[tokenId]
+├ ƒ /api/admin/openapi.json
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/request-link
+├ ƒ /api/e/[eventSlug]/embeds/[embedSlug]
+├ ƒ /api/e/[eventSlug]/embeds/[embedSlug]/html
+├ ƒ /api/e/[eventSlug]/embeds/[embedSlug]/ical
+├ ƒ /api/e/[eventSlug]/embeds/[embedSlug]/loader.js
+├ ƒ /api/e/[eventSlug]/embeds/[embedSlug]/xml
+├ ƒ /api/e/[eventSlug]/itinerary/ics
+├ ƒ /api/e/[eventSlug]/people/[personId]/headshot
+├ ƒ /api/e/[eventSlug]/schedule
+├ ƒ /api/e/[eventSlug]/schedule.ics
+├ ƒ /api/e/[eventSlug]/sessions/[sessionId]/ics
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]/draft
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]/draft/finalize
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]/draft/portal
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]/draft/save
+├ ƒ /api/e/[eventSlug]/submit/[formSlug]/upload
+├ ƒ /api/portal/action-tasks/[assignmentId]/complete
+├ ƒ /api/portal/profile/[eventId]
+├ ƒ /api/portal/profile/[eventId]/headshot
+├ ƒ /api/portal/session
+├ ƒ /api/portal/submissions/[submissionId]/withdraw
+├ ƒ /api/portal/tasks/[taskId]/comments
+├ ƒ /api/portal/tasks/[taskId]/complete
+├ ƒ /api/portal/tasks/[taskId]/upload
+├ ƒ /api/portal/tasks/[taskId]/versions/[versionId]
+├ ƒ /api/review/recuse
+├ ƒ /api/review/score
+├ ƒ /api/review/submissions/[submissionId]/fields/[fieldKey]/asset
+├ ƒ /api/v1/events/[eventSlug]/schedule
+├ ƒ /api/v1/events/[eventSlug]/speakers
+├ ƒ /api/v1/events/[eventSlug]/submissions
+├ ƒ /api/v1/openapi.json
+├ ƒ /auth/callback
+├ ƒ /co-speaker/[token]
+├ ƒ /demo
+├ ƒ /e/[eventSlug]/schedule
+├ ƒ /e/[eventSlug]/sessions/[sessionId]
+├ ƒ /e/[eventSlug]/speakers
+├ ƒ /e/[eventSlug]/speakers/[personId]
+├ ƒ /e/[eventSlug]/submit/[formSlug]
+├ ƒ /embed/[eventSlug]/schedule
+├ ƒ /embed/[eventSlug]/sessions/[sessionId]
+├ ƒ /embed/[eventSlug]/widgets/[embedSlug]
+├ ƒ /login
+├ ƒ /portal
+├ ƒ /portal/authorize
+└ ƒ /review
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+┌──────────────────────────────┐
+│ OpenNext — Generating bundle │
+└──────────────────────────────┘
+
+Bundling middleware function...
+Bundling static assets...
+Bundling cache assets...
+Building server function: default...
+Applying code patches: 2.196s
+# copyPackageTemplateFiles
+[35m⚙️ Bundling the OpenNext server...
+[0m
+[35mWorker saved in `.open-next/worker.js` 🚀
+[0m
+OpenNext build complete.
+
+┌──────────────────────────────┐
+│ OpenNext — Cloudflare deploy │
+└──────────────────────────────┘
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1m				You have defined bindings to the following internal Durable Objects:[0m
+
+  				- {"name":"EVENT_ROOM","class_name":"EventRoom"}
+  				These will not work in local development, but they should work in production.
+  
+  				If you want to develop these locally, you can define your DO in a separate Worker, with a separate configuration file.
+  				For detailed instructions, refer to the Durable Objects section here: [4mhttps://developers.cloudflare.com/workers/wrangler/api#supported-bindings[0m
+
+
+A DurableObjectNamespace in the config referenced the class "EventRoom", but no such Durable Object class is exported from the worker. Please make sure the class name matches, it is exported, and the class extends 'DurableObject'. Attempts to call to this Durable Object class will fail at runtime, but historically this was not a startup-time error. Future versions of workerd may make this a startup-time error.
+Incremental cache does not need populating
+Tag cache does not need populating
+
+ ⛅️ wrangler 4.120.0 (update available 4.120.1)
+───────────────────────────────────────────────
+🌀 Building list of assets...
+✨ Read 71 files from the assets directory /Users/agrim/Downloads/ai fun projects/conference-engine/p2.3-schedule-ics/.open-next/assets
+🌀 Starting asset upload...
+🌀 Found 3 new or modified static assets to upload. Proceeding with upload...
++ /BUILD_ID
++ /_next/static/chunks/11b40-n8y_f5b.js
++ /_next/static/chunks/1nxt8-2d4zj1f.css
+Uploaded 1 of 3 assets
+Uploaded 2 of 3 assets
+Uploaded 3 of 3 assets
+✨ Success! Uploaded 3 files (62 already uploaded) (1.72 sec)
+
+Total Upload: 10757.73 KiB / gzip: 2078.07 KiB
+Worker Startup Time: 33 ms
+Your Worker has access to the following bindings:
+Binding                                                                 Resource                  
+env.EVENT_ROOM (EventRoom)                                              Durable Object            
+env.SESSIONS (1062f9c0bed04ca2b7102bee84b3de39)                         KV Namespace              
+env.DB (conference-engine)                                              D1 Database               
+env.FILES (conference-engine-assets)                                    R2 Bucket                 
+env.WORKER_SELF_REFERENCE (conference-engine)                           Worker                    
+env.IMAGES                                                              Images                    
+env.ASSETS                                                              Assets                    
+env.RESEND_FROM_EMAIL ("team@65labs.org")                               Environment Variable      
+env.APP_ORIGIN ("https://conference-engine.65labs.org")                 Environment Variable      
+env.APP_NAME ("conference-engine")                                      Environment Variable      
+env.ADMIN_BYPASS_ENABLED ("0")                                          Environment Variable      
+env.AIRTABLE_BASE_ID ("appzkYZYKU3sG6vRM")                              Environment Variable      
+env.AIRTABLE_TABLE_NAME ("Submissions")                                 Environment Variable      
+
+Uploaded conference-engine (26.72 sec)
+Deployed conference-engine triggers (8.04 sec)
+  conference-engine.65labs.org (custom domain)
+  schedule: 0 1 * * *
+Current Version ID: 0bdaffc2-12a8-4854-8034-1c15a985675c

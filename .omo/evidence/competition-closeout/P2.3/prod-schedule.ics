@@ -1,0 +1,98 @@
+BEGIN:VCALENDAR
+PRODID:-//conference-engine//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:CFP to Stage Demo
+BEGIN:VEVENT
+UID:demo-amara@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261010T010000Z
+DTEND:20261010T014500Z
+SUMMARY:Shipping agents that recover
+LOCATION:Main Stage
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-maya@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261010T010000Z
+DTEND:20261010T023000Z
+SUMMARY:Build a capable MCP server
+LOCATION:Builder Lab
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-diego@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261010T013000Z
+DTEND:20261010T020000Z
+SUMMARY:Structured outputs at scale
+LOCATION:Forum
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-jonas@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261010T020000Z
+DTEND:20261010T024500Z
+SUMMARY:What actually breaks in production
+LOCATION:Main Stage
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-ravi@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261011T010000Z
+DTEND:20261011T013000Z
+SUMMARY:Eval pipelines in CI
+LOCATION:Main Stage
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-hana@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261011T020000Z
+DTEND:20261011T023000Z
+SUMMARY:Guardrails with useful failure modes
+LOCATION:Builder Lab
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-zoe@conference-engine.invalid
+DTSTAMP:20260810T183829Z
+DTSTART:20261012T013000Z
+DTEND:20261012T014500Z
+SUMMARY:The MCP ecosystem one year in
+LOCATION:Main Stage
+DESCRIPTION:Published session at CFP to Stage Demo
+ORGANIZER;CN=conference-engine:mailto:team@65labs.org
+STATUS:CONFIRMED
+SEQUENCE:0
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
