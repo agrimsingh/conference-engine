@@ -1,0 +1,2 @@
+ts	phase	decision	why	evidence	result
+2026-08-11T02:34:00Z	polish	P2.4 Auto-place shipped on feat/p2.4-auto-place (PR #7); deploy deferred pending UI smoke	Loops findAvailableSlot over unscheduled rail; summary N placed, M need attention; board tests green	.omo/evidence/competition-closeout/P2.4/; inbox/P2.4-report.md	pr_open

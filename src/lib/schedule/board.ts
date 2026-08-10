@@ -118,6 +118,71 @@ export function findAvailableSlot(input: {
 	return null;
 }
 
+export type AutoPlaceAssignment = {
+	sessionId: string;
+	slot: AvailableSlot;
+};
+
+export type AutoPlacePlan = {
+	placements: AutoPlaceAssignment[];
+	placed: number;
+	needAttention: number;
+	skippedIds: string[];
+};
+
+/** Loop findAvailableSlot over the unscheduled rail; accumulate intervals so later sessions see earlier placements. */
+export function planAutoPlace(input: {
+	sessions: readonly SlotSearchSession[];
+	dayKey: string;
+	timeZone: string;
+	timeRows: readonly number[];
+	rooms: readonly string[];
+	roomIds: Readonly<Record<string, string>>;
+	dayEndMinutes: number;
+	intervals: readonly ScheduleInterval[];
+}): AutoPlacePlan {
+	const working: ScheduleInterval[] = [...input.intervals];
+	const placements: AutoPlaceAssignment[] = [];
+	const skippedIds: string[] = [];
+
+	for (const session of input.sessions) {
+		const slot = findAvailableSlot({
+			session,
+			dayKey: input.dayKey,
+			timeZone: input.timeZone,
+			timeRows: input.timeRows,
+			rooms: input.rooms,
+			roomIds: input.roomIds,
+			dayEndMinutes: input.dayEndMinutes,
+			intervals: working,
+		});
+		if (!slot) {
+			skippedIds.push(session.id);
+			continue;
+		}
+		placements.push({ sessionId: session.id, slot });
+		working.push({
+			submissionId: session.id,
+			roomId: input.roomIds[slot.roomName] ?? null,
+			roomName: slot.roomName,
+			startsAtMs: slot.startsAtMs,
+			endsAtMs: slot.endsAtMs,
+			speakerKeys: session.speakerKeys,
+		});
+	}
+
+	return {
+		placements,
+		placed: placements.length,
+		needAttention: skippedIds.length,
+		skippedIds,
+	};
+}
+
+export function formatAutoPlaceSummary(placed: number, needAttention: number): string {
+	return `${placed} placed, ${needAttention} need attention`;
+}
+
 export function publishableOnDay<T extends { id: string; title: string; status: string; slot: unknown | null }>(
 	daySessions: readonly T[],
 ): T[] {

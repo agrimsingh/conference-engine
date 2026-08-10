@@ -3,8 +3,10 @@ import type { ScheduleInterval } from "@/lib/domain";
 import {
 	filterUnplacedRail,
 	findAvailableSlot,
+	formatAutoPlaceSummary,
 	isStageRoom,
 	isUnplaced,
+	planAutoPlace,
 	publishableOnDay,
 	roomsForLane,
 	toPublishConfirmTarget,
@@ -211,6 +213,112 @@ describe("findAvailableSlot", () => {
 		});
 		expect(slot?.roomName).toBe("A");
 		expect(slot?.startMinutes).toBe(9 * 60);
+	});
+});
+
+describe("planAutoPlace", () => {
+	const dayKey = "2026-06-10";
+	const timeZone = "UTC";
+	const timeRows = [9 * 60, 9 * 60 + 30, 10 * 60];
+	const rooms = ["A", "B"];
+	const roomIds = { A: "room-a", B: "room-b" };
+
+	it("places multiple unscheduled sessions without overlapping", () => {
+		const plan = planAutoPlace({
+			sessions: [
+				{ id: "s1", durationMinutes: 30, speakerKeys: ["ada"] },
+				{ id: "s2", durationMinutes: 30, speakerKeys: ["bob"] },
+				{ id: "s3", durationMinutes: 30, speakerKeys: ["cara"] },
+			],
+			dayKey,
+			timeZone,
+			timeRows,
+			rooms,
+			roomIds,
+			dayEndMinutes: 12 * 60,
+			intervals: [],
+		});
+		expect(plan.placed).toBe(3);
+		expect(plan.needAttention).toBe(0);
+		expect(plan.placements.map((row) => row.sessionId)).toEqual(["s1", "s2", "s3"]);
+		expect(plan.placements[0]?.slot).toMatchObject({
+			roomName: "A",
+			startMinutes: 9 * 60,
+		});
+		expect(plan.placements[1]?.slot).toMatchObject({
+			roomName: "B",
+			startMinutes: 9 * 60,
+		});
+		expect(plan.placements[2]?.slot).toMatchObject({
+			roomName: "A",
+			startMinutes: 9 * 60 + 30,
+		});
+		expect(formatAutoPlaceSummary(plan.placed, plan.needAttention)).toBe(
+			"3 placed, 0 need attention",
+		);
+	});
+
+	it("counts sessions that cannot fit as needing attention", () => {
+		const packed: ScheduleInterval[] = [
+			{
+				submissionId: "x1",
+				roomId: "room-a",
+				roomName: "A",
+				startsAtMs: Date.parse("2026-06-10T09:00:00.000Z"),
+				endsAtMs: Date.parse("2026-06-10T10:30:00.000Z"),
+				speakerKeys: [],
+			},
+			{
+				submissionId: "x2",
+				roomId: "room-b",
+				roomName: "B",
+				startsAtMs: Date.parse("2026-06-10T09:00:00.000Z"),
+				endsAtMs: Date.parse("2026-06-10T10:30:00.000Z"),
+				speakerKeys: [],
+			},
+		];
+		const plan = planAutoPlace({
+			sessions: [
+				{ id: "fit", durationMinutes: 30, speakerKeys: ["z"] },
+				{ id: "overflow", durationMinutes: 30, speakerKeys: ["y"] },
+			],
+			dayKey,
+			timeZone,
+			timeRows: [9 * 60],
+			rooms,
+			roomIds,
+			dayEndMinutes: 10 * 60,
+			intervals: packed,
+		});
+		expect(plan.placed).toBe(0);
+		expect(plan.needAttention).toBe(2);
+		expect(plan.skippedIds).toEqual(["fit", "overflow"]);
+		expect(formatAutoPlaceSummary(plan.placed, plan.needAttention)).toBe(
+			"0 placed, 2 need attention",
+		);
+	});
+
+	it("places what fits and leaves the rest needing attention", () => {
+		const plan = planAutoPlace({
+			sessions: [
+				{ id: "s1", durationMinutes: 30, speakerKeys: ["a"] },
+				{ id: "s2", durationMinutes: 30, speakerKeys: ["b"] },
+				{ id: "long", durationMinutes: 180, speakerKeys: ["c"] },
+			],
+			dayKey,
+			timeZone,
+			timeRows: [9 * 60, 9 * 60 + 30],
+			rooms: ["A"],
+			roomIds: { A: "room-a" },
+			dayEndMinutes: 10 * 60,
+			intervals: [],
+		});
+		expect(plan.placed).toBe(2);
+		expect(plan.needAttention).toBe(1);
+		expect(plan.skippedIds).toEqual(["long"]);
+		expect(formatAutoPlaceSummary(plan.placed, plan.needAttention)).toBe(
+			"2 placed, 1 need attention",
+		);
 	});
 });
 

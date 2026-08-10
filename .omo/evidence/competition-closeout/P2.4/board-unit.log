@@ -1,0 +1,13 @@
+
+> conference-engine@0.1.0 test:unit
+> vitest run --config vitest.config.mts src/lib/schedule/board.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/p2.4-auto-place
+
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  02:33:58
+   Duration  380ms (transform 104ms, setup 0ms, import 131ms, tests 26ms, environment 0ms)
+

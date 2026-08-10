@@ -27,9 +27,12 @@ import {
 import {
 	filterUnplacedRail,
 	findAvailableSlot,
+	formatAutoPlaceSummary,
+	planAutoPlace,
 	publishableOnDay,
 	roomsForLane,
 	toPublishConfirmTarget,
+	unplacedSessions,
 	type PublishConfirmTarget,
 	type RoomLane,
 } from "@/lib/schedule/board";
@@ -500,6 +503,171 @@ export function ScheduleBoard({
 		placeSession(selectedSession.id, slot.roomName, slot.startMinutes);
 	}
 
+	function autoPlaceRail() {
+		const rail = unplacedSessions(sessions);
+		if (rail.length === 0) {
+			setError(null);
+			setMessage(formatAutoPlaceSummary(0, 0));
+			return;
+		}
+
+		const roomsForPlacement =
+			roomFilter === "all"
+				? laneRooms
+				: laneRooms.filter((room) => room === roomFilter);
+
+		const plan = planAutoPlace({
+			sessions: rail,
+			dayKey,
+			timeZone,
+			timeRows,
+			rooms: roomsForPlacement,
+			roomIds,
+			dayEndMinutes,
+			intervals,
+		});
+
+		const summary = formatAutoPlaceSummary(plan.placed, plan.needAttention);
+		setError(null);
+		setMessage(summary);
+		setSelectedId(null);
+
+		if (plan.placements.length === 0) return;
+
+		const placementById = new Map(
+			plan.placements.map((row) => [row.sessionId, row.slot] as const),
+		);
+		const previousById = new Map(
+			rail
+				.filter((session) => placementById.has(session.id))
+				.map((session) => [session.id, session] as const),
+		);
+		const nextTrackId = trackId || null;
+		const optimisticTrackName =
+			tracks.find((track) => track.id === nextTrackId)?.name ?? "Unassigned";
+
+		setSessions((previous) =>
+			previous.map((row) => {
+				const slot = placementById.get(row.id);
+				if (!slot) return row;
+				return {
+					...row,
+					status: row.status === "published" ? "published" : "scheduled",
+					durationMinutes: Math.max(
+						1,
+						Math.round((slot.endsAtMs - slot.startsAtMs) / 60_000),
+					),
+					slot: {
+						roomId: roomIds[slot.roomName] ?? null,
+						roomName: slot.roomName,
+						trackId: nextTrackId,
+						trackName: optimisticTrackName,
+						startsAtMs: slot.startsAtMs,
+						endsAtMs: slot.endsAtMs,
+					},
+				};
+			}),
+		);
+
+		startTransition(async () => {
+			let failed = 0;
+			await Promise.all(
+				plan.placements.map(async ({ sessionId, slot }) => {
+					const previous = previousById.get(sessionId);
+					if (!previous) return;
+					try {
+						const response = await fetch(
+							`/api/admin/events/${eventSlug}/submissions/${sessionId}/schedule`,
+							{
+								method: "POST",
+								headers: { "content-type": "application/json" },
+								body: JSON.stringify({
+									startsAt: slot.startsAtMs,
+									endsAt: slot.endsAtMs,
+									roomName: slot.roomName,
+									trackId: nextTrackId,
+								}),
+							},
+						);
+						const payload = await readJson(response);
+						if (
+							typeof payload !== "object" ||
+							payload === null ||
+							!("ok" in payload)
+						) {
+							failed += 1;
+							setSessions((prev) =>
+								prev.map((row) => (row.id === sessionId ? previous : row)),
+							);
+							return;
+						}
+						const result = payload as PlacementFeedbackInput & {
+							ok: boolean;
+							error?: string;
+							status?: string;
+							slot?: {
+								room_id: string | null;
+								room_name: string;
+								track_id: string | null;
+								starts_at: number;
+								ends_at: number;
+							};
+						};
+						if (!result.ok || !result.slot) {
+							failed += 1;
+							setSessions((prev) =>
+								prev.map((row) => (row.id === sessionId ? previous : row)),
+							);
+							return;
+						}
+						setSessions((prev) =>
+							prev.map((row) =>
+								row.id === sessionId
+									? {
+											...row,
+											status: result.status ?? "scheduled",
+											durationMinutes: Math.max(
+												1,
+												Math.round(
+													(result.slot!.ends_at - result.slot!.starts_at) /
+														60_000,
+												),
+											),
+											slot: {
+												roomId: result.slot!.room_id,
+												roomName: result.slot!.room_name,
+												trackId: result.slot!.track_id,
+												trackName:
+													tracks.find(
+														(track) => track.id === result.slot!.track_id,
+													)?.name ?? "Unassigned",
+												startsAtMs: result.slot!.starts_at,
+												endsAtMs: result.slot!.ends_at,
+											},
+										}
+									: row,
+							),
+						);
+					} catch {
+						failed += 1;
+						setSessions((prev) =>
+							prev.map((row) => (row.id === sessionId ? previous : row)),
+						);
+					}
+				}),
+			);
+
+			const placed = plan.placed - failed;
+			const needAttention = plan.needAttention + failed;
+			setMessage(formatAutoPlaceSummary(placed, needAttention));
+			if (failed > 0) {
+				setError(
+					"Some sessions couldn’t be saved. Check your connection and try again.",
+				);
+			}
+		});
+	}
+
 	function mutateAction(submissionId: string, action: "unplace" | "unpublish") {
 		setError(null);
 		startTransition(async () => {
@@ -702,6 +870,16 @@ export function ScheduleBoard({
 					</button>
 					<button
 						type="button"
+						disabled={unplacedSessions(sessions).length === 0 || pending}
+						onClick={autoPlaceRail}
+						className={buttonClasses("secondary", "sm")}
+						aria-label="Auto-place Auto-schedule"
+						data-testid="auto-place"
+					>
+						Auto-place
+					</button>
+					<button
+						type="button"
 						disabled={dayPublishable.length === 0 || pending}
 						onClick={() => requestPublish(dayPublishable)}
 						className={buttonClasses("secondary", "sm")}
@@ -732,7 +910,7 @@ export function ScheduleBoard({
 					</ul>
 				)}
 				<p className="mt-2 text-xs text-neutral-500">
-					Drag onto a slot, click a session then a cell, or use Find available slot.
+					Drag onto a slot, click a session then a cell, use Find available slot, or Auto-place / Auto-schedule the rail.
 				</p>
 			</section>
 
