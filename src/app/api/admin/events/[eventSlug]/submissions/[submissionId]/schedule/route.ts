@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi, type EventAdminAccess } from "@/lib/auth/admin";
 import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
@@ -54,35 +54,36 @@ export async function POST(request: Request, context: RouteContext) {
 	const value = result as Record<string, unknown>;
 	if (value.ok !== true) return NextResponse.json({ ok: false, error: typeof value.error === "string" ? value.error : "Schedule mutation failed" }, { status: mutationResponse.status });
 	const slot = value.slot as { room_name: string; starts_at: number; ends_at: number; ics_uid: string; calendar_sequence: number };
-	let invite: Awaited<ReturnType<typeof notifyCalendarInvite>> = {
-		email: null,
-		emails: [],
-		icsBytes: "",
-	};
-	try {
-		invite = await notifyCalendarInvite(db, {
-			submissionId,
-			roomName: slot.room_name,
-			startsAtMs: slot.starts_at,
-			endsAtMs: slot.ends_at,
-			icsUid: slot.ics_uid,
-			sequence: slot.calendar_sequence,
-			fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
-		});
-	} catch (error) {
-		console.error("calendar invite failed after schedule place", {
-			submissionId,
-			error: error instanceof Error ? error.message : "unknown",
+	const calendarInviteStatus = submission.submitter_email ? "queued" : "not_applicable";
+	if (calendarInviteStatus === "queued") {
+		after(async () => {
+			try {
+				await notifyCalendarInvite(db, {
+					submissionId,
+					roomName: slot.room_name,
+					startsAtMs: slot.starts_at,
+					endsAtMs: slot.ends_at,
+					icsUid: slot.ics_uid,
+					sequence: slot.calendar_sequence,
+					fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
+				});
+			} catch (error) {
+				console.error("calendar invite failed after schedule place", {
+					submissionId,
+					error: error instanceof Error ? error.message : "unknown",
+				});
+			}
 		});
 	}
 	return NextResponse.json({
 		ok: true,
 		status: value.status,
 		slot: value.slot,
-		email: invite.email,
+		calendarInviteStatus,
+		email: null,
 		broadcasted: true,
-		icsPreview: invite.icsBytes ? invite.icsBytes.slice(0, 240) : "",
-		icsBytesLength: invite.icsBytes.length,
+		icsPreview: "",
+		icsBytesLength: 0,
 	});
 }
 

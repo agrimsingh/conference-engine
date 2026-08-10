@@ -1,10 +1,19 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ authorizeWritableEventAdminApi: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	after: vi.fn(),
+	authorizeWritableEventAdminApi: vi.fn(),
+	notifyCalendarInvite: vi.fn(),
+}));
 
 vi.mock("@/lib/auth/admin", () => ({ authorizeWritableEventAdminApi: mocks.authorizeWritableEventAdminApi }));
 vi.mock("@/lib/db/cloudflare", () => ({ getDb: async () => env.DB, getCloudflareEnv: async () => env }));
+vi.mock("@/lib/email/notify", () => ({ notifyCalendarInvite: mocks.notifyCalendarInvite }));
+vi.mock("next/server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("next/server")>()),
+	after: mocks.after,
+}));
 
 import { POST } from "@/app/api/admin/events/[eventSlug]/submissions/[submissionId]/schedule/route";
 
@@ -24,6 +33,17 @@ const event = {
 	created_at: now,
 	updated_at: now,
 };
+
+beforeEach(() => {
+	mocks.after.mockReset();
+	mocks.authorizeWritableEventAdminApi.mockReset();
+	mocks.notifyCalendarInvite.mockReset();
+	mocks.notifyCalendarInvite.mockResolvedValue({
+		email: { ok: true, status: "sent", providerId: "provider-id", messageId: "message-id" },
+		emails: [],
+		icsBytes: "BEGIN:VCALENDAR",
+	});
+});
 
 describe("schedule mutation route", () => {
 	it("preserves an existing track when a board move omits trackId", async () => {
@@ -50,7 +70,12 @@ describe("schedule mutation route", () => {
 		// This is the board's ordinary move shape: no trackId means preserve it.
 		const preserved = await request({ startsAt: "2026-05-29T11:00:00Z", endsAt: "2026-05-29T11:30:00Z", roomName: "Main" });
 		expect(preserved.status).toBe(200);
-		expect(await preserved.json()).toMatchObject({ ok: true, slot: { track_id: "schedule-route-track" } });
+		expect(await preserved.json()).toMatchObject({
+			ok: true,
+			calendarInviteStatus: "not_applicable",
+			slot: { track_id: "schedule-route-track" },
+		});
+		expect(mocks.after).not.toHaveBeenCalled();
 
 		const assigned = await request({ startsAt: "2026-05-29T11:30:00Z", endsAt: "2026-05-29T12:00:00Z", roomName: "Main", trackId: "schedule-route-track-b" });
 		expect(assigned.status).toBe(200);
@@ -92,5 +117,48 @@ describe("schedule mutation route", () => {
 		expect(response.status).toBe(400);
 		expect(await response.json()).toMatchObject({ ok: false, error: "Choose an active agenda track" });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM agenda_slots WHERE event_id = ?").bind(noTracksEvent.id).first()).toEqual({ count: 0 });
+	});
+
+	it("responds after placement before sending the calendar invitation", async () => {
+		const deferredEvent = { ...event, id: "schedule-route-deferred", slug: "schedule-route-deferred", name: "Deferred invite" };
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, start_day, end_day, day_start_minutes, day_end_minutes, slot_duration_minutes, track_conflict_policy, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(deferredEvent.id, deferredEvent.slug, deferredEvent.name, deferredEvent.timezone, deferredEvent.start_day, deferredEvent.end_day, deferredEvent.day_start_minutes, deferredEvent.day_end_minutes, deferredEvent.slot_duration_minutes, deferredEvent.track_conflict_policy, now, now),
+			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('schedule-route-deferred-form', ?, 'cfp', 'CFP', 'open', ?, ?)").bind(deferredEvent.id, now, now),
+			env.DB.prepare("INSERT INTO submissions (id, form_id, event_id, status, submitter_email, answers_json, created_at, updated_at) VALUES ('schedule-route-deferred-submission', 'schedule-route-deferred-form', ?, 'accepted', 'speaker@example.test', '{}', ?, ?)").bind(deferredEvent.id, now, now),
+			env.DB.prepare("INSERT INTO event_rooms (id, event_id, name, position, created_at, updated_at) VALUES ('schedule-route-deferred-room', ?, 'Main', 0, ?, ?)").bind(deferredEvent.id, now, now),
+		]);
+		mocks.authorizeWritableEventAdminApi.mockResolvedValue({ ok: true, access: { event: deferredEvent, account: null, membership: null } });
+		let deferredCallback: (() => void | Promise<void>) | undefined;
+		mocks.after.mockImplementation((callback: () => void | Promise<void>) => {
+			deferredCallback = callback;
+		});
+
+		const response = await POST(
+			new Request("https://conference.example.test/api/admin/events/schedule-route-deferred/submissions/schedule-route-deferred-submission/schedule", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ startsAt: "2026-05-29T10:00:00Z", endsAt: "2026-05-29T10:30:00Z", roomName: "Main" }),
+			}),
+			{ params: Promise.resolve({ eventSlug: deferredEvent.slug, submissionId: "schedule-route-deferred-submission" }) },
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			ok: true,
+			calendarInviteStatus: "queued",
+			email: null,
+			icsBytesLength: 0,
+		});
+		expect(mocks.notifyCalendarInvite).not.toHaveBeenCalled();
+		expect(deferredCallback).toBeTypeOf("function");
+		const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		mocks.notifyCalendarInvite.mockRejectedValueOnce(new Error("provider unavailable"));
+		await expect(deferredCallback?.()).resolves.toBeUndefined();
+		expect(mocks.notifyCalendarInvite).toHaveBeenCalledOnce();
+		expect(errorLog).toHaveBeenCalledWith("calendar invite failed after schedule place", {
+			submissionId: "schedule-route-deferred-submission",
+			error: "provider unavailable",
+		});
+		errorLog.mockRestore();
 	});
 });
