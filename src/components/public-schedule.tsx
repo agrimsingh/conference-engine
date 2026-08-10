@@ -6,6 +6,7 @@ import {
 	listAgendaTracks,
 	listAgendaSlotsWithSubmissions,
 	listEventRooms,
+	listSpeakerProfileCardsForPeople,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
 import { getPublicEmbedBySlug } from "@/lib/embeds/embed";
@@ -257,25 +258,7 @@ export async function PublicSchedule({
 				.map((speaker) => speaker.person_id!),
 		),
 	];
-	const profileByPerson = new Map<string, { hasHeadshot: boolean; jobTitle: string | null; company: string | null }>();
-	if (personIds.length > 0) {
-		const placeholders = personIds.map(() => "?").join(", ");
-		const profiles = await db
-			.prepare(
-				`SELECT person_id, headshot_asset_id, job_title, company
-         FROM speaker_profiles
-         WHERE event_id = ? AND person_id IN (${placeholders})`,
-			)
-			.bind(event.id, ...personIds)
-			.all<{ person_id: string; headshot_asset_id: string | null; job_title: string | null; company: string | null }>();
-		for (const profile of profiles.results) {
-			profileByPerson.set(profile.person_id, {
-				hasHeadshot: Boolean(profile.headshot_asset_id),
-				jobTitle: profile.job_title,
-				company: profile.company,
-			});
-		}
-	}
+	const profileByPerson = await listSpeakerProfileCardsForPeople(db, event.id, personIds);
 	for (const slot of publicSlots) {
 		const answers = { ...parseAnswers(slot.answers_json), ...parseAnswers(slot.approved_answers_json ?? "{}") };
 		const speakers = speakersBySubmission.get(slot.submission_id) ?? [];

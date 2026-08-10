@@ -846,10 +846,53 @@ export async function listLabelsForSubmissions(db: D1Database, submissionIds: st
 	const labels = new Map<string, string[]>();
 	const ids = [...new Set(submissionIds)];
 	if (!ids.length) return labels;
-	const placeholders = ids.map(() => "?").join(", ");
-	const result = await db.prepare(`SELECT submission_id, label FROM submission_labels WHERE submission_id IN (${placeholders}) ORDER BY label COLLATE NOCASE ASC`).bind(...ids).all<Pick<SubmissionLabelRow, "submission_id" | "label">>();
+	const result = await db
+		.prepare(
+			`SELECT submission_id, label FROM submission_labels
+       WHERE submission_id IN (SELECT value FROM json_each(?))
+       ORDER BY label COLLATE NOCASE ASC`,
+		)
+		.bind(jsonIdList(ids))
+		.all<Pick<SubmissionLabelRow, "submission_id" | "label">>();
 	for (const row of result.results) labels.set(row.submission_id, [...(labels.get(row.submission_id) ?? []), row.label]);
 	return labels;
+}
+
+/** Public schedule card fields for many speakers in one event (D1-safe). */
+export async function listSpeakerProfileCardsForPeople(
+	db: D1Database,
+	eventId: string,
+	personIds: string[],
+): Promise<
+	Map<string, { hasHeadshot: boolean; jobTitle: string | null; company: string | null }>
+> {
+	const cards = new Map<
+		string,
+		{ hasHeadshot: boolean; jobTitle: string | null; company: string | null }
+	>();
+	const ids = [...new Set(personIds)];
+	if (!ids.length) return cards;
+	const profiles = await db
+		.prepare(
+			`SELECT person_id, headshot_asset_id, job_title, company
+       FROM speaker_profiles
+       WHERE event_id = ? AND person_id IN (SELECT value FROM json_each(?))`,
+		)
+		.bind(eventId, jsonIdList(ids))
+		.all<{
+			person_id: string;
+			headshot_asset_id: string | null;
+			job_title: string | null;
+			company: string | null;
+		}>();
+	for (const profile of profiles.results) {
+		cards.set(profile.person_id, {
+			hasHeadshot: Boolean(profile.headshot_asset_id),
+			jobTitle: profile.job_title,
+			company: profile.company,
+		});
+	}
+	return cards;
 }
 
 export async function hasSuccessfulOutboundDelivery(db: D1Database, args: { submissionId: string; toEmail: string; templateKey: string }): Promise<boolean> {
