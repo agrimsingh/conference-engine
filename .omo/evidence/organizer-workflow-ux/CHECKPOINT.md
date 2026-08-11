@@ -46,7 +46,7 @@ Branch: `feat/organizer-workflow-ux` @ `main`/`dddca08`
 
 ## PR
 
-https://github.com/agrimsingh/conference-engine/pull/18
+https://github.com/agrimsingh/conference-engine/pull/19
 
 ## Prod deploy
 
