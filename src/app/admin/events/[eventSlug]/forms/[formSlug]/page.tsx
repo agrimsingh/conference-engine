@@ -9,6 +9,7 @@ import { getFormBySlug, listFormFields } from "@/lib/db/queries";
 import dynamic from "next/dynamic";
 import { parseCategoryRoute } from "@/lib/domain/category-routing";
 import { parseFormSections } from "@/lib/domain/form-sections";
+import { parseFormBuilderSection } from "./form-builder-section";
 
 const FormBuilder = dynamic(
 	() => import("./form-builder").then((m) => ({ default: m.FormBuilder })),
@@ -17,10 +18,13 @@ const FormBuilder = dynamic(
 
 type Props = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
+	searchParams: Promise<{ section?: string }>;
 };
 
-export default async function AdminFormBuilderPage({ params }: Props) {
+export default async function AdminFormBuilderPage({ params, searchParams }: Props) {
 	const { eventSlug, formSlug } = await params;
+	const { section: sectionParam } = await searchParams;
+	const initialSection = parseFormBuilderSection(sectionParam);
 	const db = await getDb();
 	const { event } = await assertCanManageEvent(db, eventSlug);
 	const form = await getFormBySlug(db, event.id, formSlug);
@@ -42,7 +46,7 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
 			<AdminEventNav eventSlug={eventSlug} />
-			<main className="mx-auto max-w-3xl px-4 py-10">
+			<main className="mx-auto max-w-6xl px-4 py-10">
 				<p className="mb-4 text-sm">
 					<Link
 						href={`/admin/events/${eventSlug}/forms`}
@@ -67,6 +71,7 @@ export default async function AdminFormBuilderPage({ params }: Props) {
 					<FormBuilder
 						eventSlug={eventSlug}
 						formSlug={formSlug}
+						initialSection={initialSection}
 						initialTitle={form.title}
 						initialDescription={form.description ?? ""}
 						initialStatus={form.status}

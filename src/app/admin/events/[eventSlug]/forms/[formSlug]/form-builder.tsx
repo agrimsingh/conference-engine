@@ -1,15 +1,47 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui";
+import { useCallback, useMemo, useState } from "react";
+import { AdminSectionShell } from "@/components/admin-section-shell";
+import { Button, noticeClasses } from "@/components/ui";
 import { FIELD_TYPES, type FieldType, type FormFieldDef } from "@/lib/domain/form-fields";
 import { type CategoryRoute } from "@/lib/domain/category-routing";
 import { type FormSection } from "@/lib/domain/form-sections";
 import { type VisibilityRule } from "@/lib/domain/visibility";
 
 import type { SelectOption } from "@/lib/domain/form-fields";
+import {
+	parseFormBuilderSection,
+	type FormBuilderSectionId,
+} from "./form-builder-section";
 import { FormBuilderPreview } from "./form-builder-preview";
+
+const SECTIONS: Array<{
+	id: FormBuilderSectionId;
+	label: string;
+	description: string;
+}> = [
+	{
+		id: "settings",
+		label: "Settings",
+		description: "Title, limits, open window, email copy, and category routing.",
+	},
+	{
+		id: "sections",
+		label: "Sections",
+		description: "Optional groups for the public form. Headers render on the live form now.",
+	},
+	{
+		id: "fields",
+		label: "Fields",
+		description: "Drag rows to reorder. Up and Down still work.",
+	},
+	{
+		id: "add-field",
+		label: "Add field",
+		description: "Create a new question on this form.",
+	},
+];
 
 type FieldRow = {
 	id: string;
@@ -27,6 +59,7 @@ type FieldRow = {
 type Props = {
 	eventSlug: string;
 	formSlug: string;
+	initialSection: FormBuilderSectionId;
 	initialTitle: string;
 	initialDescription: string;
 	initialStatus: string;
@@ -321,6 +354,7 @@ function VisibilityFields({
 export function FormBuilder({
 	eventSlug,
 	formSlug,
+	initialSection,
 	initialTitle,
 	initialDescription,
 	initialStatus,
@@ -340,6 +374,7 @@ export function FormBuilder({
 	initialFields,
 }: Props) {
 	const router = useRouter();
+	const [section, setSectionState] = useState<FormBuilderSectionId>(initialSection);
 	const [title, setTitle] = useState(initialTitle);
 	const [description, setDescription] = useState(initialDescription);
 	const [status, setStatus] = useState(initialStatus);
@@ -360,6 +395,17 @@ export function FormBuilder({
 	const [fields, setFields] = useState(initialFields);
 	const [sections, setSections] = useState<FormSection[]>(initialSections);
 	const [dragId, setDragId] = useState<string | null>(null);
+	const setSection = useCallback(
+		(next: FormBuilderSectionId) => {
+			setSectionState(next);
+			const href =
+				next === "settings"
+					? `/admin/events/${eventSlug}/forms/${formSlug}`
+					: `/admin/events/${eventSlug}/forms/${formSlug}?section=${next}`;
+			router.replace(href, { scroll: false });
+		},
+		[eventSlug, formSlug, router],
+	);
 	const canEditKeys = initialSubmissionCount === 0;
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<(
@@ -674,396 +720,419 @@ export function FormBuilder({
 	}
 
 	return (
-		<div className="space-y-8">
-			<FormBuilderPreview title={title} description={description} sections={sections} fields={previewFields} />
+		<div>
+			<FormBuilderPreview
+				title={title}
+				description={description}
+				sections={sections}
+				fields={previewFields}
+			/>
 
-			<section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<h2 className="text-sm font-medium text-neutral-200">Form settings</h2>
-				<label className="block text-xs text-neutral-400">
-					Title
-					<input
-						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-						value={title}
-						onChange={(e) => setTitle(e.target.value)}
-					/>
-				</label>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<label className="block text-xs text-neutral-400">
-						Minimum speakers
-						<input type="number" min={1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={minSpeakers} onChange={(e) => setMinSpeakers(Number(e.target.value))} />
-					</label>
-					<label className="block text-xs text-neutral-400">
-						Maximum speakers
-						<input type="number" min={minSpeakers || 1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={maxSpeakers} onChange={(e) => setMaxSpeakers(Number(e.target.value))} />
-					</label>
-				</div>
-				<label className="block text-xs text-neutral-400">
-					Submission limit <span className="text-neutral-500">(0 means unlimited)</span>
-					<input type="number" min={0} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={submissionLimit} onChange={(e) => setSubmissionLimit(Number(e.target.value))} />
-				</label>
-				<label className="flex items-center gap-2 text-xs text-neutral-300">
-					<input type="checkbox" checked={draftsEnabled} onChange={(e) => setDraftsEnabled(e.target.checked)} />
-					Allow submitters to save a draft and resume by email
-				</label>
-				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
-					<summary className="cursor-pointer font-medium text-neutral-200">Email copy and reminders</summary>
-					<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail, confirmation copy for email, and thank-you copy after submit. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the default copy.</p>
-					<label className="mt-3 block">Welcome copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={welcomeCopy} onChange={(e) => setWelcomeCopy(e.target.value)} /></label>
-					<label className="mt-3 block">Confirmation copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={confirmationCopy} onChange={(e) => setConfirmationCopy(e.target.value)} /></label>
-					<label className="mt-3 block">Speaker task reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
-					<label className="mt-3 block">Thank-you copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={thankYouCopy} onChange={(e) => setThankYouCopy(e.target.value)} /></label>
-				</details>
-				<label className="block text-xs text-neutral-400">
-					Description
-					<textarea
-						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-						rows={3}
-						value={description}
-						onChange={(e) => setDescription(e.target.value)}
-					/>
-				</label>
-				<label className="block text-xs text-neutral-400">
-					Status
-					<select
-						className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-						value={status}
-						onChange={(e) => setStatus(e.target.value)}
-					>
-						<option value="draft">draft</option>
-						<option value="open">open</option>
-						<option value="closed">closed</option>
-					</select>
-				</label>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<label className="block text-xs text-neutral-400">
-						Opens at (local)
-						<input
-							type="datetime-local"
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							value={opensAtInput}
-							onChange={(e) => setOpensAtInput(e.target.value)}
-						/>
-					</label>
-					<label className="block text-xs text-neutral-400">
-						Closes at (local)
-						<input
-							type="datetime-local"
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							value={closesAtInput}
-							onChange={(e) => setClosesAtInput(e.target.value)}
-						/>
-					</label>
-				</div>
-				<p className="text-xs text-neutral-500">
-					Set a close date to enable draft reminder emails for unsubmitted drafts in the final 72 hours.
-				</p>
-				<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
-					<summary className="cursor-pointer font-medium text-neutral-200">Category routing</summary>
-					<p className="mt-2 text-neutral-500">Route a select answer to an organizer category. Leave both fields blank for no category.</p>
-					<label className="mt-3 block">Select field key
-						<select className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={categoryFieldKey} onChange={(e) => setCategoryFieldKey(e.target.value)}>
-							<option value="">No category routing</option>
-							{fields.filter((field) => field.fieldType === "select").map((field) => <option key={field.id} value={field.key}>{field.key}</option>)}
-						</select>
-					</label>
-					<label className="mt-3 block">Value = category
-						<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={4} placeholder={"stage = Stage\nworkshop = Workshop"} value={categoryMapText} onChange={(e) => setCategoryMapText(e.target.value)} />
-					</label>
-				</details>
-				<Button type="button" disabled={busy} onClick={() => void saveMeta()}>
-					Save settings
-				</Button>
-			</section>
-
-			<section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<h2 className="text-sm font-medium text-neutral-200">Sections</h2>
-				<p className="text-xs text-neutral-500">Optional groups for the public form. Phase 4 adds section navigation; headers render now.</p>
-				<SectionsEditor sections={sections} onChange={setSections} />
-			</section>
-
-			<section className="space-y-3">
-				<h2 className="text-sm font-medium text-neutral-200">Fields</h2>
-				<p className="text-xs text-neutral-500">Drag rows to reorder. Up/Down still work.</p>
-				<ol className="divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900">
-					{fields.map((field, index) => (
-						<li
-							key={field.id}
-							className={`px-4 py-3 ${dragId === field.id ? "bg-neutral-800/60" : ""}`}
-							draggable={!busy && editingId !== field.id}
-							onDragStart={() => setDragId(field.id)}
-							onDragEnd={() => setDragId(null)}
-							onDragOver={(event) => event.preventDefault()}
-							onDrop={() => dropField(field.id)}
-						>
-							{editingId === field.id && editDraft ? (
-								<div className="space-y-3">
-									<label className="block text-xs text-neutral-400">
-										Key
-										<input
-											className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 disabled:opacity-50"
-											value={editDraft.key}
-											disabled={!canEditKeys}
-											onChange={(e) =>
-												setEditDraft((d) =>
-													d ? { ...d, key: e.target.value } : d,
-												)
-											}
-										/>
-									</label>
-									{!canEditKeys ? (
-										<p className="text-xs text-neutral-500">Keys lock after the first submission to preserve answers_json.</p>
-									) : (
-										<p className="text-xs text-neutral-500">
-											Key <code className="text-neutral-400">{field.key}</code> · {field.fieldType}
-										</p>
-									)}
-									<label className="block text-xs text-neutral-400">
-										Label
-										<input
-											className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-											value={editDraft.label}
-											onChange={(e) =>
-												setEditDraft((d) =>
-													d ? { ...d, label: e.target.value } : d,
-												)
-											}
-										/>
-									</label>
-									<label className="block text-xs text-neutral-400">
-										Help text
-										<input
-											className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-											value={editDraft.helpText}
-											onChange={(e) =>
-												setEditDraft((d) =>
-													d ? { ...d, helpText: e.target.value } : d,
-												)
-											}
-										/>
-									</label>
-									<label className="flex items-center gap-2 text-xs text-neutral-300">
-										<input
-											type="checkbox"
-											checked={editDraft.required}
-											onChange={(e) =>
-												setEditDraft((d) =>
-													d ? { ...d, required: e.target.checked } : d,
-												)
-											}
-										/>
-										Required
-									</label>
-									<SectionSelect
-										sections={sections}
-										value={editDraft.sectionKey}
-										onChange={(sectionKey) =>
-											setEditDraft((d) => (d ? { ...d, sectionKey } : d))
-										}
-									/>
-									<VisibilityFields
-										op={editDraft.visibilityOp}
-										fieldKey={editDraft.visibilityFieldKey}
-										value={editDraft.visibilityValue}
-										values={editDraft.visibilityValues}
-										siblingKeys={fields
-											.filter((f) => f.id !== field.id && f.fieldType === "select")
-											.map((f) => f.key)}
-										onChange={(next) =>
-											setEditDraft((d) => (d ? { ...d, ...next } : d))
-										}
-									/>
-									{field.fieldType === "select" ||
-									field.fieldType === "multiselect" ? (
-										<OptionsEditor
-											options={editDraft.options}
-											onChange={(options) =>
-												setEditDraft((d) => (d ? { ...d, options } : d))
-											}
-										/>
-									) : null}
-									<FieldConfigFields
-										fieldType={field.fieldType}
-										draft={editDraft}
-										onChange={(patch) =>
-											setEditDraft((d) => (d ? { ...d, ...patch } : d))
-										}
-									/>
-									<div className="flex gap-2">
-										<Button
-											type="button"
-											disabled={busy}
-											onClick={() => void saveFieldEdit(field)}
-										>
-											Save field
-										</Button>
-										<button
-											type="button"
-											className="text-xs text-neutral-400"
-											onClick={() => {
-												setEditingId(null);
-												setEditDraft(null);
-											}}
-										>
-											Cancel
-										</button>
-									</div>
-								</div>
-							) : (
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<div className="min-w-0">
-										<p className="font-medium text-neutral-100">
-											<span className="mr-2 cursor-grab text-neutral-500" aria-hidden="true">⋮⋮</span>
-											{field.label}
-										</p>
-										<p className="text-xs text-neutral-500">
-											{field.key} · {field.fieldType}
-											{field.sectionKey ? ` · section ${field.sectionKey}` : ""}
-											{field.required ? " · required" : ""}
-											{field.helpText ? " · has help" : ""}
-											{" · "}
-											{visibilitySummary(field.visibilityRule)}
-										</p>
-									</div>
-									<div className="flex items-center gap-2">
-										<button
-											type="button"
-											disabled={busy}
-											onClick={() => startEdit(field)}
-											className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300"
-										>
-											Edit
-										</button>
-										<button
-											type="button"
-											disabled={busy || index === 0}
-											onClick={() => void move(field.id, -1)}
-											className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 disabled:opacity-40"
-										>
-											Up
-										</button>
-										<button
-											type="button"
-											disabled={busy || index === fields.length - 1}
-											onClick={() => void move(field.id, 1)}
-											className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 disabled:opacity-40"
-										>
-											Down
-										</button>
-										<button
-											type="button"
-											disabled={busy}
-											onClick={() => void removeField(field.id)}
-											className="rounded-md border border-red-900/60 px-2 py-1 text-xs text-red-300"
-										>
-											Remove
-										</button>
-									</div>
-								</div>
-							)}
-						</li>
-					))}
-				</ol>
-			</section>
-
-			<section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-				<h2 className="text-sm font-medium text-neutral-200">Add field</h2>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<label className="block text-xs text-neutral-400">
-						Key
-						<input
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							placeholder="duration_minutes"
-							value={draft.key}
-							onChange={(e) => setDraft((d) => ({ ...d, key: e.target.value }))}
-						/>
-					</label>
-					<label className="block text-xs text-neutral-400">
-						Label
-						<input
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							placeholder="Duration (minutes)"
-							value={draft.label}
-							onChange={(e) =>
-								setDraft((d) => ({ ...d, label: e.target.value }))
-							}
-						/>
-					</label>
-					<label className="block text-xs text-neutral-400">
-						Type
-						<select
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							value={draft.fieldType}
-							onChange={(e) =>
-								setDraft((d) => ({
-									...d,
-									fieldType: e.target.value as FieldType,
-								}))
-							}
-						>
-							{FIELD_TYPES.map((type) => (
-								<option key={type} value={type}>
-									{type}
-								</option>
-							))}
-						</select>
-					</label>
-					<label className="flex items-end gap-2 pb-2 text-xs text-neutral-300">
-						<input
-							type="checkbox"
-							checked={draft.required}
-							onChange={(e) =>
-								setDraft((d) => ({ ...d, required: e.target.checked }))
-							}
-						/>
-						Required
-					</label>
-					<SectionSelect
-						sections={sections}
-						value={draft.sectionKey}
-						onChange={(sectionKey) => setDraft((d) => ({ ...d, sectionKey }))}
-					/>
-					<label className="block text-xs text-neutral-400 sm:col-span-2">
-						Help text
-						<input
-							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
-							value={draft.helpText}
-							onChange={(e) =>
-								setDraft((d) => ({ ...d, helpText: e.target.value }))
-							}
-						/>
-					</label>
-					<div className="space-y-2 sm:col-span-2">
-						<VisibilityFields
-							op={draft.visibilityOp}
-							fieldKey={draft.visibilityFieldKey}
-							value={draft.visibilityValue}
-							values={draft.visibilityValues}
-							siblingKeys={visibilitySourceKeys}
-							onChange={(next) => setDraft((d) => ({ ...d, ...next }))}
-						/>
+			<AdminSectionShell
+				ariaLabel="Form builder sections"
+				mobileLabel="Form section"
+				sections={SECTIONS}
+				section={section}
+				onSectionChange={(next) => setSection(parseFormBuilderSection(next))}
+				notice={
+					error ? (
+						<p aria-live="polite" role="alert" className={noticeClasses("negative")}>
+							{error}
+						</p>
+					) : null
+				}
+			>
+				{section === "settings" ? (
+					<div className="space-y-3">
+						<label className="block text-xs text-neutral-400">
+							Title
+							<input
+								className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+								value={title}
+								onChange={(e) => setTitle(e.target.value)}
+							/>
+						</label>
+						<div className="grid gap-3 sm:grid-cols-2">
+							<label className="block text-xs text-neutral-400">
+								Minimum speakers
+								<input type="number" min={1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={minSpeakers} onChange={(e) => setMinSpeakers(Number(e.target.value))} />
+							</label>
+							<label className="block text-xs text-neutral-400">
+								Maximum speakers
+								<input type="number" min={minSpeakers || 1} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={maxSpeakers} onChange={(e) => setMaxSpeakers(Number(e.target.value))} />
+							</label>
+						</div>
+						<label className="block text-xs text-neutral-400">
+							Submission limit <span className="text-neutral-500">(0 means unlimited)</span>
+							<input type="number" min={0} className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={submissionLimit} onChange={(e) => setSubmissionLimit(Number(e.target.value))} />
+						</label>
+						<label className="flex items-center gap-2 text-xs text-neutral-300">
+							<input type="checkbox" checked={draftsEnabled} onChange={(e) => setDraftsEnabled(e.target.checked)} />
+							Allow submitters to save a draft and resume by email
+						</label>
+						<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
+							<summary className="cursor-pointer font-medium text-neutral-200">Email copy and reminders</summary>
+							<p className="mt-2 text-neutral-500">Welcome copy is used for draft resume mail, confirmation copy for email, and thank-you copy after submit. Use {"{{event_name}}"}, {"{{submitter_name}}"}, {"{{title}}"}, and {"{{resume_url}}"}. Empty values use the default copy.</p>
+							<label className="mt-3 block">Welcome copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={welcomeCopy} onChange={(e) => setWelcomeCopy(e.target.value)} /></label>
+							<label className="mt-3 block">Confirmation copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={confirmationCopy} onChange={(e) => setConfirmationCopy(e.target.value)} /></label>
+							<label className="mt-3 block">Speaker task reminder copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={reminderCopy} onChange={(e) => setReminderCopy(e.target.value)} /></label>
+							<label className="mt-3 block">Thank-you copy<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={3} value={thankYouCopy} onChange={(e) => setThankYouCopy(e.target.value)} /></label>
+						</details>
+						<label className="block text-xs text-neutral-400">
+							Description
+							<textarea
+								className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+								rows={3}
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+							/>
+						</label>
+						<label className="block text-xs text-neutral-400">
+							Status
+							<select
+								className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+								value={status}
+								onChange={(e) => setStatus(e.target.value)}
+							>
+								<option value="draft">draft</option>
+								<option value="open">open</option>
+								<option value="closed">closed</option>
+							</select>
+						</label>
+						<div className="grid gap-3 sm:grid-cols-2">
+							<label className="block text-xs text-neutral-400">
+								Opens at (local)
+								<input
+									type="datetime-local"
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									value={opensAtInput}
+									onChange={(e) => setOpensAtInput(e.target.value)}
+								/>
+							</label>
+							<label className="block text-xs text-neutral-400">
+								Closes at (local)
+								<input
+									type="datetime-local"
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									value={closesAtInput}
+									onChange={(e) => setClosesAtInput(e.target.value)}
+								/>
+							</label>
+						</div>
+						<p className="text-xs text-neutral-500">
+							Set a close date to enable draft reminder emails for unsubmitted drafts in the final 72 hours.
+						</p>
+						<details className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
+							<summary className="cursor-pointer font-medium text-neutral-200">Category routing</summary>
+							<p className="mt-2 text-neutral-500">Route a select answer to an organizer category. Leave both fields blank for no category.</p>
+							<label className="mt-3 block">Select field key
+								<select className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" value={categoryFieldKey} onChange={(e) => setCategoryFieldKey(e.target.value)}>
+									<option value="">No category routing</option>
+									{fields.filter((field) => field.fieldType === "select").map((field) => <option key={field.id} value={field.key}>{field.key}</option>)}
+								</select>
+							</label>
+							<label className="mt-3 block">Value = category
+								<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={4} placeholder={"stage = Stage\nworkshop = Workshop"} value={categoryMapText} onChange={(e) => setCategoryMapText(e.target.value)} />
+							</label>
+						</details>
+						<div>
+							<Button type="button" disabled={busy} onClick={() => void saveMeta()}>
+								Save settings
+							</Button>
+						</div>
 					</div>
-				</div>
-				{draft.fieldType === "select" || draft.fieldType === "multiselect" ? (
-					<OptionsEditor
-						options={draft.options}
-						onChange={(options) => setDraft((d) => ({ ...d, options }))}
-					/>
 				) : null}
-				<FieldConfigFields
-					fieldType={draft.fieldType}
-					draft={draft}
-					onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
-				/>
-				<Button type="button" disabled={busy} onClick={() => void addField()}>
-					Add field
-				</Button>
-			</section>
 
-			{error ? (
-				<p className="text-sm text-red-300" role="alert">
-					{error}
-				</p>
-			) : null}
+				{section === "sections" ? (
+					<div className="space-y-3">
+						<SectionsEditor sections={sections} onChange={setSections} />
+						<div>
+							<Button type="button" disabled={busy} onClick={() => void saveMeta()}>
+								Save sections
+							</Button>
+						</div>
+					</div>
+				) : null}
+
+				{section === "fields" ? (
+					<ol className="divide-y divide-neutral-800 border-y border-neutral-800">
+						{fields.map((field, index) => (
+							<li
+								key={field.id}
+								className={`py-3 ${dragId === field.id ? "bg-neutral-900/60" : ""}`}
+								draggable={!busy && editingId !== field.id}
+								onDragStart={() => setDragId(field.id)}
+								onDragEnd={() => setDragId(null)}
+								onDragOver={(event) => event.preventDefault()}
+								onDrop={() => dropField(field.id)}
+							>
+								{editingId === field.id && editDraft ? (
+									<div className="space-y-3">
+										<label className="block text-xs text-neutral-400">
+											Key
+											<input
+												className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 disabled:opacity-50"
+												value={editDraft.key}
+												disabled={!canEditKeys}
+												onChange={(e) =>
+													setEditDraft((d) =>
+														d ? { ...d, key: e.target.value } : d,
+													)
+												}
+											/>
+										</label>
+										{!canEditKeys ? (
+											<p className="text-xs text-neutral-500">Keys lock after the first submission to preserve answers.</p>
+										) : (
+											<p className="text-xs text-neutral-500">
+												Key <code className="text-neutral-400">{field.key}</code> · {field.fieldType}
+											</p>
+										)}
+										<label className="block text-xs text-neutral-400">
+											Label
+											<input
+												className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+												value={editDraft.label}
+												onChange={(e) =>
+													setEditDraft((d) =>
+														d ? { ...d, label: e.target.value } : d,
+													)
+												}
+											/>
+										</label>
+										<label className="block text-xs text-neutral-400">
+											Help text
+											<input
+												className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+												value={editDraft.helpText}
+												onChange={(e) =>
+													setEditDraft((d) =>
+														d ? { ...d, helpText: e.target.value } : d,
+													)
+												}
+											/>
+										</label>
+										<label className="flex items-center gap-2 text-xs text-neutral-300">
+											<input
+												type="checkbox"
+												checked={editDraft.required}
+												onChange={(e) =>
+													setEditDraft((d) =>
+														d ? { ...d, required: e.target.checked } : d,
+													)
+												}
+											/>
+											Required
+										</label>
+										<SectionSelect
+											sections={sections}
+											value={editDraft.sectionKey}
+											onChange={(sectionKey) =>
+												setEditDraft((d) => (d ? { ...d, sectionKey } : d))
+											}
+										/>
+										<VisibilityFields
+											op={editDraft.visibilityOp}
+											fieldKey={editDraft.visibilityFieldKey}
+											value={editDraft.visibilityValue}
+											values={editDraft.visibilityValues}
+											siblingKeys={fields
+												.filter((f) => f.id !== field.id && f.fieldType === "select")
+												.map((f) => f.key)}
+											onChange={(next) =>
+												setEditDraft((d) => (d ? { ...d, ...next } : d))
+											}
+										/>
+										{field.fieldType === "select" ||
+										field.fieldType === "multiselect" ? (
+											<OptionsEditor
+												options={editDraft.options}
+												onChange={(options) =>
+													setEditDraft((d) => (d ? { ...d, options } : d))
+												}
+											/>
+										) : null}
+										<FieldConfigFields
+											fieldType={field.fieldType}
+											draft={editDraft}
+											onChange={(patch) =>
+												setEditDraft((d) => (d ? { ...d, ...patch } : d))
+											}
+										/>
+										<div className="flex gap-2">
+											<Button
+												type="button"
+												disabled={busy}
+												onClick={() => void saveFieldEdit(field)}
+											>
+												Save field
+											</Button>
+											<button
+												type="button"
+												className="text-xs text-neutral-400"
+												onClick={() => {
+													setEditingId(null);
+													setEditDraft(null);
+												}}
+											>
+												Cancel
+											</button>
+										</div>
+									</div>
+								) : (
+									<div className="flex flex-wrap items-center justify-between gap-3">
+										<div className="min-w-0">
+											<p className="font-medium text-neutral-100">
+												<span className="mr-2 cursor-grab text-neutral-500" aria-hidden="true">⋮⋮</span>
+												{field.label}
+											</p>
+											<p className="text-xs text-neutral-500">
+												{field.key} · {field.fieldType}
+												{field.sectionKey ? ` · section ${field.sectionKey}` : ""}
+												{field.required ? " · required" : ""}
+												{field.helpText ? " · has help" : ""}
+												{" · "}
+												{visibilitySummary(field.visibilityRule)}
+											</p>
+										</div>
+										<div className="flex items-center gap-2">
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => startEdit(field)}
+												className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300"
+											>
+												Edit
+											</button>
+											<button
+												type="button"
+												disabled={busy || index === 0}
+												onClick={() => void move(field.id, -1)}
+												className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 disabled:opacity-40"
+											>
+												Up
+											</button>
+											<button
+												type="button"
+												disabled={busy || index === fields.length - 1}
+												onClick={() => void move(field.id, 1)}
+												className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 disabled:opacity-40"
+											>
+												Down
+											</button>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => void removeField(field.id)}
+												className="rounded-md border border-red-900/60 px-2 py-1 text-xs text-red-300"
+											>
+												Remove
+											</button>
+										</div>
+									</div>
+								)}
+							</li>
+						))}
+					</ol>
+				) : null}
+
+				{section === "add-field" ? (
+					<div className="space-y-3">
+						<div className="grid gap-3 sm:grid-cols-2">
+							<label className="block text-xs text-neutral-400">
+								Key
+								<input
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									placeholder="duration_minutes"
+									value={draft.key}
+									onChange={(e) => setDraft((d) => ({ ...d, key: e.target.value }))}
+								/>
+							</label>
+							<label className="block text-xs text-neutral-400">
+								Label
+								<input
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									placeholder="Duration (minutes)"
+									value={draft.label}
+									onChange={(e) =>
+										setDraft((d) => ({ ...d, label: e.target.value }))
+									}
+								/>
+							</label>
+							<label className="block text-xs text-neutral-400">
+								Type
+								<select
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									value={draft.fieldType}
+									onChange={(e) =>
+										setDraft((d) => ({
+											...d,
+											fieldType: e.target.value as FieldType,
+										}))
+									}
+								>
+									{FIELD_TYPES.map((type) => (
+										<option key={type} value={type}>
+											{type}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="flex items-end gap-2 pb-2 text-xs text-neutral-300">
+								<input
+									type="checkbox"
+									checked={draft.required}
+									onChange={(e) =>
+										setDraft((d) => ({ ...d, required: e.target.checked }))
+									}
+								/>
+								Required
+							</label>
+							<SectionSelect
+								sections={sections}
+								value={draft.sectionKey}
+								onChange={(sectionKey) => setDraft((d) => ({ ...d, sectionKey }))}
+							/>
+							<label className="block text-xs text-neutral-400 sm:col-span-2">
+								Help text
+								<input
+									className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+									value={draft.helpText}
+									onChange={(e) =>
+										setDraft((d) => ({ ...d, helpText: e.target.value }))
+									}
+								/>
+							</label>
+							<div className="space-y-2 sm:col-span-2">
+								<VisibilityFields
+									op={draft.visibilityOp}
+									fieldKey={draft.visibilityFieldKey}
+									value={draft.visibilityValue}
+									values={draft.visibilityValues}
+									siblingKeys={visibilitySourceKeys}
+									onChange={(next) => setDraft((d) => ({ ...d, ...next }))}
+								/>
+							</div>
+						</div>
+						{draft.fieldType === "select" || draft.fieldType === "multiselect" ? (
+							<OptionsEditor
+								options={draft.options}
+								onChange={(options) => setDraft((d) => ({ ...d, options }))}
+							/>
+						) : null}
+						<FieldConfigFields
+							fieldType={draft.fieldType}
+							draft={draft}
+							onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+						/>
+						<div>
+							<Button type="button" disabled={busy} onClick={() => void addField()}>
+								Add field
+							</Button>
+						</div>
+					</div>
+				) : null}
+			</AdminSectionShell>
 		</div>
 	);
 }
@@ -1227,7 +1296,7 @@ function SectionsEditor({
 	return (
 		<div className="space-y-2">
 			{sections.map((section, index) => (
-				<div key={section.key || index} className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-950/40 p-3 sm:grid-cols-2">
+				<div key={section.key || index} className="grid gap-2 border-b border-neutral-800 py-3 sm:grid-cols-2">
 					<label className="block text-xs text-neutral-400">
 						Key
 						<input
