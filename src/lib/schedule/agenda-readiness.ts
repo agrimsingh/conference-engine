@@ -1,9 +1,14 @@
-import { detectConflicts, type ScheduleInterval } from "@/lib/domain/schedule";
+import {
+	detectConflicts,
+	isPublicAgendaVisibility,
+	type ScheduleInterval,
+} from "@/lib/domain/schedule";
 
 export type AgendaReadinessSession = {
 	id: string;
 	status: string;
 	contentStatus?: string | null;
+	agendaVisibility?: string | null;
 	speakerKeys: readonly string[];
 	slot: {
 		roomId: string | null;
@@ -80,14 +85,22 @@ export function buildAgendaReadiness(
 	const programme = sessions.filter(
 		(session) => isProgrammeSession(session) && session.status !== "withdrawn",
 	);
+	const publicProgramme = programme.filter((session) =>
+		isPublicAgendaVisibility(session.agendaVisibility),
+	);
 	const acceptedCount = programme.length;
-	const approvedCount = programme.filter(isContentApproved).length;
+	const publicCount = publicProgramme.length;
+	const approvedCount = publicProgramme.filter(isContentApproved).length;
 	const scheduledCount = programme.filter(isScheduledOnAgenda).length;
 	const conflictCount = countConflictedSessions(programme);
-	const publishedCount = programme.filter((session) => session.status === "published").length;
+	const publishedCount = publicProgramme.filter((session) => session.status === "published").length;
 
 	const base = `/admin/events/${options.eventSlug}`;
 	const hasProgramme = acceptedCount > 0;
+	const publicApprovalComplete =
+		hasProgramme && (publicCount === 0 || approvedCount === publicCount);
+	const publishedComplete =
+		hasProgramme && (publicCount === 0 || publishedCount === publicCount);
 
 	return [
 		{
@@ -102,7 +115,7 @@ export function buildAgendaReadiness(
 			label: "Public approval",
 			count: approvedCount,
 			href: `${base}/content`,
-			complete: hasProgramme && approvedCount === acceptedCount,
+			complete: publicApprovalComplete,
 		},
 		{
 			key: "scheduled",
@@ -123,7 +136,7 @@ export function buildAgendaReadiness(
 			label: "Published",
 			count: publishedCount,
 			href: "#publish",
-			complete: hasProgramme && publishedCount === acceptedCount,
+			complete: publishedComplete,
 		},
 	];
 }

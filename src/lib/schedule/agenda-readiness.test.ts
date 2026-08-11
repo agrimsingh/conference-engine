@@ -177,4 +177,70 @@ describe("buildAgendaReadiness", () => {
 		expect(steps.every((step) => step.complete)).toBe(true);
 		expect(steps.map((step) => step.count)).toEqual([2, 2, 2, 0, 2]);
 	});
+
+	it("scores Public approval and Published against public-agenda sessions only", () => {
+		const rows = [
+			session({
+				id: "talk",
+				status: "published",
+				contentStatus: "approved",
+				agendaVisibility: "public",
+				slot: slotA,
+			}),
+			session({
+				id: "staff-lunch",
+				status: "scheduled",
+				contentStatus: "draft",
+				agendaVisibility: "private",
+				slot: {
+					roomId: "r2",
+					roomName: "Side",
+					startsAtMs: 1_000,
+					endsAtMs: 2_000,
+				},
+			}),
+		];
+		const steps = buildAgendaReadiness(rows, { eventSlug: "aie" });
+		expect(steps.find((step) => step.key === "accepted")).toMatchObject({
+			count: 2,
+			complete: true,
+		});
+		expect(steps.find((step) => step.key === "scheduled")).toMatchObject({
+			count: 2,
+			complete: true,
+		});
+		expect(steps.find((step) => step.key === "public_approval")).toMatchObject({
+			count: 1,
+			complete: true,
+		});
+		expect(steps.find((step) => step.key === "published")).toMatchObject({
+			count: 1,
+			complete: true,
+		});
+	});
+
+	it("marks Public approval and Published complete when only private service blocks exist", () => {
+		const rows = [
+			session({
+				id: "break",
+				status: "scheduled",
+				contentStatus: "draft",
+				agendaVisibility: "private",
+				slot: slotA,
+			}),
+		];
+		const steps = buildAgendaReadiness(rows, { eventSlug: "aie" });
+		expect(steps.find((step) => step.key === "accepted")).toMatchObject({
+			count: 1,
+			complete: true,
+		});
+		expect(steps.find((step) => step.key === "public_approval")).toMatchObject({
+			count: 0,
+			complete: true,
+		});
+		expect(steps.find((step) => step.key === "published")).toMatchObject({
+			count: 0,
+			complete: true,
+		});
+	});
 });

@@ -276,6 +276,71 @@ describe("loadCockpitSnapshot", () => {
 		expect(snapshot.reviewedUndecidedTotal).toBe(1);
 	});
 
+	it("excludes private-agenda scheduled blocks from unpublished publish gates", async () => {
+		const eventId = "cockpit-private-agenda";
+		await seedBase(eventId);
+
+		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO submissions (id, form_id, event_id, status, agenda_visibility, answers_json, submitter_name, submitter_email, created_at, updated_at)
+         VALUES (?, ?, ?, 'scheduled', 'public', ?, 'Public', 'public@test.invalid', ?, ?)`,
+			).bind(
+				`${eventId}-public`,
+				`${eventId}-form`,
+				eventId,
+				JSON.stringify({ title: "Needs publish" }),
+				now,
+				now,
+			),
+			env.DB.prepare(
+				`INSERT INTO submissions (id, form_id, event_id, status, agenda_visibility, item_kind, answers_json, submitter_name, submitter_email, created_at, updated_at)
+         VALUES (?, ?, ?, 'scheduled', 'private', 'service', ?, NULL, NULL, ?, ?)`,
+			).bind(
+				`${eventId}-private`,
+				`${eventId}-form`,
+				eventId,
+				JSON.stringify({ title: "Staff lunch", duration_minutes: 45 }),
+				now,
+				now,
+			),
+			env.DB.prepare(
+				`INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at)
+         VALUES (?, ?, ?, 'Main', ?, ?, ?, ?, ?)`,
+			).bind(
+				`${eventId}-slot-public`,
+				eventId,
+				`${eventId}-public`,
+				now + 3_600_000,
+				now + 7_200_000,
+				`${eventId}-ics-public`,
+				now,
+				now,
+			),
+			env.DB.prepare(
+				`INSERT INTO agenda_slots (id, event_id, submission_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at)
+         VALUES (?, ?, ?, 'Foyer', ?, ?, ?, ?, ?)`,
+			).bind(
+				`${eventId}-slot-private`,
+				eventId,
+				`${eventId}-private`,
+				now + 3_600_000,
+				now + 6_300_000,
+				`${eventId}-ics-private`,
+				now,
+				now,
+			),
+		]);
+
+		const event = await getEventById(env.DB, eventId);
+		expect(event).not.toBeNull();
+		const snapshot = await loadCockpitSnapshot(env.DB, event!);
+
+		expect(snapshot.scheduledUnpublished.map((row) => row.submissionId)).toEqual([
+			`${eventId}-public`,
+		]);
+		expect(snapshot.scheduledUnpublishedTotal).toBe(1);
+	});
+
 	it("caps blocker lists while reporting full totals", async () => {
 		const eventId = "cockpit-cap";
 		await seedBase(eventId);

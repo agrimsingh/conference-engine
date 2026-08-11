@@ -1378,7 +1378,7 @@ export function ScheduleBoard({
 									<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => mutateAction(session.id, "unplace")}>Unschedule</button>
 									{session.status === "published" ? (
 										<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => mutateAction(session.id, "unpublish")}>Unpublish</button>
-									) : session.status === "scheduled" ? (
+									) : publishableOnDay([session]).length > 0 ? (
 										<button type="button" className={buttonClasses("secondary", "sm")} onClick={() => requestPublish([session])}>Publish</button>
 									) : null}
 								</div>
