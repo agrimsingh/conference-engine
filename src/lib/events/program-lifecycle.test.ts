@@ -214,6 +214,31 @@ describe("programLifecycle", () => {
 		expect(programLifecycleCurrent(steps)).toBeNull();
 	});
 
+	it("describes remaining publish work as unpublished, not agenda-private", () => {
+		const steps = programLifecycle(
+			input({
+				roomsCount: 1,
+				tracksCount: 1,
+				formsReady: true,
+				cfpOpen: true,
+				submittedCount: 2,
+				reviewPlanReady: true,
+				pendingReviewCount: 0,
+				reviewedUndecided: 0,
+				toNotifyRemaining: 0,
+				acceptedCount: 2,
+				outstandingSpeakerTasks: 0,
+				acceptedUnscheduled: 0,
+				scheduledUnpublished: 2,
+				publishedCount: 0,
+			}),
+		);
+		const publish = steps.find((step) => step.key === "publish");
+		expect(publish?.status).toBe("current");
+		expect(publish?.detail).toBe("2 scheduled sessions still unpublished — publish when ready.");
+		expect(publish?.detail).not.toMatch(/private/);
+	});
+
 	it("does not peek: later steps stay blocked even when their predicates are already true", () => {
 		const steps = programLifecycle(
 			input({

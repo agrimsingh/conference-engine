@@ -1765,7 +1765,7 @@ export async function listScheduledUnpublishedSubmissions(
 	limit = COCKPIT_BLOCKER_LIST_LIMIT,
 ): Promise<CockpitSqlList<CockpitSubmissionSqlRow>> {
 	const bounded = cockpitListLimit(limit);
-	const where = `s.event_id = ? AND s.status = 'scheduled'`;
+	const where = `s.event_id = ? AND s.status = 'scheduled' AND COALESCE(s.agenda_visibility, 'public') = 'public'`;
 	const [result, total] = await Promise.all([
 		db
 			.prepare(

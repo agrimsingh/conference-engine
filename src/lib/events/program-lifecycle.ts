@@ -201,7 +201,7 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
 				return `${plural(input.publishedCount, "session")} live on the public schedule.`;
 			}
 			if (input.scheduledUnpublished > 0) {
-				return `${plural(input.scheduledUnpublished, "scheduled session")} still private — publish when ready.`;
+				return `${plural(input.scheduledUnpublished, "scheduled session")} still unpublished — publish when ready.`;
 			}
 			return "Publish scheduled sessions so they appear on the public schedule.";
 		},
