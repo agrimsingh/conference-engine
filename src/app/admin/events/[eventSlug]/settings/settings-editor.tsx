@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { TimezoneSelect } from "@/components/timezone-select";
-import { buttonClasses, INPUT_CLASSES, noticeClasses } from "@/components/ui";
+import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses } from "@/components/ui";
 import type { EventConfiguration } from "@/lib/events/configuration";
 import type { TaskFormField, TaskFormFieldType } from "@/lib/speakers/task-forms";
 import { ApiTokensPanel } from "@/app/admin/events/[eventSlug]/team/api-tokens-panel";
@@ -371,7 +371,7 @@ export function SettingsEditor({
 										e.currentTarget.reset();
 									}}
 								>
-									<Field label="New room name" name="name" />
+									<Field id="settings-room-name" label="New room name" name="name" />
 									<button disabled={pending} className={buttonClasses("secondary")}>
 										Add room
 									</button>
@@ -379,6 +379,24 @@ export function SettingsEditor({
 								<Rows
 									rows={configuration.rooms}
 									pending={pending}
+									empty={
+										<EmptyState
+											title="No rooms yet"
+											description="Rooms appear as schedule columns. Add one with the form above."
+										>
+											<p className="mt-4">
+												<button
+													type="button"
+													className={buttonClasses("primary")}
+													onClick={() =>
+														document.getElementById("settings-room-name")?.focus()
+													}
+												>
+													Add a room
+												</button>
+											</p>
+										</EmptyState>
+									}
 									onMove={(index, delta) =>
 										move(
 											"rooms",
@@ -408,7 +426,7 @@ export function SettingsEditor({
 										e.currentTarget.reset();
 									}}
 								>
-									<Field label="Track name" name="name" />
+									<Field id="settings-track-name" label="Track name" name="name" />
 									<Field
 										label="Track slug"
 										name="slug"
@@ -422,6 +440,24 @@ export function SettingsEditor({
 								<Rows
 									rows={configuration.tracks}
 									pending={pending}
+									empty={
+										<EmptyState
+											title="No tracks yet"
+											description="Tracks group sessions on the agenda. Add one with the form above."
+										>
+											<p className="mt-4">
+												<button
+													type="button"
+													className={buttonClasses("primary")}
+													onClick={() =>
+														document.getElementById("settings-track-name")?.focus()
+													}
+												>
+													Add a track
+												</button>
+											</p>
+										</EmptyState>
+									}
 									onMove={(index, delta) =>
 										move(
 											"tracks",
@@ -469,6 +505,7 @@ export function SettingsEditor({
 										Add a task template
 									</p>
 									<Field
+										id="settings-task-key"
 										label="Task key"
 										name="key"
 										placeholder="travel-details"
@@ -498,6 +535,24 @@ export function SettingsEditor({
 								<Rows
 									rows={configuration.tasks}
 									pending={pending}
+									empty={
+										<EmptyState
+											title="No speaker tasks yet"
+											description="Templates are copied onto accepted speakers. Add one with the form above."
+										>
+											<p className="mt-4">
+												<button
+													type="button"
+													className={buttonClasses("primary")}
+													onClick={() =>
+														document.getElementById("settings-task-key")?.focus()
+													}
+												>
+													Add a task template
+												</button>
+											</p>
+										</EmptyState>
+									}
 									onMove={(index, delta) =>
 										move(
 											"tasks",
@@ -578,6 +633,7 @@ function Field({
 function Rows<T extends { id: string }>({
 	rows,
 	pending,
+	empty,
 	onMove,
 	onSave,
 	onDelete,
@@ -585,13 +641,21 @@ function Rows<T extends { id: string }>({
 }: {
 	rows: T[];
 	pending: boolean;
+	empty?: ReactNode;
 	onMove: (index: number, delta: number) => void;
 	onSave: (id: string, data: Record<string, string>) => Promise<boolean>;
 	onDelete: (id: string) => Promise<boolean>;
 	render: (row: T) => ReactNode;
 }) {
 	if (rows.length === 0) {
-		return <p className="text-sm text-neutral-500">Nothing here yet.</p>;
+		return (
+			empty ?? (
+				<EmptyState
+					title="Nothing here yet"
+					description="Add an item with the form above."
+				/>
+			)
+		);
 	}
 
 	return (

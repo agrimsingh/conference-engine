@@ -264,7 +264,7 @@ export async function notifyCalendarCancellation(
 		const email = await sendTemplatedEmail(db, {
 			eventId: event.id, submissionId: submission.id, templateKey: "calendar_invite", toEmail: recipient.email,
 			context: { eventName: event.name, submitterName: recipient.name || "there", title, roomName: args.roomName, startsAtIso: new Date(args.startsAtMs).toISOString(), endsAtIso: new Date(args.endsAtMs).toISOString() },
-			override: { subject: `Cancelled: ${title} @ ${event.name}`, text: `Hi ${recipient.name || "there"},\n\nThe scheduled session \"${title}\" at ${event.name} has been cancelled. A calendar cancellation is attached.\n\n— conference-engine` },
+			override: { subject: `Cancelled: ${title} @ ${event.name}`, text: `Hey ${recipient.name || "there"},\n\nThe scheduled session \"${title}\" at ${event.name} has been cancelled. A calendar cancellation is attached.\n\nIf anything looks off, just reply to this email.` },
 			attachments: [{ filename: "cancel.ics", content: icsBytes, contentType: "text/calendar; method=CANCEL; charset=utf-8" }],
 			force: true, runtime: args.runtime,
 		});

@@ -1,0 +1,13 @@
+
+> conference-engine@0.1.0 test:unit
+> vitest run --config vitest.config.mts src/lib/sessions/service-blocks.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/Untitled
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  09:56:00
+   Duration  363ms (transform 132ms, setup 0ms, import 169ms, tests 4ms, environment 0ms)
+

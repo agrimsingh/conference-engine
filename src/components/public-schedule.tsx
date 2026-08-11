@@ -10,7 +10,7 @@ import {
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
 import { getPublicEmbedBySlug } from "@/lib/embeds/embed";
-import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/public-format";
 import {
 	publicScheduleTrack,
@@ -245,7 +245,9 @@ export async function PublicSchedule({
 	const roomFilter = roomParam?.trim() || "all";
 
 	const publicSlots = slots.filter((slot) =>
-		isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1,
+		isPublicScheduleStatus(slot.submission_status) &&
+		isPublicAgendaVisibility(slot.agenda_visibility) &&
+		slot.content_approved === 1,
 	);
 
 	const enriched: EnrichedSlot[] = [];

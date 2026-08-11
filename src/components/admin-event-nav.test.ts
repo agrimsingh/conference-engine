@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ADMIN_EVENT_GROUPS,
 	ADMIN_EVENT_LINKS,
+	SPEAKER_PORTAL_HREF,
 	adminEventPath,
 } from "./admin-event-nav";
 
@@ -14,6 +15,9 @@ describe("AdminEventNav paths", () => {
 	it("exposes the speaker roster under the event admin chrome", () => {
 		expect(ADMIN_EVENT_LINKS).toContainEqual({ segment: "speakers", label: "Speakers" });
 		expect(adminEventPath("ai-summit", "speakers")).toBe("/admin/events/ai-summit/speakers");
+		const speakersGroup = ADMIN_EVENT_GROUPS.find((group) => group.label === "Speakers");
+		expect(speakersGroup?.links.map((link) => link.segment)).toContain("speakers");
+		expect(SPEAKER_PORTAL_HREF).toBe("/portal");
 	});
 
 	it("exposes the embed builder under the event admin chrome", () => {

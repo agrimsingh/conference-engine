@@ -55,8 +55,12 @@ export function UnplacedDraggableChip({ session, selected, onSelect }: UnplacedC
 				aria-pressed={selected}
 			>
 				<p className="font-medium">{session.title}</p>
+				{session.itemKind === "service" ? (
+					<p className="mt-0.5 text-[11px] uppercase tracking-wide text-neutral-500">Service</p>
+				) : null}
 				<p className="mt-0.5 text-xs opacity-80">
 					{session.durationMinutes}m · {session.status}
+					{session.agendaVisibility === "private" ? " · private" : ""}
 					{session.speakerLabels.length ? ` · ${session.speakerLabels.join(", ")}` : ""}
 				</p>
 			</button>
@@ -112,6 +116,9 @@ export function PlacedDraggableCard({
 			className="m-0.5 box-border w-full cursor-pointer overflow-hidden rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-100 active:cursor-grabbing"
 		>
 			<p className="line-clamp-3 font-medium leading-snug">{session.title}</p>
+			{session.itemKind === "service" ? (
+				<p className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Service</p>
+			) : null}
 			{speakers ? (
 				<p className="mt-0.5 truncate text-[11px] text-neutral-300">{speakers}</p>
 			) : null}

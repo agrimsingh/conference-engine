@@ -19,9 +19,11 @@ import {
 import {
 	AIE_CATEGORY_LABELS,
 	UNCATEGORIZED_CATEGORY,
+	bulkNotifyTemplateSelection,
 	displayCategory,
 	isSubmissionQueueTab,
 	renderMessageTemplate,
+	SUBMISSION_QUEUE_COACHING,
 	SUBMISSION_QUEUE_LABELS,
 	SUBMISSION_QUEUE_TABS,
 	type SubmissionQueueTab,
@@ -193,11 +195,32 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 		return queryString ? `${base}?${queryString}` : base;
 	};
 
-	const notifyPreview = renderMessageTemplate("acceptance", {
-		eventName: event.name,
-		submitterName: "there",
-		title: "(untitled)",
+	const notifyTemplate = bulkNotifyTemplateSelection(
+		pageRows.map((row) => row.status),
+	);
+	const notifyPreview =
+		notifyTemplate.kind === "uniform"
+			? renderMessageTemplate(notifyTemplate.templateKey, {
+					eventName: event.name,
+					submitterName: "there",
+					title: "(untitled)",
+				})
+			: { subject: "", text: "" };
+	const notifyRecipients = pageRows.map((row) => {
+		const answers = parseSubmissionAnswers(row.answers_json);
+		const title =
+			typeof answers.title === "string" && answers.title.trim()
+				? answers.title.trim()
+				: "(untitled)";
+		return {
+			id: row.id,
+			title,
+			speakers: (speakersBySubmission.get(row.id) ?? []).map(
+				(speaker) => speaker.name,
+			),
+		};
 	});
+	const queueCoaching = SUBMISSION_QUEUE_COACHING[queue];
 
 	return (
 		<div className="min-h-dvh bg-neutral-950 text-neutral-200">
@@ -208,7 +231,7 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					title={event.name}
 					description={
 						<>
-							Decide first, notify later. Queue shows{" "}
+							{queueCoaching ?? "Decide first, notify later."} Queue shows{" "}
 							{pageResult.total}
 							{queue !== "all" ? ` of ${facets.total}` : ""} in{" "}
 							{SUBMISSION_QUEUE_LABELS[queue].toLowerCase()}.{" "}
@@ -323,12 +346,13 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 					</div>
 				</PageHeader>
 
-				{queue === "to_notify" && pageSubmissionIds.length > 0 ? (
+				{queue === "to_notify" && notifyRecipients.length > 0 ? (
 					<BulkNotifyBar
 						eventSlug={event.slug}
-						submissionIds={pageSubmissionIds}
+						recipients={notifyRecipients}
 						defaultSubject={notifyPreview.subject}
 						defaultText={notifyPreview.text}
+						mixedOutcomes={notifyTemplate.kind === "mixed"}
 					/>
 				) : null}
 
@@ -434,4 +458,16 @@ export default async function AdminSubmissionsPage({ params, searchParams }: Pro
 			</main>
 		</div>
 	);
+}
+
+function parseSubmissionAnswers(raw: string): Record<string, unknown> {
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+			return parsed as Record<string, unknown>;
+		}
+	} catch {
+		return {};
+	}
+	return {};
 }

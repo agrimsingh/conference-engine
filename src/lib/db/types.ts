@@ -77,6 +77,9 @@ export type FormFieldRow = {
 	section_key?: string | null;
 };
 
+export type SubmissionItemKind = "talk" | "service";
+export type AgendaVisibility = "public" | "private";
+
 export type SubmissionRow = {
 	id: string;
 	form_id: string;
@@ -99,6 +102,8 @@ export type SubmissionRow = {
 	video_url?: string | null;
 	google_doc_url?: string | null;
 	supporting_url?: string | null;
+	item_kind?: SubmissionItemKind;
+	agenda_visibility?: AgendaVisibility;
 	created_at: number;
 	updated_at: number;
 	submitted_at: number | null;
@@ -375,6 +380,8 @@ export type AgendaSlotWithSubmissionRow = AgendaSlotRow & {
 	video_url?: string | null;
 	google_doc_url?: string | null;
 	supporting_url?: string | null;
+	item_kind?: SubmissionItemKind;
+	agenda_visibility?: AgendaVisibility;
 };
 
 export type ReviewAssignmentRow = {

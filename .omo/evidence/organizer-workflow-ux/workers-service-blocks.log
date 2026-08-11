@@ -1,0 +1,14 @@
+
+> conference-engine@0.1.0 test:workers
+> vitest run --config vitest.workers.config.mts test/workers/service-blocks.test.ts
+
+
+ RUN  v4.1.10 /Users/agrim/Downloads/ai fun projects/conference-engine/Untitled
+
+Using secrets defined in .dev.vars
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  09:47:28
+   Duration  1.92s (transform 217ms, setup 608ms, import 159ms, tests 97ms, environment 0ms)
+

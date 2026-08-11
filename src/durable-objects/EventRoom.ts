@@ -15,6 +15,7 @@ import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 import { formatClock } from "@/lib/schedule/time";
 import { publicationSnapshotFromAnswers, restoreSessionRevision, setSessionContentStatus, updateSessionContent, type ContentStatus } from "@/lib/content/revisions";
+import { assertCanPublishAgendaVisibility } from "@/lib/sessions/service-blocks";
 
 type ScheduleInput = { eventId: string; submissionId: string; startsAtMs: number; endsAtMs: number; roomName: string; trackId?: string | null };
 type BulkPublicationInput = { eventId: string; submissionIds: string[]; action: "publish" | "unpublish"; approveContent: boolean };
@@ -23,6 +24,7 @@ type PublicationRow = {
 	status: string;
 	content_status: string;
 	answers_json: string;
+	agenda_visibility: string | null;
 	current_revision_id: string | null;
 	approved_revision_id: string | null;
 	slot_id: string | null;
@@ -244,7 +246,7 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 	}
 
 	private async scheduleAction(eventId: string, submissionId: string, action: ScheduleAction, approveContent = false): Promise<{ ok: true; status: string; approved?: number; slot?: Record<string, unknown> } | { ok: false; error: string; status: number; approvalRequired?: boolean }> {
-		const submission = await this.env.DB.prepare(`SELECT s.id, s.event_id, s.status, s.content_status, s.answers_json,
+		const submission = await this.env.DB.prepare(`SELECT s.id, s.event_id, s.status, s.content_status, s.answers_json, s.agenda_visibility,
 		       h.current_revision_id, h.approved_revision_id, a.id AS slot_id
 		  FROM submissions s
 		  LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id
@@ -273,6 +275,8 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		}
 		const target = action === "publish" ? "published" : "scheduled";
 		if (action === "publish") {
+			const visibility = assertCanPublishAgendaVisibility(submission.agenda_visibility);
+			if (!visibility.ok) return { ok: false, error: visibility.error, status: 409 };
 			if (!submission.slot_id) return { ok: false, error: "Place this session on the agenda before publishing", status: 409 };
 			if ((submission.content_status !== "approved" || !submission.approved_revision_id || submission.current_revision_id !== submission.approved_revision_id) && !approveContent) {
 				return { ok: false, error: "Approval required. Confirm ‘Approve current content & publish’ to pin the current revision and make this session public.", status: 409, approvalRequired: true };
@@ -303,7 +307,7 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		const event = await this.env.DB.prepare("SELECT mode FROM events WHERE id = ?").bind(input.eventId).first<{ mode: "live" | "demo" }>();
 		if (!event) return { ok: false, error: "Event not found", status: 404 };
 		if (event.mode === "demo") return { ok: false, error: "This schedule is read-only", status: 403 };
-		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, s.answers_json,
+		const rows = await this.env.DB.prepare(`SELECT s.id, s.status, s.content_status, s.answers_json, s.agenda_visibility,
 		       h.current_revision_id, h.approved_revision_id, a.id AS slot_id
 		  FROM submissions s
 		  LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
@@ -312,6 +316,11 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 			.bind(input.eventId, JSON.stringify(ids)).all<PublicationRow>();
 		if (rows.results.length !== ids.length) return { ok: false, error: "One or more sessions are outside this event or no longer exist", status: 404 };
 		if (input.action === "publish") {
+			const privateRow = rows.results.find((row) => !assertCanPublishAgendaVisibility(row.agenda_visibility).ok);
+			if (privateRow) {
+				const visibility = assertCanPublishAgendaVisibility(privateRow.agenda_visibility);
+				return { ok: false, error: visibility.ok ? "Private service blocks stay off the public schedule." : visibility.error, status: 409 };
+			}
 			if (rows.results.some((row) => row.status !== "scheduled" || !row.slot_id)) return { ok: false, error: "Only scheduled sessions with an agenda slot can be published", status: 409 };
 			if (rows.results.some((row) => row.content_status !== "approved" || !row.approved_revision_id || row.current_revision_id !== row.approved_revision_id) && !input.approveContent) {
 				return { ok: false, error: "Approval required. Confirm ‘Approve current content & publish’ to pin every selected revision before publication.", status: 409, approvalRequired: true };

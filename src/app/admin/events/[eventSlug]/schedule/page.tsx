@@ -1,6 +1,7 @@
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, buttonClasses } from "@/components/ui";
+import { emptyNextActionHref } from "@/lib/admin/empty-next-action";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -22,6 +23,7 @@ import {
 	parseDayKey,
 } from "@/lib/schedule/time";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import type { ScheduleSession } from "./schedule-board";
 
 const ScheduleBoard = dynamic(
@@ -89,9 +91,15 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 			: null;
 		sessions.push({
 			id: row.id,
-		title: titleFromAnswers(answers),
-		category: displayCategory(row.category),
+			title: titleFromAnswers(answers),
+			category: displayCategory(row.category),
 			status: row.status,
+			contentStatus:
+				row.content_status === "draft" ||
+				row.content_status === "in_review" ||
+				row.content_status === "approved"
+					? row.content_status
+					: null,
 			submitterName: row.submitter_name,
 			// Placed sessions must size from the agenda slot, not CFP answers
 			// (answers often default to 30m while the slot is 90m).
@@ -104,6 +112,8 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 					? `${speaker.name || speaker.email} (pending)`
 					: speaker.name || speaker.email,
 			),
+			itemKind: row.item_kind === "service" ? "service" : "talk",
+			agendaVisibility: row.agenda_visibility === "private" ? "private" : "public",
 			slot: slot
 				? {
 						roomId: slot.room_id,
@@ -130,11 +140,20 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 					description="Place or drag accepted talks onto the grid. Room, speaker, and configured track conflicts are blocked and shown loudly."
 				/>
 
-				{sessions.length === 0 ? (
+				{rooms.length === 0 ? (
 					<EmptyState
-						title="Nothing to schedule yet"
-						description="Accept a submission first, then come back to place it on the grid."
-					/>
+						title="No rooms yet"
+						description="Add at least one room before placing talks on the grid. Rooms become schedule columns."
+					>
+						<p className="mt-4">
+							<Link
+								href={emptyNextActionHref(event.slug, "settings.rooms")}
+								className={buttonClasses("primary")}
+							>
+								Add rooms
+							</Link>
+						</p>
+					</EmptyState>
 				) : (
 					<ScheduleBoard
 						eventSlug={event.slug}
@@ -149,6 +168,11 @@ export default async function AdminSchedulePage({ params, searchParams }: Props)
 						dayEndMinutes={event.day_end_minutes ?? 18 * 60}
 						slotDurationMinutes={event.slot_duration_minutes ?? 30}
 						sessions={sessions}
+						emptyProgrammeHref={
+							sessions.length === 0
+								? emptyNextActionHref(event.slug, "submissions")
+								: null
+						}
 					/>
 				)}
 			</main>

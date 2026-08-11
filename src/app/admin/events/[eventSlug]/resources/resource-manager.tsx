@@ -2,8 +2,10 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { AdminSectionShell } from "@/components/admin-section-shell";
-import { buttonClasses, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
+import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
+import { emptyNextActionHref } from "@/lib/admin/empty-next-action";
 import type { PortalResourceRow } from "@/lib/db/types";
 
 type ResourceDraft = {
@@ -202,10 +204,21 @@ export function ResourceManager({
 						))}
 					</div>
 				) : (
-					<p className="border border-dashed border-neutral-700 px-4 py-8 text-sm text-neutral-500">
-						No portal resources yet. Publish a guide, venue map, or other speaker reference when it
-						is ready.
-					</p>
+					<EmptyState
+						title="No portal resources yet"
+						description="Publish a guide, venue map, or other speaker reference when it is ready."
+					>
+						{readOnly ? null : (
+							<p className="mt-4">
+								<Link
+									href={emptyNextActionHref(eventSlug, "resources.create")}
+									className={buttonClasses("primary")}
+								>
+									Create resource
+								</Link>
+							</p>
+						)}
+					</EmptyState>
 				)
 			) : null}
 

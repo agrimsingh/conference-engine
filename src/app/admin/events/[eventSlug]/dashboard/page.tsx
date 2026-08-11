@@ -6,7 +6,9 @@ import { assertCanManageEvent } from "@/lib/auth/admin";
 import { loadCockpitSnapshot } from "@/lib/cockpit/snapshot";
 import { getDb } from "@/lib/db/cloudflare";
 import type { EventRow } from "@/lib/db/types";
+import { loadProgramLifecycle } from "@/lib/events/load-program-lifecycle";
 import { loadSubmissionPacingChart } from "@/lib/pacing/load";
+import { ProgramLifecycleStrip } from "./program-lifecycle";
 import { SubmissionPacingChart } from "./submission-pacing-chart";
 
 const ProgramCockpit = dynamic(
@@ -29,9 +31,9 @@ export default async function AdminDashboardPage({ params }: Props) {
 			<AdminEventNav eventSlug={event.slug} />
 			<main className="mx-auto max-w-5xl px-4 py-10">
 				<PageHeader
-					eyebrow="Organizer · Program cockpit"
+					eyebrow="Organizer · Program"
 					title={event.name}
-					description="Every pipeline blocker in one place: review, decide, remind, schedule, publish, retry."
+					description="Work the program lifecycle in order. The cockpit lists every actionable blocker underneath."
 				/>
 
 				<Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden />}>
@@ -47,11 +49,21 @@ async function DashboardPanels({ db, event }: { db: D1Database; event: EventRow 
 		loadCockpitSnapshot(db, event),
 		loadSubmissionPacingChart(db, event),
 	]);
+	const lifecycle = await loadProgramLifecycle(db, event, snapshot);
 
 	return (
-		<>
-			<SubmissionPacingChart chart={pacing} />
-			<ProgramCockpit eventSlug={event.slug} initialSnapshot={snapshot} />
-		</>
+		<div className="space-y-10">
+			<ProgramLifecycleStrip steps={lifecycle} />
+			<div className="space-y-4">
+				<div>
+					<h2 className="text-sm font-medium text-neutral-100">Pipeline blockers</h2>
+					<p className="mt-1 text-xs text-neutral-500">
+						Live counts for review, notify, schedule, publish, and email retries.
+					</p>
+				</div>
+				<SubmissionPacingChart chart={pacing} />
+				<ProgramCockpit eventSlug={event.slug} initialSnapshot={snapshot} />
+			</div>
+		</div>
 	);
 }
