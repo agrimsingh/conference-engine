@@ -7,13 +7,12 @@ import { consumeAuthChallenge } from "@/lib/auth/challenges";
 import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
 import { getAccountById } from "@/lib/db/queries";
 import { acceptEventInvitation } from "@/lib/events/invite-member";
+import { safeNextPath } from "@/lib/security/safe-next-path";
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
 	const token = url.searchParams.get("token")?.trim() ?? "";
-	const nextParam = url.searchParams.get("next")?.trim() ?? "";
-	const next =
-		nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/admin";
+	const next = safeNextPath(url.searchParams.get("next")?.trim());
 
 	if (!token) {
 		return NextResponse.redirect(new URL("/login", url.origin));

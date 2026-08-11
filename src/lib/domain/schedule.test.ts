@@ -37,6 +37,20 @@ describe("isPublicAgendaVisibility", () => {
 	it("excludes private service blocks from the public agenda", () => {
 		expect(isPublicAgendaVisibility("private")).toBe(false);
 	});
+
+	it("gates published private slots out of public embeds and v1 schedule", () => {
+		type SlotGate = {
+			submission_status: string;
+			agenda_visibility: "public" | "private";
+			content_approved: number;
+		};
+		const gate = (slot: SlotGate) =>
+			isPublicScheduleStatus(slot.submission_status) &&
+			isPublicAgendaVisibility(slot.agenda_visibility) &&
+			slot.content_approved === 1;
+		expect(gate({ submission_status: "published", agenda_visibility: "private", content_approved: 1 })).toBe(false);
+		expect(gate({ submission_status: "published", agenda_visibility: "public", content_approved: 1 })).toBe(true);
+	});
 });
 
 describe("resolveRoom", () => {

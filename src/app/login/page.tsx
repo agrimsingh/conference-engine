@@ -1,3 +1,4 @@
+import { safeNextPath } from "@/lib/security/safe-next-path";
 import { OrganizerLoginForm } from "./organizer-login-form";
 
 type Props = {
@@ -6,10 +7,7 @@ type Props = {
 
 export default async function LoginPage({ searchParams }: Props) {
 	const params = await searchParams;
-	const next =
-		params.next?.startsWith("/") && !params.next.startsWith("//")
-			? params.next
-			: "/admin";
+	const next = safeNextPath(params.next);
 	const initialError =
 		params.error === "expired"
 			? "That sign-in link expired. Request a fresh one below."
