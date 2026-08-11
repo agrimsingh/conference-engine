@@ -54,16 +54,16 @@ async function DashboardPanels({ db, event }: { db: D1Database; event: EventRow 
 	return (
 		<div className="space-y-10">
 			<ProgramLifecycleStrip steps={lifecycle} />
-			<div className="space-y-4">
-				<div>
-					<h2 className="text-sm font-medium text-neutral-100">Pipeline blockers</h2>
-					<p className="mt-1 text-xs text-neutral-500">
+			<section className="space-y-6">
+				<header className="border-b border-neutral-800 pb-4">
+					<h2 className="text-lg font-semibold text-neutral-100">Pipeline blockers</h2>
+					<p className="mt-1 text-sm text-neutral-400">
 						Live counts for review, notify, schedule, publish, and email retries.
 					</p>
-				</div>
+				</header>
 				<SubmissionPacingChart chart={pacing} />
 				<ProgramCockpit eventSlug={event.slug} initialSnapshot={snapshot} />
-			</div>
+			</section>
 		</div>
 	);
 }

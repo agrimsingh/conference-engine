@@ -207,7 +207,7 @@ export default async function AdminSubmissionDetailPage({
 					}
 				/>
 
-				<section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
+				<section className="border-b border-neutral-800 pb-4">
 					<div className="flex flex-wrap items-center gap-2">
 						<Chip>{category}</Chip>
 						<StatusPill tone={submissionStatusTone(row.status)}>
@@ -219,24 +219,41 @@ export default async function AdminSubmissionDetailPage({
 					</div>
 				</section>
 
-				<section className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
-					<h2 className="text-sm font-medium text-neutral-200">Proposal answers</h2>
-					<div className="mt-2">
-						<SubmissionAnswersList answers={answerDisplays} />
-					</div>
+				<section className="mt-8">
+					<header className="mb-4 border-b border-neutral-800 pb-4">
+						<h2 className="text-lg font-semibold text-neutral-100">Proposal answers</h2>
+						<p className="mt-1 text-sm text-neutral-400">
+							What the submitter entered on the form.
+						</p>
+					</header>
+					<SubmissionAnswersList answers={answerDisplays} />
 				</section>
 
-				<div className="mt-4">
+				<section className="mt-8">
+					<header className="mb-4 border-b border-neutral-800 pb-4">
+						<h2 className="text-lg font-semibold text-neutral-100">Decision</h2>
+						<p className="mt-1 text-sm text-neutral-400">
+							Accept, reject, or hold this proposal.
+						</p>
+					</header>
 					<DecisionButtons
 						eventSlug={event.slug}
 						submissionId={row.id}
 						status={row.status}
 						previews={previews}
 					/>
-				</div>
+				</section>
 
 				{activePlan ? (
-					<div className="mt-4">
+					<section className="mt-8">
+						<header className="mb-4 border-b border-neutral-800 pb-4">
+							<h2 className="text-lg font-semibold text-neutral-100">
+								Assigned reviewers
+							</h2>
+							<p className="mt-1 text-sm text-neutral-400">
+								Who should score this proposal on the active plan.
+							</p>
+						</header>
 						<AssignmentControls
 							key={`${row.id}:${assignedReviewerIds.join(",")}`}
 							eventSlug={event.slug}
@@ -247,33 +264,48 @@ export default async function AdminSubmissionDetailPage({
 							}))}
 							assignedReviewerIds={assignedReviewerIds}
 						/>
-					</div>
+					</section>
 				) : null}
 
-				<div className="mt-4">
+				<section className="mt-8">
+					<header className="mb-4 border-b border-neutral-800 pb-4">
+						<h2 className="text-lg font-semibold text-neutral-100">Speakers</h2>
+						<p className="mt-1 text-sm text-neutral-400">
+							Primary and co-speakers on this proposal.
+						</p>
+					</header>
 					<SubmissionSpeakers
 						eventSlug={event.slug}
 						submissionId={row.id}
 						speakers={speakerSummaries}
 					/>
-				</div>
+				</section>
 
-				<div className="mt-4">
+				<section className="mt-8">
+					<header className="mb-4 border-b border-neutral-800 pb-4">
+						<h2 className="text-lg font-semibold text-neutral-100">Labels</h2>
+						<p className="mt-1 text-sm text-neutral-400">
+							Organizer tags for filtering the queue.
+						</p>
+					</header>
 					<SubmissionLabels
 						eventSlug={event.slug}
 						submissionId={row.id}
 						labels={labels}
 					/>
-				</div>
+				</section>
 
 				{tasks.length > 0 ? (
-					<section className="mt-4 rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 text-xs text-neutral-400">
-						<p className="font-medium text-neutral-300">
-							Speaker tasks {completed}/{requiredTasks.length} required complete
-						</p>
-						<ul className="mt-1 space-y-0.5">
+					<section className="mt-8">
+						<header className="mb-4 border-b border-neutral-800 pb-4">
+							<h2 className="text-lg font-semibold text-neutral-100">Speaker tasks</h2>
+							<p className="mt-1 text-sm text-neutral-400">
+								{completed}/{requiredTasks.length} required complete
+							</p>
+						</header>
+						<ul className="divide-y divide-neutral-800 border-y border-neutral-800 text-sm text-neutral-400">
 							{tasks.map((task) => (
-								<li key={task.id}>
+								<li key={task.id} className="py-2.5">
 									{personNames.get(task.person_id) ?? task.person_id} ·{" "}
 									{task.template_label || task.template_key} · {task.status}
 									{task.template_required === 0 ? " (optional)" : ""}
@@ -284,11 +316,16 @@ export default async function AdminSubmissionDetailPage({
 				) : null}
 
 				{outboundMessages.length > 0 ? (
-					<section className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
-						<h2 className="text-sm font-medium text-neutral-200">Email history</h2>
-						<ul className="mt-2 divide-y divide-neutral-800">
+					<section className="mt-8">
+						<header className="mb-4 border-b border-neutral-800 pb-4">
+							<h2 className="text-lg font-semibold text-neutral-100">Email history</h2>
+							<p className="mt-1 text-sm text-neutral-400">
+								Outbound messages for this submission.
+							</p>
+						</header>
+						<ul className="divide-y divide-neutral-800 border-y border-neutral-800">
 							{outboundMessages.map((message) => (
-								<li key={message.id} className="py-2 text-sm">
+								<li key={message.id} className="py-3 text-sm">
 									<div className="flex flex-wrap items-center justify-between gap-2">
 										<span className="text-neutral-300">
 											{new Date(message.created_at).toLocaleString()}

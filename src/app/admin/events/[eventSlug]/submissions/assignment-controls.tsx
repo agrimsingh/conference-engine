@@ -74,40 +74,40 @@ export function AssignmentControls({
 	}
 
 	return (
-		<div className="space-y-1.5">
-			<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-				Assigned reviewers
-			</p>
-			<div className="flex flex-wrap items-center gap-1.5">
+		<div className="space-y-3">
+			<ul className="divide-y divide-neutral-800 border-y border-neutral-800">
 				{reviewers.map((reviewer) => {
 					const active = selected.has(reviewer.id);
 					return (
-						<button
-							key={reviewer.id}
-							type="button"
-							disabled={pending}
-							onClick={() => toggle(reviewer.id)}
-							className={
-								active
-									? "inline-flex items-center rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300 disabled:opacity-40"
-									: "inline-flex items-center rounded-md border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-xs text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 disabled:opacity-40"
-							}
-						>
-							{reviewer.name}
-						</button>
+						<li key={reviewer.id}>
+							<label className="flex cursor-pointer items-center gap-3 py-2.5 text-sm text-neutral-300">
+								<input
+									type="checkbox"
+									checked={active}
+									disabled={pending}
+									onChange={() => toggle(reviewer.id)}
+									className="rounded border-neutral-600 bg-neutral-950 text-neutral-100 focus:ring-neutral-500"
+								/>
+								<span className={active ? "text-neutral-100" : "text-neutral-400"}>
+									{reviewer.name}
+								</span>
+							</label>
+						</li>
 					);
 				})}
-				{dirty ? (
+			</ul>
+			{dirty ? (
+				<div>
 					<Button
 						size="sm"
 						variant="secondary"
 						disabled={pending}
 						onClick={() => void save()}
 					>
-						{pending ? "Saving…" : "Save"}
+						{pending ? "Saving…" : "Save assignments"}
 					</Button>
-				) : null}
-			</div>
+				</div>
+			) : null}
 			{error ? <p className="text-xs text-red-400">{error}</p> : null}
 		</div>
 	);
