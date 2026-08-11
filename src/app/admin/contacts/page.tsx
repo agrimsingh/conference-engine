@@ -19,7 +19,7 @@ import {
 	type ContactFilters,
 } from "@/lib/contacts";
 import { getDb } from "@/lib/db/cloudflare";
-import { ContactsConsole } from "./contacts-console";
+import { ContactsConsole, parseContactsView } from "./contacts-console";
 
 type Props = {
 	searchParams: Promise<{
@@ -128,7 +128,7 @@ export default async function AdminContactsPage({ searchParams }: Props) {
 					initialBoard={board}
 					initialSegments={segments}
 					events={events.map((event) => ({ id: event.id, slug: event.slug, name: event.name }))}
-					initialView={params.view === "pipeline" ? "pipeline" : "directory"}
+					initialView={parseContactsView(params.view)}
 					initialSegmentId={params.segment ?? null}
 				/>
 			</main>
