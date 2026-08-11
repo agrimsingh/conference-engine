@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { AdminSectionShell } from "@/components/admin-section-shell";
-import { EmptyState } from "@/components/ui";
+import { buttonClasses, EmptyState } from "@/components/ui";
+import { emptyNextActionHref } from "@/lib/admin/empty-next-action";
 import type { RosterSpeaker } from "@/lib/speakers/roster";
 import type { SpeakerActionAssignment } from "@/lib/speakers/operations";
 import { FilesLibrary, type FileLibraryRow } from "../files/files-library";
@@ -96,7 +98,16 @@ export function TasksConsole({
 					<EmptyState
 						title="No uploaded files"
 						description="Create a file request in Deliverables, then uploads appear here with session and speaker metadata."
-					/>
+					>
+						<p className="mt-4">
+							<Link
+								href={emptyNextActionHref(eventSlug, "tasks.deliverables")}
+								className={buttonClasses("primary")}
+							>
+								Open deliverables
+							</Link>
+						</p>
+					</EmptyState>
 				)
 			) : null}
 		</AdminSectionShell>

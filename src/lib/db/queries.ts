@@ -1392,7 +1392,9 @@ export async function listAgendaSlotsWithSubmissions(
          s.submitter_email AS submitter_email,
          s.video_url AS video_url,
          s.google_doc_url AS google_doc_url,
-         s.supporting_url AS supporting_url
+         s.supporting_url AS supporting_url,
+         s.item_kind AS item_kind,
+         s.agenda_visibility AS agenda_visibility
        FROM agenda_slots a
        INNER JOIN submissions s ON s.id = a.submission_id
 	   LEFT JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id

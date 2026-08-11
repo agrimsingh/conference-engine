@@ -42,38 +42,40 @@ export type EventMessageTemplateRow = {
 	updated_at: number;
 };
 
+const REPLY_CTA = "If anything looks off, just reply to this email.";
+
 const DEFAULTS: Record<EditableMessageTemplateKey, MessageTemplateDraft> = {
 	submission_received: {
 		subject: "Thanks for submitting to {{event_name}}",
-		text: "Hi {{submitter_name}},\n\nWe received your proposal \"{{title}}\" for {{event_name}}.\nThe program committee will review it and follow up.\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nGot your proposal "{{title}}" for {{event_name}}.\nThe program committee will take a look and follow up.\n\n${REPLY_CTA}`,
 	},
 	acceptance: {
 		subject: "You're accepted: {{title}}",
-		text: "Hi {{submitter_name}},\n\nCongratulations — \"{{title}}\" was accepted for {{event_name}}.\n{{portal_hint}}\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nGood news: "{{title}}" was accepted for {{event_name}}.\n{{portal_hint}}\n\n${REPLY_CTA}`,
 	},
 	rejection: {
 		subject: "Update on your {{event_name}} proposal",
-		text: "Hi {{submitter_name}},\n\nThank you for submitting \"{{title}}\" to {{event_name}}.\nWe are unable to accept it for this program.\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nThanks for submitting "{{title}}" to {{event_name}}.\nWe aren't able to accept it for this program.\n\n${REPLY_CTA}`,
 	},
 	waitlist: {
 		subject: "Waitlist update: {{title}}",
-		text: "Hi {{submitter_name}},\n\nThank you for submitting \"{{title}}\" to {{event_name}}.\nYour proposal is currently on the waitlist. If a slot opens up, we may reach out with next steps.\nNo action is needed from you right now.\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nThanks for submitting "{{title}}" to {{event_name}}.\nYour proposal is on the waitlist for now. If a slot opens up, we may reach out with next steps.\nNothing you need to do right now.\n\n${REPLY_CTA}`,
 	},
 	portal_magic_link: {
 		subject: "Sign in to your {{event_name}} speaker portal",
-		text: "Hi {{submitter_name}},\n\nUse this one-time link to open your speaker portal:\n{{portal_url}}\n\nIf you did not request this, you can ignore this email.\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nHere's a one-time link to open your speaker portal:\n{{portal_url}}\n\nIf you didn't request this, you can ignore this email.\n\n${REPLY_CTA}`,
 	},
 	task_reminder: {
 		subject: "Reminder: {{outstanding_count}} outstanding speaker tasks for {{event_name}}",
-		text: "Hi {{submitter_name}},\n\nYou still have {{outstanding_count}} outstanding speaker tasks for {{event_name}}:\n\n{{task_list}}\n\n{{portal_hint}}\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\nQuick reminder: you still have {{outstanding_count}} outstanding speaker tasks for {{event_name}}:\n\n{{task_list}}\n\n{{portal_hint}}\n\n${REPLY_CTA}`,
 	},
 	speaker_announcement: {
 		subject: "Update from {{event_name}}",
-		text: "Hi {{submitter_name}},\n\n{{title}}\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\n{{title}}\n\n${REPLY_CTA}`,
 	},
 	calendar_invite: {
 		subject: "Scheduled: {{title}} @ {{event_name}}",
-		text: "Hi {{submitter_name}},\n\n\"{{title}}\" is on the {{event_name}} agenda.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar invite (.ics) is attached.\n\n— conference-engine",
+		text: `Hey {{submitter_name}},\n\n"{{title}}" is on the {{event_name}} agenda.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar invite (.ics) is attached.\n\n${REPLY_CTA}`,
 	},
 };
 

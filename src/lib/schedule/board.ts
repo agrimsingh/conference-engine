@@ -244,10 +244,70 @@ export function formatAutoPlaceSummary(placed: number, needAttention: number): s
 	return `${placed} placed, ${needAttention} need attention`;
 }
 
-export function publishableOnDay<T extends { id: string; title: string; status: string; slot: unknown | null }>(
-	daySessions: readonly T[],
-): T[] {
-	return daySessions.filter((session) => session.slot != null && session.status === "scheduled");
+export function formatMinutesAsClock(startMinutes: number): string {
+	const hours = Math.floor(startMinutes / 60);
+	const minutes = startMinutes % 60;
+	return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export type AutoPlacePreviewPlacement = {
+	sessionId: string;
+	title: string;
+	roomName: string;
+	startMinutes: number;
+	timeLabel: string;
+};
+
+export type AutoPlacePreviewSkipped = {
+	sessionId: string;
+	title: string;
+};
+
+export type AutoPlacePreview = {
+	willPlace: AutoPlacePreviewPlacement[];
+	stillUnplaced: AutoPlacePreviewSkipped[];
+};
+
+export type AutoPlaceConfirmTarget = {
+	plan: AutoPlacePlan;
+	preview: AutoPlacePreview;
+};
+
+export function buildAutoPlacePreview(
+	plan: AutoPlacePlan,
+	sessions: readonly { id: string; title: string }[],
+): AutoPlacePreview {
+	const titleById = new Map(sessions.map((session) => [session.id, session.title]));
+	return {
+		willPlace: plan.placements.map(({ sessionId, slot }) => ({
+			sessionId,
+			title: titleById.get(sessionId) ?? sessionId,
+			roomName: slot.roomName,
+			startMinutes: slot.startMinutes,
+			timeLabel: formatMinutesAsClock(slot.startMinutes),
+		})),
+		stillUnplaced: plan.skippedIds.map((sessionId) => ({
+			sessionId,
+			title: titleById.get(sessionId) ?? sessionId,
+		})),
+	};
+}
+
+export function publishableOnDay<
+	T extends {
+		id: string;
+		title: string;
+		status: string;
+		slot: unknown | null;
+		agendaVisibility?: string;
+	},
+>(daySessions: readonly T[]): T[] {
+	return daySessions.filter(
+		(session) =>
+			session.slot != null &&
+			session.status === "scheduled" &&
+			session.agendaVisibility !== "private",
+	);
 }
 
 export function toPublishConfirmTarget(

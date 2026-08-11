@@ -24,7 +24,9 @@ import {
 	intervalsOverlap,
 	type ScheduleInterval,
 } from "@/lib/domain/schedule";
+import { buildAgendaReadiness } from "@/lib/schedule/agenda-readiness";
 import {
+	buildAutoPlacePreview,
 	filterUnplacedRail,
 	findAvailableSlot,
 	formatAutoPlaceSummary,
@@ -33,6 +35,7 @@ import {
 	roomsForLane,
 	toPublishConfirmTarget,
 	unplacedSessions,
+	type AutoPlaceConfirmTarget,
 	type PublishConfirmTarget,
 	type RoomLane,
 } from "@/lib/schedule/board";
@@ -55,6 +58,7 @@ import {
 	parseSlotDroppableId,
 	slotDroppableId,
 } from "./schedule-dnd";
+import { SERVICE_BLOCK_DURATIONS } from "@/lib/sessions/service-blocks";
 import type { ScheduleSession } from "./schedule-types";
 
 export type { ScheduleSession };
@@ -72,6 +76,7 @@ type Props = {
 	dayEndMinutes: number;
 	slotDurationMinutes: number;
 	sessions: ScheduleSession[];
+	emptyProgrammeHref?: string | null;
 };
 
 type ViewMode = "day" | "list" | "week" | "track" | "room";
@@ -89,17 +94,23 @@ export function ScheduleBoard({
 	dayEndMinutes,
 	slotDurationMinutes,
 	sessions: initialSessions,
+	emptyProgrammeHref = null,
 }: Props) {
 	const router = useRouter();
 	const [sessions, setSessions] = useState(initialSessions);
 	const [view, setView] = useState<ViewMode>("day");
 	const [roomFilter, setRoomFilter] = useState<string>("all");
 	const [roomLane, setRoomLane] = useState<RoomLane>("stages");
+	const [serviceTitle, setServiceTitle] = useState("");
+	const [serviceDurationMinutes, setServiceDurationMinutes] = useState<number>(60);
+	const [serviceVisibility, setServiceVisibility] = useState<"public" | "private">("public");
+	const [serviceFormOpen, setServiceFormOpen] = useState(false);
 	const [trackId, setTrackId] = useState<string>(tracks[0]?.id ?? "");
 	const [reassignTrack, setReassignTrack] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [railQuery, setRailQuery] = useState("");
 	const [publishConfirm, setPublishConfirm] = useState<PublishConfirmTarget | null>(null);
+	const [autoPlaceConfirm, setAutoPlaceConfirm] = useState<AutoPlaceConfirmTarget | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
@@ -175,6 +186,13 @@ export function ScheduleBoard({
 		() => publishableOnDay(daySessions),
 		[daySessions],
 	);
+
+	const readiness = useMemo(
+		() => buildAgendaReadiness(sessions, { eventSlug }),
+		[eventSlug, sessions],
+	);
+	const conflictStep = readiness.find((step) => step.key === "conflicts");
+	const conflictCount = conflictStep?.count ?? 0;
 
 	const selectedSession = useMemo(
 		() => sessions.find((session) => session.id === selectedId) ?? null,
@@ -491,6 +509,62 @@ export function ScheduleBoard({
 		setPublishConfirm(toPublishConfirmTarget(targets));
 	}
 
+	function createServiceBlock() {
+		const title = serviceTitle.trim();
+		if (!title) {
+			setError("Service block title is required.");
+			return;
+		}
+		setError(null);
+		setMessage(null);
+		startTransition(async () => {
+			try {
+				const response = await fetch(`/api/admin/events/${eventSlug}/service-blocks`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						title,
+						durationMinutes: serviceDurationMinutes,
+						agendaVisibility: serviceVisibility,
+					}),
+				});
+				const payload = await readJson<{
+					ok?: boolean;
+					error?: string;
+					submissionId?: string;
+					title?: string;
+					durationMinutes?: number;
+					agendaVisibility?: "public" | "private";
+				}>(response);
+				if (!response.ok || !payload?.ok || !payload.submissionId) {
+					setError(payload?.error ?? "Could not create service block");
+					return;
+				}
+				const next: ScheduleSession = {
+					id: payload.submissionId,
+					title: payload.title ?? title,
+					category: "Uncategorized",
+					status: "accepted",
+					contentStatus: null,
+					submitterName: null,
+					durationMinutes: payload.durationMinutes ?? serviceDurationMinutes,
+					speakerKeys: [],
+					speakerLabels: [],
+					itemKind: "service",
+					agendaVisibility: payload.agendaVisibility ?? serviceVisibility,
+					slot: null,
+				};
+				setSessions((previous) => [next, ...previous]);
+				setServiceTitle("");
+				setServiceFormOpen(false);
+				setSelectedId(next.id);
+				setMessage("Service block added to the unplaced rail.");
+			} catch {
+				setError("Couldn’t create service block. Check your connection and try again.");
+			}
+		});
+	}
+
 	function findSlotForSelected() {
 		if (!selectedSession) {
 			setError("Select a session first.");
@@ -544,12 +618,22 @@ export function ScheduleBoard({
 			trackIntervals,
 		});
 
-		const summary = formatAutoPlaceSummary(plan.placed, plan.needAttention);
 		setError(null);
-		setMessage(summary);
-		setSelectedId(null);
+		setMessage(null);
+		setAutoPlaceConfirm({
+			plan,
+			preview: buildAutoPlacePreview(plan, rail),
+		});
+	}
 
-		if (plan.placements.length === 0) return;
+	function confirmAutoPlace() {
+		if (!autoPlaceConfirm || autoPlaceConfirm.plan.placements.length === 0) return;
+		const { plan } = autoPlaceConfirm;
+		const rail = unplacedSessions(sessions);
+		setAutoPlaceConfirm(null);
+		setSelectedId(null);
+		setError(null);
+		setMessage(formatAutoPlaceSummary(plan.placed, plan.needAttention));
 
 		const placementById = new Map(
 			plan.placements.map((row) => [row.sessionId, row.slot] as const),
@@ -733,7 +817,11 @@ export function ScheduleBoard({
 						previous.map((session) =>
 							session.id !== submissionId
 								? session
-								: { ...session, status: payload.status ?? "published" },
+								: {
+										...session,
+										status: payload.status ?? "published",
+										contentStatus: "approved",
+									},
 						),
 					);
 					setMessage("Session is now public.");
@@ -760,7 +848,9 @@ export function ScheduleBoard({
 				const idSet = new Set(ids);
 				setSessions((previous) =>
 					previous.map((session) =>
-						idSet.has(session.id) ? { ...session, status: "published" } : session,
+						idSet.has(session.id)
+							? { ...session, status: "published", contentStatus: "approved" }
+							: session,
 					),
 				);
 				setMessage(`Published ${payload.changed ?? count} sessions.`);
@@ -780,6 +870,47 @@ export function ScheduleBoard({
 			onDragCancel={onDragCancel}
 		>
 		<div className="space-y-6">
+			<nav aria-label="Agenda readiness" className="border-b border-neutral-900 pb-3">
+				<ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
+					{readiness.map((step, index) => (
+						<li key={step.key} className="flex items-center gap-2">
+							{index > 0 ? (
+								<span aria-hidden="true" className="text-neutral-700">
+									→
+								</span>
+							) : null}
+							{step.href ? (
+								<a
+									href={step.href}
+									className={
+										step.complete
+											? "text-neutral-500 hover:text-neutral-300"
+											: step.key === "conflicts" && step.count > 0
+												? "text-amber-300/90 hover:text-amber-200"
+												: "text-neutral-200 hover:text-white"
+									}
+								>
+									{step.label}{" "}
+									<span className="tabular-nums">{step.count}</span>
+								</a>
+							) : (
+								<span className={step.complete ? "text-neutral-500" : "text-neutral-200"}>
+									{step.label}{" "}
+									<span className="tabular-nums">{step.count}</span>
+								</span>
+							)}
+						</li>
+					))}
+				</ol>
+			</nav>
+			{conflictCount > 0 ? (
+				<p id="conflicts" className="scroll-mt-4 text-sm text-amber-300/80">
+					{conflictCount} {conflictCount === 1 ? "session overlaps" : "sessions overlap"} on
+					room or speaker.
+				</p>
+			) : (
+				<div id="conflicts" className="scroll-mt-4" />
+			)}
 			<div className="flex flex-wrap items-center gap-3">
 				<label className="flex items-center gap-2 text-sm text-neutral-300">
 					View
@@ -862,7 +993,79 @@ export function ScheduleBoard({
 			) : null}
 			{message ? <p className={noticeClasses("positive")}>{message}</p> : null}
 
-			<section className="border-b border-neutral-800 pb-4">
+			<section id="unplaced" className="scroll-mt-4 border-b border-neutral-800 pb-4">
+				{emptyProgrammeHref && sessions.length === 0 ? (
+					<p className="mb-3 text-sm text-neutral-400">
+						No accepted talks yet.{" "}
+						<a href={emptyProgrammeHref} className="text-neutral-200 underline underline-offset-2">
+							Open submissions
+						</a>{" "}
+						or add a service block below.
+					</p>
+				) : null}
+				<div className="mb-3 rounded-md border border-neutral-800 bg-neutral-950/40 p-3">
+					<div className="flex flex-wrap items-center gap-2">
+						<h2 className="text-sm font-medium text-neutral-300">Add service block</h2>
+						<button
+							type="button"
+							className={`${buttonClasses("secondary", "sm")} ml-auto`}
+							onClick={() => setServiceFormOpen((open) => !open)}
+							aria-expanded={serviceFormOpen}
+						>
+							{serviceFormOpen ? "Hide" : "Add"}
+						</button>
+					</div>
+					{serviceFormOpen ? (
+						<div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
+							<label className="block text-sm text-neutral-300">
+								Title
+								<input
+									type="text"
+									value={serviceTitle}
+									onChange={(event) => setServiceTitle(event.target.value)}
+									placeholder="Lunch, break, registration…"
+									className={`mt-1 w-full ${INPUT_CLASSES}`}
+									maxLength={240}
+								/>
+							</label>
+							<label className="block text-sm text-neutral-300">
+								Duration
+								<select
+									className={`mt-1 ${INPUT_CLASSES}`}
+									value={serviceDurationMinutes}
+									onChange={(event) => setServiceDurationMinutes(Number(event.target.value))}
+								>
+									{SERVICE_BLOCK_DURATIONS.map((minutes) => (
+										<option key={minutes} value={minutes}>
+											{minutes}m
+										</option>
+									))}
+								</select>
+							</label>
+							<label className="block text-sm text-neutral-300">
+								Visibility
+								<select
+									className={`mt-1 ${INPUT_CLASSES}`}
+									value={serviceVisibility}
+									onChange={(event) =>
+										setServiceVisibility(event.target.value === "private" ? "private" : "public")
+									}
+								>
+									<option value="public">Public</option>
+									<option value="private">Private</option>
+								</select>
+							</label>
+							<button
+								type="button"
+								disabled={pending || !serviceTitle.trim()}
+								onClick={createServiceBlock}
+								className={buttonClasses("primary", "sm")}
+							>
+								Create
+							</button>
+						</div>
+					) : null}
+				</div>
 				<div className="mb-2 flex flex-wrap items-center gap-2">
 					<h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
 						Unplaced
@@ -896,10 +1099,11 @@ export function ScheduleBoard({
 						Auto-place
 					</button>
 					<button
+						id="publish"
 						type="button"
 						disabled={dayPublishable.length === 0 || pending}
 						onClick={() => requestPublish(dayPublishable)}
-						className={buttonClasses("secondary", "sm")}
+						className={`${buttonClasses("secondary", "sm")} scroll-mt-4`}
 					>
 						Publish day ({dayPublishable.length})
 					</button>
@@ -967,6 +1171,84 @@ export function ScheduleBoard({
 								className={buttonClasses("primary", "sm")}
 							>
 								Approve &amp; publish {publishConfirm.sessionIds.length}
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
+
+			{autoPlaceConfirm ? (
+				<div
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="auto-place-confirm-title"
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+				>
+					<div className="w-full max-w-md space-y-3 rounded-lg border border-neutral-700 bg-neutral-900 p-4 shadow-xl">
+						<h2
+							id="auto-place-confirm-title"
+							className="text-base font-medium text-neutral-100"
+						>
+							Auto-place preview
+						</h2>
+						<p className="text-sm text-neutral-400">
+							{formatAutoPlaceSummary(
+								autoPlaceConfirm.plan.placed,
+								autoPlaceConfirm.plan.needAttention,
+							)}
+						</p>
+						{autoPlaceConfirm.preview.willPlace.length > 0 ? (
+							<div className="space-y-1">
+								<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+									Will place
+								</p>
+								<ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-neutral-300">
+									{autoPlaceConfirm.preview.willPlace.map((row) => (
+										<li key={row.sessionId}>
+											{row.title}
+											<span className="text-neutral-500">
+												{" "}
+												· {row.roomName} · {row.timeLabel}
+											</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						) : null}
+						{autoPlaceConfirm.preview.stillUnplaced.length > 0 ? (
+							<div className="space-y-1">
+								<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+									Still unplaced
+								</p>
+								<ul className="max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-neutral-300">
+									{autoPlaceConfirm.preview.stillUnplaced.map((row) => (
+										<li key={row.sessionId}>{row.title}</li>
+									))}
+								</ul>
+							</div>
+						) : null}
+						{autoPlaceConfirm.plan.placements.length === 0 ? (
+							<p className={noticeClasses("warning")}>
+								No open slots for these sessions on this day with the current room filter.
+							</p>
+						) : null}
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								disabled={pending}
+								onClick={() => setAutoPlaceConfirm(null)}
+								className={buttonClasses("secondary", "sm")}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								disabled={pending || autoPlaceConfirm.plan.placements.length === 0}
+								onClick={confirmAutoPlace}
+								className={buttonClasses("primary", "sm")}
+								data-testid="auto-place-apply"
+							>
+								Apply {autoPlaceConfirm.plan.placements.length}
 							</button>
 						</div>
 					</div>

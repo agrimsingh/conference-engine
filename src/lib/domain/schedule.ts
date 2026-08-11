@@ -132,6 +132,10 @@ export function isPublicScheduleStatus(value: string): value is PublicScheduleSt
 	return (PUBLIC_SCHEDULE_STATUSES as readonly string[]).includes(value);
 }
 
+export function isPublicAgendaVisibility(value: string | null | undefined): boolean {
+	return (value ?? "public") === "public";
+}
+
 /** Match a trimmed room name against configured rooms (empty catalog = free-form ok). */
 export function resolveRoom<T extends { id: string; name: string }>(
 	rooms: readonly T[],

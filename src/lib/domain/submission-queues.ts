@@ -53,6 +53,27 @@ export function decisionTemplateForStatus(
 	return DECISION_TEMPLATE_BY_STATUS[status];
 }
 
+export type BulkNotifyTemplateSelection =
+	| { kind: "uniform"; templateKey: DecisionTemplateKey }
+	| { kind: "mixed" }
+	| { kind: "none" };
+
+export function bulkNotifyTemplateSelection(
+	statuses: readonly string[],
+): BulkNotifyTemplateSelection {
+	const keys = new Set<DecisionTemplateKey>();
+	for (const status of statuses) {
+		const key = decisionTemplateForStatus(status);
+		if (!key) return { kind: "none" };
+		keys.add(key);
+	}
+	if (keys.size === 0) return { kind: "none" };
+	if (keys.size > 1) return { kind: "mixed" };
+	const templateKey = keys.values().next().value;
+	if (!templateKey) return { kind: "none" };
+	return { kind: "uniform", templateKey };
+}
+
 /**
  * Pure membership for a queue tab given status + derived notified flag.
  * scheduled/published count as Notified (past the notify stage).
@@ -87,12 +108,20 @@ export function submissionMatchesQueue(
 }
 
 export const SUBMISSION_QUEUE_LABELS: Record<SubmissionQueueTab, string> = {
-	pending: "Pending",
+	pending: "Pending review",
 	to_notify: "To notify",
 	notified: "Notified",
 	withdrawn: "Withdrawn",
 	drafts: "Drafts",
 	all: "All",
+};
+
+export const SUBMISSION_QUEUE_COACHING: Partial<
+	Record<SubmissionQueueTab, string>
+> = {
+	pending: "Accept or decline here. Speakers are not emailed until you notify.",
+	to_notify:
+		"These speakers have not been informed yet. Review the message, then send.",
 };
 
 /**

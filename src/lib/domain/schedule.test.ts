@@ -3,6 +3,7 @@ import {
 	detectConflicts,
 	formatScheduleConflicts,
 	formatTrackConflict,
+	isPublicAgendaVisibility,
 	isPublicScheduleStatus,
 	PUBLIC_SCHEDULE_STATUSES,
 	resolveRoom,
@@ -23,6 +24,18 @@ describe("isPublicScheduleStatus", () => {
 	it("rejects empty and whitespace", () => {
 		expect(isPublicScheduleStatus("")).toBe(false);
 		expect(isPublicScheduleStatus(" published ")).toBe(false);
+	});
+});
+
+describe("isPublicAgendaVisibility", () => {
+	it("treats public and missing as visible", () => {
+		expect(isPublicAgendaVisibility("public")).toBe(true);
+		expect(isPublicAgendaVisibility(undefined)).toBe(true);
+		expect(isPublicAgendaVisibility(null)).toBe(true);
+	});
+
+	it("excludes private service blocks from the public agenda", () => {
+		expect(isPublicAgendaVisibility("private")).toBe(false);
 	});
 });
 

@@ -54,7 +54,7 @@ export async function buildPublicScheduleIcs(
 			 INNER JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id
 			 LEFT JOIN agenda_calendar_lifecycles l
 			   ON l.event_id = s.event_id AND l.submission_id = s.id
-			 WHERE s.event_id = ? AND s.status = 'published'
+			 WHERE s.event_id = ? AND s.status = 'published' AND s.agenda_visibility = 'public'
 			 ORDER BY a.starts_at ASC, s.id ASC`,
 		)
 		.bind(event.id)

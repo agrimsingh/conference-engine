@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	bulkNotifyTemplateSelection,
 	decisionTemplateForStatus,
 	isDecisionOutcomeStatus,
 	isSubmissionQueueTab,
@@ -39,5 +40,41 @@ describe("decision notified derivation helpers", () => {
 		expect(decisionTemplateForStatus("submitted")).toBeNull();
 		expect(isSubmissionQueueTab("to_notify")).toBe(true);
 		expect(isSubmissionQueueTab("bogus")).toBe(false);
+	});
+});
+
+describe("bulkNotifyTemplateSelection", () => {
+	it("picks one template when outcomes match", () => {
+		expect(bulkNotifyTemplateSelection(["accepted", "accepted"])).toEqual({
+			kind: "uniform",
+			templateKey: "acceptance",
+		});
+		expect(bulkNotifyTemplateSelection(["rejected"])).toEqual({
+			kind: "uniform",
+			templateKey: "rejection",
+		});
+		expect(bulkNotifyTemplateSelection(["waitlisted", "waitlisted"])).toEqual({
+			kind: "uniform",
+			templateKey: "waitlist",
+		});
+	});
+
+	it("flags mixed outcomes instead of defaulting to acceptance", () => {
+		expect(
+			bulkNotifyTemplateSelection(["accepted", "rejected"]),
+		).toEqual({ kind: "mixed" });
+		expect(
+			bulkNotifyTemplateSelection(["accepted", "waitlisted"]),
+		).toEqual({ kind: "mixed" });
+	});
+
+	it("returns none for empty or non-outcome statuses", () => {
+		expect(bulkNotifyTemplateSelection([])).toEqual({ kind: "none" });
+		expect(bulkNotifyTemplateSelection(["submitted"])).toEqual({
+			kind: "none",
+		});
+		expect(bulkNotifyTemplateSelection(["accepted", "submitted"])).toEqual({
+			kind: "none",
+		});
 	});
 });

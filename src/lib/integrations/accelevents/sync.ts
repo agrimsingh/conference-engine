@@ -295,6 +295,7 @@ async function loadSyncSources(
 			 FROM submissions s
 			 LEFT JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
 			 WHERE s.event_id = ? AND s.status IN ('accepted', 'scheduled', 'published')
+			   AND s.item_kind = 'talk'
 			 ORDER BY s.created_at ASC`,
 		).bind(scope.eventId).all<SourceSessionRow>(),
 	]);

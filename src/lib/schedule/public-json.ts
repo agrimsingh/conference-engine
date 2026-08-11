@@ -6,7 +6,7 @@ import {
 	listSpeakerProfileCardsForPeople,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
-import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { safeExternalUrl } from "@/lib/sessions/session";
 
@@ -81,7 +81,9 @@ export async function buildPublicScheduleJson(
 	]);
 
 	const publicSlots = slots.filter((slot) =>
-		isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1,
+		isPublicScheduleStatus(slot.submission_status) &&
+		isPublicAgendaVisibility(slot.agenda_visibility) &&
+		slot.content_approved === 1,
 	);
 	const speakersBySubmission = await listSpeakersForSubmissions(
 		db,

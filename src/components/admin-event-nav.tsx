@@ -9,6 +9,8 @@ type Props = {
 	eventSlug: string;
 };
 
+export const SPEAKER_PORTAL_HREF = "/portal";
+
 export const ADMIN_EVENT_GROUPS = [
 	{
 		label: "Overview",
@@ -181,6 +183,12 @@ export function AdminEventNav({ eventSlug }: Props) {
 					>
 						View public
 					</Link>
+					<Link
+						href={SPEAKER_PORTAL_HREF}
+						className="rounded-md border border-neutral-800 bg-neutral-900 px-2.5 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-800"
+					>
+						View speaker portal
+					</Link>
 				</div>
 
 				<div className="relative ml-auto lg:hidden">
@@ -243,6 +251,12 @@ export function AdminEventNav({ eventSlug }: Props) {
 									className="rounded-md bg-neutral-800 px-2 py-2 text-center text-sm font-medium text-neutral-100 transition-colors hover:bg-neutral-700"
 								>
 									View public
+								</Link>
+								<Link
+									href={SPEAKER_PORTAL_HREF}
+									className="col-span-2 rounded-md bg-neutral-800 px-2 py-2 text-center text-sm font-medium text-neutral-100 transition-colors hover:bg-neutral-700"
+								>
+									View speaker portal
 								</Link>
 							</div>
 						</div>

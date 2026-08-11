@@ -61,7 +61,7 @@ export async function buildPublicItineraryIcs(
 		 INNER JOIN agenda_slots a ON a.submission_id = s.id AND a.event_id = s.event_id
 		 INNER JOIN content_heads h ON h.event_id = s.event_id AND h.entity_type = 'session' AND h.entity_id = s.id AND h.approved_revision_id IS NOT NULL
 		 INNER JOIN content_revisions cr ON cr.id = h.approved_revision_id AND cr.event_id = s.event_id
-		 WHERE s.event_id = ? AND s.status = 'published' AND s.id IN (SELECT value FROM json_each(?))`,
+		 WHERE s.event_id = ? AND s.status = 'published' AND s.agenda_visibility = 'public' AND s.id IN (SELECT value FROM json_each(?))`,
 	).bind(event.id, JSON.stringify(sessionIds)).all<ItineraryRow>();
 
 	// A stale, unpublished, or cross-event id invalidates the whole export.

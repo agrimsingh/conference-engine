@@ -13,7 +13,7 @@ export function renderFormCopy(
 /** Organizer copy can be freely written, but resume emails always retain a usable link. */
 export function composeResumeDraftEmail(copy: string | null | undefined, context: Parameters<typeof renderFormCopy>[1]): string {
 	const resumeUrl = context.resumeUrl ?? "";
-	if (!copy?.trim()) return `Hi ${context.submitterName},\n\nUse this link to resume your saved proposal:\n${resumeUrl}\n\nIf you did not request this, you can ignore this email.`;
+	if (!copy?.trim()) return `Hey ${context.submitterName},\n\nUse this link to resume your saved proposal:\n${resumeUrl}\n\nIf you didn't request this, you can ignore this email.\n\nIf anything looks off, just reply to this email.`;
 	return `${renderFormCopy(copy, context)}\n\nResume your draft: ${resumeUrl}`;
 }
 

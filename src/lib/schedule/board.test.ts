@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ScheduleInterval } from "@/lib/domain";
 import {
+	buildAutoPlacePreview,
 	filterUnplacedRail,
 	findAvailableSlot,
 	formatAutoPlaceSummary,
+	formatMinutesAsClock,
 	isStageRoom,
 	isUnplaced,
 	planAutoPlace,
@@ -11,6 +13,7 @@ import {
 	roomsForLane,
 	toPublishConfirmTarget,
 	unplacedSessions,
+	type AutoPlacePlan,
 } from "./board";
 
 const base = {
@@ -376,6 +379,109 @@ describe("publish confirm target", () => {
 		expect(toPublishConfirmTarget(rows)).toEqual({
 			sessionIds: ["1"],
 			titles: ["A"],
+		});
+	});
+
+	it("excludes private service blocks from day publish", () => {
+		const day = [
+			{ id: "1", title: "Talk", status: "scheduled", slot: { x: 1 }, agendaVisibility: "public" },
+			{ id: "2", title: "Staff lunch", status: "scheduled", slot: { x: 1 }, agendaVisibility: "private" },
+		];
+		expect(publishableOnDay(day).map((row) => row.id)).toEqual(["1"]);
+	});
+});
+
+describe("buildAutoPlacePreview", () => {
+	const sessions = [
+		{ id: "s1", title: "Opening keynote" },
+		{ id: "s2", title: "Panel" },
+		{ id: "long", title: "Workshop" },
+	];
+
+	it("separates will-place rows with room/time from still-unplaced titles", () => {
+		const plan: AutoPlacePlan = {
+			placements: [
+				{
+					sessionId: "s1",
+					slot: {
+						roomName: "A",
+						startMinutes: 9 * 60,
+						startsAtMs: Date.parse("2026-06-10T09:00:00.000Z"),
+						endsAtMs: Date.parse("2026-06-10T09:30:00.000Z"),
+					},
+				},
+				{
+					sessionId: "s2",
+					slot: {
+						roomName: "B",
+						startMinutes: 9 * 60 + 30,
+						startsAtMs: Date.parse("2026-06-10T09:30:00.000Z"),
+						endsAtMs: Date.parse("2026-06-10T10:00:00.000Z"),
+					},
+				},
+			],
+			placed: 2,
+			needAttention: 1,
+			skippedIds: ["long"],
+		};
+
+		const preview = buildAutoPlacePreview(plan, sessions);
+		expect(preview.willPlace).toEqual([
+			{
+				sessionId: "s1",
+				title: "Opening keynote",
+				roomName: "A",
+				startMinutes: 9 * 60,
+				timeLabel: "09:00",
+			},
+			{
+				sessionId: "s2",
+				title: "Panel",
+				roomName: "B",
+				startMinutes: 9 * 60 + 30,
+				timeLabel: "09:30",
+			},
+		]);
+		expect(preview.stillUnplaced).toEqual([
+			{ sessionId: "long", title: "Workshop" },
+		]);
+		expect(formatMinutesAsClock(10 * 60 + 5)).toBe("10:05");
+	});
+
+	it("does not mutate the plan (preview vs apply separation)", () => {
+		const plan: AutoPlacePlan = {
+			placements: [
+				{
+					sessionId: "s1",
+					slot: {
+						roomName: "A",
+						startMinutes: 9 * 60,
+						startsAtMs: 1,
+						endsAtMs: 2,
+					},
+				},
+			],
+			placed: 1,
+			needAttention: 0,
+			skippedIds: [],
+		};
+		const frozen = structuredClone(plan);
+		const preview = buildAutoPlacePreview(plan, sessions);
+		expect(plan).toEqual(frozen);
+		expect(preview.willPlace).toHaveLength(1);
+		expect(preview.stillUnplaced).toHaveLength(0);
+	});
+
+	it("falls back to session id when title is missing", () => {
+		const plan: AutoPlacePlan = {
+			placements: [],
+			placed: 0,
+			needAttention: 1,
+			skippedIds: ["unknown"],
+		};
+		expect(buildAutoPlacePreview(plan, [])).toEqual({
+			willPlace: [],
+			stillUnplaced: [{ sessionId: "unknown", title: "unknown" }],
 		});
 	});
 });

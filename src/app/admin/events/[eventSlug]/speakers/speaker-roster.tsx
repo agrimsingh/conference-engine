@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { buttonClasses, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
+import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill } from "@/components/ui";
+import { emptyNextActionHref } from "@/lib/admin/empty-next-action";
 import {
 	ContentConsole,
 	type ContentSession,
@@ -587,7 +588,21 @@ export function SpeakerRoster({
 							</div>
 						) : null}
 
-						{visible.length === 0 ? (
+						{speakers.length === 0 ? (
+							<EmptyState
+								title="No speakers yet"
+								description="Add a speaker to the roster, or wait for accepted submissions to populate it."
+							>
+								<p className="mt-4">
+									<Link
+										href={emptyNextActionHref(eventSlug, "speakers.add")}
+										className={buttonClasses("primary")}
+									>
+										Add speaker
+									</Link>
+								</p>
+							</EmptyState>
+						) : visible.length === 0 ? (
 							<p className="border-t border-neutral-800 py-8 text-sm text-neutral-500">
 								No speakers match this filter.
 							</p>
