@@ -51,8 +51,8 @@ export function ProgramLifecycleStrip({
 		<section aria-label="Program lifecycle" className="space-y-3">
 			<div className="flex flex-wrap items-baseline justify-between gap-2">
 				<div>
-					<h2 className="text-sm font-medium text-neutral-100">Program lifecycle</h2>
-					<p className="mt-1 text-xs text-neutral-500">
+					<h2 className="text-lg font-semibold text-neutral-100">Program lifecycle</h2>
+					<p className="mt-1 text-sm text-neutral-400">
 						{completedCount} of {steps.length} stages complete. Work the sequence; the
 						cockpit below lists actionable blockers.
 					</p>

@@ -290,68 +290,68 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 		failedDeliveriesExpanded,
 	);
 
-	return (
-		<div className="space-y-6">
-			<div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-				<p className="text-neutral-400">
-					{total} blocker{total === 1 ? "" : "s"} across the program pipeline
-				</p>
-				<div className="flex items-center gap-2">
-					<span
-						title={
-							transport === "broadcasted"
-								? "Live updates connected"
-								: "Refreshing every few seconds"
-						}
-					>
-						<StatusPill tone={transport === "broadcasted" ? "positive" : "warning"}>
-							{transport === "broadcasted" ? "Live" : "Auto-refresh"}
-						</StatusPill>
-					</span>
-					<span className="text-xs tabular-nums text-neutral-500">
-						{mounted
-							? `updated ${new Date(snapshot.fetchedAt).toLocaleTimeString()}`
-							: "updated just now"}
-					</span>
-				</div>
-			</div>
+	const metricItems = (
+		[
+			["Tasks", counts.outstandingTasks, "tasks"],
+			["Co-speakers", counts.pendingCoSpeakers, "co-speakers"],
+			["Needs plan", counts.needsReviewActivation, "needs-plan"],
+			["Unassigned", counts.unassignedReviews, "unassigned"],
+			["Incomplete reviews", counts.incompleteReviews, "incomplete-reviews"],
+			["Undecided", counts.reviewedUndecided, "undecided"],
+			["Unscheduled", counts.acceptedUnscheduled, "unscheduled"],
+			["Unpublished", counts.scheduledUnpublished, "unpublished"],
+			["Failed email", counts.failedDeliveries, "failed-email"],
+		] as const
+	).filter(([, count]) => count > 0);
 
-			<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-3">
-				{(
-					[
-						["Tasks", counts.outstandingTasks, "tasks"],
-						["Co-speakers", counts.pendingCoSpeakers, "co-speakers"],
-						["Needs plan", counts.needsReviewActivation, "needs-plan"],
-						["Unassigned", counts.unassignedReviews, "unassigned"],
-						["Incomplete reviews", counts.incompleteReviews, "incomplete-reviews"],
-						["Undecided", counts.reviewedUndecided, "undecided"],
-						["Unscheduled", counts.acceptedUnscheduled, "unscheduled"],
-						["Unpublished", counts.scheduledUnpublished, "unpublished"],
-						["Failed email", counts.failedDeliveries, "failed-email"],
-					] as const
-				).map(([label, count, anchorKey]) => (
-					<li
-						key={label}
-						className={`rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2${count === 0 ? " opacity-50" : ""}`}
-					>
-						{count > 0 ? (
-							<a href={`#cockpit-${anchorKey}`} className="block hover:opacity-90">
-								<p className="text-xs text-neutral-500">{label}</p>
-								<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-100">
-									{count}
-								</p>
-							</a>
-						) : (
-							<>
-								<p className="text-xs text-neutral-600">{label}</p>
-								<p className="mt-0.5 text-lg font-medium tabular-nums text-neutral-600">
-									{count}
-								</p>
-							</>
-						)}
-					</li>
-				))}
-			</ul>
+	return (
+		<div className="space-y-8">
+			<header className="border-b border-neutral-800 pb-4">
+				<div className="flex flex-wrap items-baseline justify-between gap-2">
+					<p className="text-sm text-neutral-400">
+						<span className="text-neutral-200">{total}</span> blocker
+						{total === 1 ? "" : "s"} across the program pipeline
+					</p>
+					<div className="flex items-center gap-2">
+						<span
+							title={
+								transport === "broadcasted"
+									? "Live updates connected"
+									: "Refreshing every few seconds"
+							}
+						>
+							<StatusPill tone={transport === "broadcasted" ? "positive" : "warning"}>
+								{transport === "broadcasted" ? "Live" : "Auto-refresh"}
+							</StatusPill>
+						</span>
+						<span className="text-xs tabular-nums text-neutral-500">
+							{mounted
+								? `updated ${new Date(snapshot.fetchedAt).toLocaleTimeString()}`
+								: "updated just now"}
+						</span>
+					</div>
+				</div>
+				{metricItems.length > 0 ? (
+					<p className="mt-3 flex flex-wrap items-center gap-x-0 gap-y-1 text-sm text-neutral-400">
+						{metricItems.map(([label, count, anchorKey], index) => (
+							<span key={label} className="inline-flex items-center">
+								{index > 0 ? (
+									<span className="mx-2 text-neutral-700" aria-hidden="true">
+										·
+									</span>
+								) : null}
+								<a
+									href={`#cockpit-${anchorKey}`}
+									className="hover:text-neutral-200"
+								>
+									<span className="text-neutral-200 tabular-nums">{count}</span>{" "}
+									{label.toLowerCase()}
+								</a>
+							</span>
+						))}
+					</p>
+				) : null}
+			</header>
 
 			{lastError ? (
 				<p className={noticeClasses("warning")}>
@@ -370,7 +370,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.pendingCoSpeakers.length > 0 ? (
 				<section
 					id="cockpit-co-speakers"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Co-speakers awaiting confirmation</p>
@@ -430,7 +430,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.outstandingTasks.groups.length > 0 ? (
 				<section
 					id="cockpit-tasks"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Outstanding required speaker tasks</p>
@@ -514,7 +514,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.needsReviewActivation.length > 0 ? (
 				<section
 					id="cockpit-needs-plan"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<div>
@@ -575,7 +575,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.unassignedReviews.length > 0 ? (
 				<section
 					id="cockpit-unassigned"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-end justify-between gap-2">
 						<div>
@@ -657,7 +657,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.incompleteReviews.length > 0 ? (
 				<section
 					id="cockpit-incomplete-reviews"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Incomplete assigned reviews</p>
@@ -703,7 +703,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.reviewedUndecided.length > 0 ? (
 				<section
 					id="cockpit-undecided"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Reviewed but undecided</p>
@@ -772,7 +772,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.acceptedUnscheduled.length > 0 ? (
 				<section
 					id="cockpit-unscheduled"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Accepted but unscheduled</p>
@@ -815,7 +815,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.scheduledUnpublished.length > 0 ? (
 				<section
 					id="cockpit-unpublished"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Scheduled but unpublished</p>
@@ -883,7 +883,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 			{snapshot.failedDeliveries.length > 0 ? (
 				<section
 					id="cockpit-failed-email"
-					className="scroll-mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
 				>
 					<div className="flex flex-wrap items-baseline justify-between gap-2">
 						<p className="font-medium text-neutral-100">Failed email deliveries</p>

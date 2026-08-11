@@ -48,7 +48,7 @@ export function SubmissionPacingChart({ chart }: Props) {
 		return (
 			<section
 				aria-label="Submission pacing"
-				className="mb-8 border border-neutral-800 bg-neutral-900/40 px-4 py-5"
+				className="mb-8 border-b border-neutral-800 pb-6"
 			>
 				<div className="flex flex-wrap items-baseline justify-between gap-2">
 					<h2 className="text-sm font-medium text-neutral-100">
@@ -93,7 +93,7 @@ export function SubmissionPacingChart({ chart }: Props) {
 	return (
 		<section
 			aria-label="Submission pacing"
-			className="mb-8 border border-neutral-800 bg-neutral-900/40 px-4 py-5"
+			className="mb-8 border-b border-neutral-800 pb-6"
 		>
 			<div className="flex flex-wrap items-baseline justify-between gap-2">
 				<h2 className="text-sm font-medium text-neutral-100">
