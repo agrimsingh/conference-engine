@@ -186,7 +186,7 @@ const PIPELINE: {
 	{
 		stage: "Speaker ops",
 		description:
-			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. Outstanding work stays on the cockpit until it lands.",
+			"Accepted speakers get a magic-link portal for bio, headshot, and slides, and can withdraw if plans change. The cross-event contact directory at /admin/contacts tracks your speaker roster with pipeline, tags, and CSV import across every event you own.",
 		action: {
 			kind: "own",
 			href: "/demo?perspective=speaker",
@@ -196,7 +196,7 @@ const PIPELINE: {
 	{
 		stage: "Schedule",
 		description:
-			"Published sessions land on a public grid that defaults to today or the next session day. The drag editor and clash checks run in your own event.",
+			"Drag to place; clash checks fire before you drop. Auto-place fills the unscheduled rail in one pass. Attendees can subscribe to the live schedule at /e/[slug]/schedule.ics.",
 		action: {
 			kind: "play",
 			href: `/e/${DEMO_EVENT}/schedule`,
@@ -206,7 +206,7 @@ const PIPELINE: {
 	{
 		stage: "Publish",
 		description:
-			"Speakers and session pages ship with the schedule. Public JSON and embeds cover the conference site; a separate admin API lets agents run the programme with a per-event token.",
+			"Speakers and session pages ship with the schedule. Embeds can be paused to stop serving without touching the publish gate. Agents run the full programme over the admin OpenAPI with a per-event token.",
 		action: {
 			kind: "play",
 			href: `/e/${DEMO_EVENT}/speakers`,
@@ -524,11 +524,10 @@ export default function Home() {
 							<h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
 								Click around the real UI
 							</h2>
-							<p className="mt-2 max-w-xl text-pretty text-sm text-neutral-400">
-								These open seeded demo routes. Submit, review, and the speaker
-								portal stay on an event you create (writable sandbox is local
-								only).
-							</p>
+					<p className="mt-2 max-w-xl text-pretty text-sm text-neutral-400">
+							These open seeded demo routes. Review, accept/notify, and the
+							schedule editor run in your own event.
+						</p>
 						</div>
 						<Link
 							href="/demo"

@@ -112,10 +112,9 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 					<ArrowIcon />
 				</Link>
 			</div>
-			<p className="mt-4 text-xs text-neutral-500">
-				Public demo is read-only · agents use per-event API tokens · writable
-				sandbox is local (see README)
-			</p>
+		<p className="mt-4 text-xs text-neutral-500">
+			Public demo is read-only · agents use per-event API tokens
+		</p>
 		</section>
 	);
 }
