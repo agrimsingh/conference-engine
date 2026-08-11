@@ -9,6 +9,7 @@ import type { AccountRow } from "@/lib/db/types";
 import { sendAuthEmail } from "@/lib/email/resend";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
+import { safeNextPath } from "@/lib/security/safe-next-path";
 
 type RequestLinkBody = { email?: unknown; name?: unknown; next?: unknown };
 const MAX_AUTH_LINK_REQUEST_BYTES = 16 * 1024;
@@ -29,8 +30,7 @@ export async function POST(request: Request) {
 	const body = readBody(parsed.value);
 	const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
 	const name = typeof body.name === "string" ? body.name.trim().slice(0, 160) : undefined;
-	const next = typeof body.next === "string" && body.next.startsWith("/") && !body.next.startsWith("//")
-		? body.next : "/admin";
+	const next = safeNextPath(typeof body.next === "string" ? body.next : null);
 	const db = await getDb();
 	const secret = await getAuthSecret();
 	const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";

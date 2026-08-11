@@ -5,7 +5,7 @@ import {
 	listPublicSpeakersForEvent,
 	listSpeakersForSubmissions,
 } from "@/lib/db/queries";
-import { isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
+import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/public-format";
 
@@ -215,7 +215,11 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 	const event = await getEventBySlug(db, eventSlug); if (!event) return null;
 	const embed = await getPublicEmbedBySlug(db, event.id, embedSlug); if (!embed || embed.status !== "active") return null;
 	const [slots, tracks, speakerRows] = await Promise.all([listAgendaSlotsWithSubmissions(db, event.id), listAgendaTracks(db, event.id, { includeRetired: true }), listPublicSpeakersForEvent(db, event.id)]);
-	const published = slots.filter((slot) => isPublicScheduleStatus(slot.submission_status) && slot.content_approved === 1);
+	const published = slots.filter((slot) =>
+		isPublicScheduleStatus(slot.submission_status) &&
+		isPublicAgendaVisibility(slot.agenda_visibility) &&
+		slot.content_approved === 1,
+	);
 	const speakerMap = await listSpeakersForSubmissions(db, published.map((slot) => slot.submission_id));
 	const speakerDirectory = new Map(speakerRows.map((speaker) => [speaker.person_id, speaker]));
 	const sessions = published.map((slot) => {
