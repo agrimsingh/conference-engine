@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingDecisionsScene } from "@/components/landing-decisions-scene";
 import { LogoMark } from "@/components/logo";
 import { buttonClasses } from "@/components/ui";
 
@@ -6,6 +7,21 @@ type Props = {
 	demoEvent: string;
 	repoUrl: string;
 };
+
+const PRINCIPLES = [
+	{
+		title: "One programme",
+		body: "Public page, embed, and API are projections of the same records.",
+	},
+	{
+		title: "After accept is half the job",
+		body: "Bios, headshots, decks, chasing.",
+	},
+	{
+		title: "Nothing leaks",
+		body: "Stage decisions. Reviewers don't get contact emails. Public names are confirmed speakers only. Unconfirmed reads as \"Speaker to be announced\".",
+	},
+] as const;
 
 function ArrowIcon() {
 	return (
@@ -88,13 +104,13 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 				Live for organizers
 			</p>
 			<h1 className="mt-3 max-w-5xl text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl lg:text-6xl">
-				Build your event.{" "}
-				<span className="text-emerald-400">From CFP to stage.</span>
+				The work between the call{" "}
+				<span className="text-emerald-400">and the first session.</span>
 			</h1>
 			<p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-neutral-400">
-				One workspace from open call to live schedule. Stage decisions before
-				they send, collect what speakers owe through a portal, and publish when
-				the programme is settled. Nothing to install.
+				Stage accept and decline in private. Release when the programme is
+				settled. Speakers get the email. The public page stays quiet until you
+				publish.
 			</p>
 			<div className="mt-6 flex flex-wrap items-center gap-5 text-sm font-medium">
 				<Link
@@ -112,9 +128,27 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 					<ArrowIcon />
 				</Link>
 			</div>
-		<p className="mt-4 text-xs text-neutral-500">
-			Public demo is read-only · agents use per-event API tokens
-		</p>
+			<p className="mt-4 text-xs text-neutral-500">
+				Public demo is read-only · agents use per-event API tokens
+			</p>
+			<div className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.75fr)] lg:items-start lg:gap-12">
+				<LandingDecisionsScene />
+				<ol className="border-t border-neutral-800">
+					{PRINCIPLES.map((item) => (
+						<li
+							key={item.title}
+							className="border-b border-neutral-800 py-4"
+						>
+							<p className="text-sm font-medium text-neutral-100">
+								{item.title}
+							</p>
+							<p className="mt-1 text-sm leading-relaxed text-neutral-400">
+								{item.body}
+							</p>
+						</li>
+					))}
+				</ol>
+			</div>
 		</section>
 	);
 }

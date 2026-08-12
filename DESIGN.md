@@ -110,7 +110,7 @@ components:
 
 **Creative North Star: "The Product Is the Hero"**
 
-conference-engine's visual world is the developer-tool category standard played completely straight — the Linear/Vercel/Resend/Stripe/PostHog register with no irony and no smuggled quirk. This is a recorded brand commitment (PRODUCT.md, 2026-08-08): convention is the choice, and future visual work refines within this canon rather than re-litigating the direction. The landing page proves the thesis literally — instead of a tall centered hero with a screenshot in a browser frame (explicitly refused), the page opens with a compact left-aligned conversion band that says the hosted product is ready for organizers now, then hands ~70% of the viewport to a live-looking schedule builder catching a real speaker conflict. The product demonstrates itself; the marketing copy stands aside.
+conference-engine's visual world is the developer-tool category standard played completely straight — the Linear/Vercel/Resend/Stripe/PostHog register with no irony and no smuggled quirk. This is a recorded brand commitment (PRODUCT.md, 2026-08-08): convention is the choice, and future visual work refines within this canon rather than re-litigating the direction. The landing page proves the thesis in organizer chrome — instead of a tall centered hero with a screenshot in a browser frame (explicitly refused), the page opens with a compact left-aligned conversion band that names the job (the work between the call and the first session), then a coded admin release-decisions panel with three principles beside it. The product demonstrates itself; the marketing copy stands aside.
 
 **The system is one dark world (decision recorded 2026-08-08, superseding the earlier marketing/app split).** Every surface — landing, admin (submissions, schedule, dashboard, tasks), review board, speaker portal, CFP form, and public schedule — lives on the same near-black ground (#0a0a0b) with off-white text, graphite raised cards, hairline carbon borders, and a single emerald accent. The earlier Stripe-style split (dark marketing, light workhorse app) was deliberate at the time; the product owner has since decided consistency wins: the app is the landing page's promise kept, in the same room. The old "never darken the app surfaces" rule is retired.
 
@@ -128,8 +128,8 @@ Density is dev-tool density: 13px and 11px micro-type is normal inside functiona
 A neutral-dominated palette where the entire Tailwind neutral scale is the shared spine and emerald is the only voice with an opinion.
 
 ### Primary
-- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per viewport — the primary action (the landing "Create your event" button; the one filled button per app view), with near-black text. Also the logo mark's stroke and dot, and the drag-card's active border at 60% opacity. In practice Tailwind `emerald-500` is its working twin on buttons.
-- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("From CFP to stage."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`). `emerald-400` is the text register for positive status on dark chips.
+- **Emerald Signal** (`{colors.emerald-signal}`, #10b981): the single brand accent. Solid fill on exactly one element per viewport — the primary action (the landing "Create your event" button; the one filled button per app view), with near-black text. Also the logo mark's stroke and dot. In practice Tailwind `emerald-500` is its working twin on buttons. The landing mock's "Release decisions" control is a picture of the admin primary, not a second live CTA.
+- **Emerald Bright** (`{colors.emerald-bright}`, #34d399): emerald's interactive register — arrow links, the highlighted headline phrase ("and the first session."), the live-status dot, hover states of emerald elements, and the global `:focus-visible` outline (2px, offset 2px, defined in `globals.css`). `emerald-400` is the text register for positive status on dark chips.
 
 ### Secondary
 - **Conflict Red** (`{colors.conflict-red}`, #dc2626): red means "the system caught something" and nothing else. The schedule conflict banner is its loudest form (solid red-600 fill, red-400/60 border, white semibold text). Everywhere else red is error/negative semantics only, rendered for dark surfaces as red-400 text on red-500/10 fill with red-500/30 border. Never decorative, never a second accent.
@@ -162,8 +162,8 @@ A neutral-dominated palette where the entire Tailwind neutral scale is the share
 **Character:** One neutral grotesk doing everything, differentiated by size, weight ceiling, and tightening tracking as size grows. Confident, quiet, engineered — the voice of a tool that expects to be trusted, not admired.
 
 ### Hierarchy
-- **Display** (600, 2.25rem stepping to 3.75rem at `lg`, tight leading, −0.02em): the landing headline only. Left-aligned, `text-balance`, with the product span “From CFP to stage.” colored Emerald Bright.
-- **Headline** (600, 1.5rem stepping to 1.875rem, −0.025em): landing section headings ("The whole program pipeline, one system").
+- **Display** (600, 2.25rem stepping to 3.75rem at `lg`, tight leading, −0.02em): the landing headline only. Left-aligned, `text-balance`, with the product span “and the first session.” colored Emerald Bright.
+- **Headline** (600, 1.5rem stepping to 1.875rem, −0.025em): landing section headings ("One pipeline from CFP to publish").
 - **Title** (600, 1.875rem, −0.025em): app page titles via the shared `PageHeader` component, in neutral-100; item-level titles drop to 1.125rem/500.
 - **Body** (400, 0.875rem base, 1rem for landing lede, relaxed leading on long descriptions): Smoke. Long text capped near `max-w-xl`/`max-w-2xl` (~65ch).
 - **Label** (500, 0.75rem, +0.025em, UPPERCASE): the eyebrow above every app page title ("Organizer · Dashboard", "Speaker portal") in Steel. Inside dense components the ramp continues down: 13px medium for card titles, 11px for metadata, 10px for tag chips.
@@ -199,7 +199,7 @@ Small radii throughout, scaled to element size: 4px on tag chips, 6px (`rounded-
 
 Border style is a grammar of its own: **solid** 1px = structure (cards, dividers, nav edges); **dotted** = the passage of time (hour lines on the grid); **dashed** = potential space (the drop-target ghost, empty states, upload zones). The one expressive silhouette is the mid-drag card's 1.5° rotation — the only non-rectilinear geometry in the system.
 
-Motion follows the same restraint: hover states are color swaps; the single authored animation is the drag card's 3px hover (`drag-hover`, 2.6s, `cubic-bezier(0.16, 1, 0.3, 1)`, infinite alternate) plus a `motion-safe` ping on the live dot, both disabled under `prefers-reduced-motion`.
+Motion follows the same restraint: hover states are color swaps; the single authored animation is a `motion-safe` ping on the live dot, disabled under `prefers-reduced-motion`.
 
 ## Components
 
@@ -231,7 +231,7 @@ Shared primitives live in `src/components/ui.tsx` (Button, Chip, StatusPill, Seg
 - **App band (`AppNav`):** slim translucent bar (80% Ink Ground + `backdrop-blur`, Carbon Line bottom edge) carrying the logo mark + semibold tracking-tight wordmark linking home. The landing extends the same treatment with marketing links and the single emerald CTA; app surfaces (admin, review, portal, CFP, public schedule) carry their section links as 0.75rem/500 pills — active pill Carbon Line fill with neutral-100 text, idle pills Smoke text with Graphite hover; sections separated by a 1px vertical Carbon Line rule.
 
 ### The Schedule Grid (signature)
-The product-as-hero artifact and the system's densest expression: 44px time ruler with tabular 24h labels, dotted Carbon Line hour rules every 64px, room lanes split by 70%-opacity solid borders, positioned slot cards (13px medium title, 11px Smoke meta), a dashed ghost drop-target, the tilted floating drag card with emerald border, and the lone red conflict banner. On the landing it renders borderless — no browser chrome, no container — and dissolves into the page through a bottom gradient fade to neutral-950.
+The densest product expression, on admin and public schedule: 44px time ruler with tabular 24h labels, dotted Carbon Line hour rules every 64px, room lanes split by 70%-opacity solid borders, positioned slot cards (13px medium title, 11px Smoke meta), a dashed ghost drop-target, the tilted floating drag card with emerald border, and the lone red conflict banner. The landing hero is organizer release-decisions chrome instead: Carbon Line panel, mono admin path, quiet workflow rail, divide-y proposal rows, left-aligned primary. No browser frame.
 
 ## Do's and Don'ts
 
@@ -244,7 +244,7 @@ The product-as-hero artifact and the system's densest expression: 44px time rule
 - **Do** compose the shared primitives (`Button`, `Chip`, `StatusPill`, `SegmentedControl`, `EmptyState`, `PageHeader`, `AppNav`) instead of hand-rolling classes per surface.
 
 ### Don't:
-- **Don't** build a tall centered hero with a screenshot in a browser frame — the direction contract explicitly refuses it; the product renders live, borderless, and fades into the page.
+- **Don't** build a tall centered hero with a screenshot in a browser frame — the direction contract explicitly refuses it. The landing hero is coded admin chrome in the same dark world, not a framed screenshot.
 - **Don't** lighten any surface back to the retired paper palette, and don't let emerald become chrome (no emerald card or container borders — emerald is action/liveness/positive-status only).
 - **Don't** use red anywhere except conflict/error semantics — no second accent, no decorative red.
 - **Don't** put shadows on resting elements; a shadow means mid-drag or alert, nothing else.
