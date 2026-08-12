@@ -113,14 +113,22 @@ export async function listPublishedPortalResourcesForSpeaker(db: D1Database, per
 	const result = await db.prepare(
 		`SELECT pr.* FROM portal_resources pr
 		 WHERE pr.published = 1
-		   AND EXISTS (
-			 SELECT 1 FROM event_speaker_profiles esp
-			 WHERE esp.event_id = pr.event_id
-			   AND esp.person_id = ?
-			   AND esp.workflow_status NOT IN ('declined', 'withdrawn')
+		   AND (
+			 EXISTS (
+			   SELECT 1 FROM event_speaker_profiles esp
+			   WHERE esp.event_id = pr.event_id
+			     AND esp.person_id = ?
+			     AND esp.workflow_status NOT IN ('declined', 'withdrawn')
+			 )
+			 OR EXISTS (
+			   SELECT 1 FROM speaker_handoffs h
+			   WHERE h.event_id = pr.event_id
+			     AND h.manager_person_id = ?
+			     AND h.status = 'accepted'
+			 )
 		   )
 		 ORDER BY pr.event_id ASC, pr.position ASC, pr.created_at ASC`,
-	).bind(personId).all<PortalResourceRow>();
+	).bind(personId, personId).all<PortalResourceRow>();
 	return result.results.filter((resource) => resource.resource_type !== "embed" || (resource.embed_url !== null && isHttpsUrl(resource.embed_url)));
 }
 

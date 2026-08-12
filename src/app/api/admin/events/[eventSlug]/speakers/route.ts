@@ -3,7 +3,6 @@ import { authorizeEventAdminApi, authorizeWritableEventAdminApi } from "@/lib/au
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
 import { getDb } from "@/lib/db/cloudflare";
 import {
-	importSpeakerRosterCsv,
 	isSpeakerWorkflowStatus,
 	listEventSpeakerRoster,
 	parseSpeakerSocials,
@@ -43,18 +42,7 @@ export async function POST(request: Request, context: RouteContext) {
 
 	const contentType = request.headers.get("content-type") ?? "";
 	if (contentType.includes("text/csv") || contentType.includes("application/csv")) {
-		const csv = await request.text();
-		if (csv.length > 512 * 1024) {
-			return NextResponse.json({ ok: false, error: "CSV is too large" }, { status: 413 });
-		}
-		const imported = await importSpeakerRosterCsv(db, {
-			eventId: authorization.access.event.id,
-			csv,
-		});
-		if (!imported.ok) {
-			return NextResponse.json(imported, { status: 400 });
-		}
-		return NextResponse.json(imported);
+		return csvImportGone(eventSlug);
 	}
 
 	const parsed = await readBoundedJson(request, 32 * 1024);
@@ -64,12 +52,7 @@ export async function POST(request: Request, context: RouteContext) {
 	}
 
 	if (typeof parsed.value.csv === "string") {
-		const imported = await importSpeakerRosterCsv(db, {
-			eventId: authorization.access.event.id,
-			csv: parsed.value.csv,
-		});
-		if (!imported.ok) return NextResponse.json(imported, { status: 400 });
-		return NextResponse.json(imported);
+		return csvImportGone(eventSlug);
 	}
 
 	const email = typeof parsed.value.email === "string" ? parsed.value.email : "";
@@ -99,6 +82,16 @@ export async function POST(request: Request, context: RouteContext) {
 	});
 	if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
 	return NextResponse.json({ ok: true, speaker: result.speaker });
+}
+
+function csvImportGone(eventSlug: string) {
+	return NextResponse.json(
+		{
+			ok: false,
+			error: `CSV import moved to POST /api/admin/events/${eventSlug}/speakers/import/preview and POST /api/admin/events/${eventSlug}/speakers/import/commit.`,
+		},
+		{ status: 410 },
+	);
 }
 
 function parseSocialsInput(raw: unknown): SpeakerSocials {

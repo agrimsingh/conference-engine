@@ -38,12 +38,23 @@ export type PendingCoSpeakerItem = {
 	invitedAt: number | null;
 };
 
+export type PendingSlotAckItem = {
+	submissionId: string;
+	submissionTitle: string;
+	personId: string;
+	personName: string | null;
+	personEmail: string;
+	startsAt: number;
+	roomName: string;
+};
+
 export type OutstandingTasksSnapshot = {
 	eventId: string;
 	eventSlug: string;
 	incompleteCount: number;
 	groups: OutstandingTaskGroup[];
 	pendingCoSpeakers: PendingCoSpeakerItem[];
+	pendingSlotAcks: PendingSlotAckItem[];
 	fetchedAt: number;
 };
 

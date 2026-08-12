@@ -1,4 +1,4 @@
-import type { OutstandingTaskGroup, PendingCoSpeakerItem } from "./outstanding-tasks";
+import type { OutstandingTaskGroup, PendingCoSpeakerItem, PendingSlotAckItem } from "./outstanding-tasks";
 
 /** Max rows returned per cockpit blocker section; totals may be higher. */
 export const COCKPIT_BLOCKER_LIST_LIMIT = 50;
@@ -63,6 +63,7 @@ export type CockpitSnapshot = {
 		groups: OutstandingTaskGroup[];
 	};
 	pendingCoSpeakers: PendingCoSpeakerItem[];
+	pendingSlotAcks: PendingSlotAckItem[];
 	/** Submitted pipeline work with no active evaluation plan. */
 	needsReviewActivation: CockpitSubmissionRef[];
 	needsReviewActivationTotal: number;
@@ -83,6 +84,7 @@ export type CockpitSnapshot = {
 export type CockpitBlockerKey =
 	| "outstandingTasks"
 	| "pendingCoSpeakers"
+	| "pendingSlotAcks"
 	| "needsReviewActivation"
 	| "unassignedReviews"
 	| "incompleteReviews"
@@ -95,6 +97,7 @@ export function cockpitBlockerCounts(snapshot: CockpitSnapshot): Record<CockpitB
 	return {
 		outstandingTasks: snapshot.outstandingTasks.incompleteCount,
 		pendingCoSpeakers: snapshot.pendingCoSpeakers.length,
+		pendingSlotAcks: snapshot.pendingSlotAcks.length,
 		needsReviewActivation: snapshot.needsReviewActivationTotal,
 		unassignedReviews: snapshot.unassignedReviewsTotal,
 		incompleteReviews: snapshot.incompleteReviewsTotal,

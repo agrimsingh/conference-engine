@@ -244,7 +244,7 @@ async function updateSubmittedInPlace(
 
 export async function finalizeDraft(
 	db: D1Database,
-	args: { secret: string; draftId: string; token: string; submitterName: string; answers: AnswerMap; speakers: SpeakerAnswer[]; category?: string | null; now?: number },
+	args: { secret: string; draftId: string; token: string; submitterName: string; answers: AnswerMap; speakers: SpeakerAnswer[]; category?: string | null; formRevisionId?: string | null; now?: number },
 ): Promise<FinalizeDraftResult> {
 	const now = args.now ?? Date.now();
 	const hash = await hmacHash(args.secret, args.token);
@@ -292,10 +292,10 @@ export async function finalizeDraft(
 		const results = await db.batch([
 			...people,
 			db.prepare(
-				`INSERT INTO submissions (id, form_id, event_id, status, answers_json, category, submitter_email, submitter_name, submitter_person_id, created_at, updated_at, submitted_at)
-         SELECT ?, ?, ?, 'submitted', ?, ?, ?, ?, (SELECT id FROM people WHERE email = ?), ?, ?, ?
+				`INSERT INTO submissions (id, form_id, event_id, status, answers_json, category, submitter_email, submitter_name, submitter_person_id, form_revision_id, created_at, updated_at, submitted_at)
+         SELECT ?, ?, ?, 'submitted', ?, ?, ?, ?, (SELECT id FROM people WHERE email = ?), ?, ?, ?, ?
          WHERE EXISTS (SELECT 1 FROM submission_drafts WHERE id = ? AND status = 'draft')`,
-			).bind(submissionId, draft.form_id, draft.event_id, JSON.stringify(args.answers), args.category ?? null, draft.verified_email, args.submitterName.trim(), draft.verified_email, now, now, now, draft.id),
+			).bind(submissionId, draft.form_id, draft.event_id, JSON.stringify(args.answers), args.category ?? null, draft.verified_email, args.submitterName.trim(), draft.verified_email, args.formRevisionId ?? null, now, now, now, draft.id),
 			...speakerStatements,
 			db.prepare("UPDATE submission_drafts SET status = 'submitted', submission_id = ?, finalized_at = ?, updated_at = ? WHERE id = ? AND status = 'draft'").bind(submissionId, now, now, draft.id),
 			// Keep an edit-capable current token instead of consuming; submitters may revise until the form closes.

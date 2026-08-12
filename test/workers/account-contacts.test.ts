@@ -5,6 +5,8 @@ import {
 	enrollContactInPipeline,
 	getAccountContact,
 	importAccountContactsCsv,
+	previewAccountContactsCsv,
+	commitAccountContactsCsv,
 	listAccountContacts,
 	mergeAccountContacts,
 	moveContactPipelineStage,
@@ -245,6 +247,37 @@ Valid Speaker,valid.speaker@sbek-test.example.com
 		if (result.ok) return;
 		expect(result.rows?.some((row) => row.row === 3)).toBe(true);
 		expect(await listAccountContacts(env.DB, accountId)).toHaveLength(0);
+	});
+
+	it("previews contact CSV without writing rows", async () => {
+		const { accountId } = await seedAccount("import-preview");
+		const preview = await previewAccountContactsCsv(env.DB, {
+			accountId,
+			csv: FIXTURE_CSV,
+		});
+		expect(preview.ok).toBe(true);
+		if (!preview.ok) return;
+		expect(preview.created).toBe(3);
+		expect(preview.updated).toBe(0);
+		expect(await listAccountContacts(env.DB, accountId)).toHaveLength(0);
+
+		const committed = await commitAccountContactsCsv(env.DB, {
+			accountId,
+			csv: FIXTURE_CSV,
+			now,
+		});
+		expect(committed.ok).toBe(true);
+		if (!committed.ok) return;
+		expect(committed.imported).toBe(3);
+
+		const again = await previewAccountContactsCsv(env.DB, {
+			accountId,
+			csv: FIXTURE_CSV,
+		});
+		expect(again.ok).toBe(true);
+		if (!again.ok) return;
+		expect(again.created).toBe(0);
+		expect(again.updated).toBe(3);
 	});
 
 	it("dedupes overlapping event_speaker_contacts when merging duplicates", async () => {

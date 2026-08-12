@@ -103,6 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
 			answers: validated.visibleAnswers,
 			speakers: validated.speakers,
 			category,
+			formRevisionId: loaded.revisionId,
 		});
 	} catch (error) {
 		if (isSubmissionLimitReachedError(error)) {

@@ -66,7 +66,7 @@ const SECTIONS: Array<{
 	{
 		id: "import",
 		label: "Import",
-		description: "Import a CSV or add a contact by hand.",
+		description: "Preview a CSV, then import contacts.",
 	},
 	{
 		id: "email",
@@ -121,6 +121,11 @@ export function ContactsConsole({
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [csvText, setCsvText] = useState("");
+	const [csvPreview, setCsvPreview] = useState<{
+		created: number;
+		updated: number;
+		rows: Array<{ row: number; email: string; name: string; action: "create" | "update" }>;
+	} | null>(null);
 	const [draft, setDraft] = useState<CreateDraft>(emptyDraft);
 	const [segmentName, setSegmentName] = useState("AI Experts");
 	const [activeSegmentId, setActiveSegmentId] = useState<string | null>(initialSegmentId);
@@ -447,12 +452,46 @@ export function ContactsConsole({
 					{view === "import" ? (
 						<ImportSection
 							csvText={csvText}
+							csvPreview={csvPreview}
 							draft={draft}
-							onCsvTextChange={setCsvText}
+							onCsvTextChange={(value) => {
+								setCsvText(value);
+								setCsvPreview(null);
+							}}
 							onDraftChange={setDraft}
+							onPreview={() =>
+								run(async () => {
+									const response = await fetch("/api/admin/contacts/import/preview", {
+										method: "POST",
+										headers: { "content-type": "application/json" },
+										body: JSON.stringify({ csv: csvText }),
+									});
+									const data = (await response.json()) as {
+										ok: boolean;
+										created?: number;
+										updated?: number;
+										rows?: Array<{
+											row: number;
+											email: string;
+											name: string;
+											action: "create" | "update";
+										}>;
+										error?: string;
+									};
+									if (!data.ok) throw new Error(data.error ?? "Could not preview CSV");
+									setCsvPreview({
+										created: data.created ?? 0,
+										updated: data.updated ?? 0,
+										rows: data.rows ?? [],
+									});
+									setMessage(
+										`Preview ready: ${data.created ?? 0} new, ${data.updated ?? 0} updates. Nothing written yet.`,
+									);
+								})
+							}
 							onImport={() =>
 								run(async () => {
-									const response = await fetch("/api/admin/contacts/import", {
+									const response = await fetch("/api/admin/contacts/import/commit", {
 										method: "POST",
 										headers: { "content-type": "application/json" },
 										body: JSON.stringify({ csv: csvText }),
@@ -466,6 +505,7 @@ export function ContactsConsole({
 									if (!data.ok) throw new Error(data.error ?? "Import failed");
 									await refreshDirectory(filters);
 									await refreshPipeline();
+									setCsvPreview(null);
 									setMessage(`Imported ${data.imported ?? 0}, updated ${data.updated ?? 0}`);
 								})
 							}
@@ -967,16 +1007,24 @@ function PipelineSection({
 
 function ImportSection({
 	csvText,
+	csvPreview,
 	draft,
 	onCsvTextChange,
 	onDraftChange,
+	onPreview,
 	onImport,
 	onCreate,
 }: {
 	csvText: string;
+	csvPreview: {
+		created: number;
+		updated: number;
+		rows: Array<{ row: number; email: string; name: string; action: "create" | "update" }>;
+	} | null;
 	draft: CreateDraft;
 	onCsvTextChange: (value: string) => void;
 	onDraftChange: (value: CreateDraft | ((prev: CreateDraft) => CreateDraft)) => void;
+	onPreview: () => void;
 	onImport: () => void;
 	onCreate: () => void;
 }) {
@@ -986,7 +1034,7 @@ function ImportSection({
 				<div>
 					<h3 className="text-sm font-medium text-neutral-100">Import CSV</h3>
 					<p className="mt-1 text-sm text-neutral-500">
-						Columns: name, email, title, company, bio. Re-import dedupes on email.
+						Columns: name, email, title, company, bio. Preview the plan, then import. Re-import dedupes on email.
 					</p>
 				</div>
 				<label className="block space-y-1.5 text-sm">
@@ -999,9 +1047,46 @@ function ImportSection({
 						spellCheck={false}
 					/>
 				</label>
-				<button type="button" className={buttonClasses("primary")} onClick={onImport}>
-					Import contacts
-				</button>
+				<div className="flex flex-wrap gap-2">
+					<button type="button" className={buttonClasses("secondary")} onClick={onPreview}>
+						Preview import
+					</button>
+					<button
+						type="button"
+						className={buttonClasses("primary")}
+						onClick={onImport}
+						disabled={!csvPreview}
+					>
+						Import contacts
+					</button>
+				</div>
+				{csvPreview ? (
+					<div className="overflow-x-auto rounded-lg border border-neutral-800">
+						<p className="border-b border-neutral-800 px-3 py-2 text-xs text-neutral-400">
+							{csvPreview.created} new · {csvPreview.updated} updates. Nothing is written until you import.
+						</p>
+						<table className="min-w-full text-left text-xs text-neutral-300">
+							<thead className="text-neutral-500">
+								<tr>
+									<th className="px-3 py-2 font-medium">Row</th>
+									<th className="px-3 py-2 font-medium">Name</th>
+									<th className="px-3 py-2 font-medium">Email</th>
+									<th className="px-3 py-2 font-medium">Plan</th>
+								</tr>
+							</thead>
+							<tbody>
+								{csvPreview.rows.map((row) => (
+									<tr key={`${row.row}-${row.email}`} className="border-t border-neutral-800">
+										<td className="px-3 py-2 tabular-nums text-neutral-500">{row.row}</td>
+										<td className="px-3 py-2">{row.name}</td>
+										<td className="px-3 py-2">{row.email}</td>
+										<td className="px-3 py-2">{row.action === "create" ? "Create" : "Update"}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : null}
 			</div>
 
 			<div className="space-y-4 border-t border-neutral-800 pt-8">

@@ -12,6 +12,7 @@ import { isPlausibleEmail, normalizeEmail } from "@/lib/security/crypto";
 import { validatedAppOrigin } from "@/lib/security/origin";
 import { hasFormulaPrefix, parseBoundedCsv } from "@/lib/sessions/csv";
 import { listSpeakerCrmSummaries, type SpeakerCrmSummary } from "./crm";
+import { listAcceptedHandoffsForEvent } from "./handoff";
 import { SPEAKER_SOCIAL_KEYS, type SpeakerSocialKey, type SpeakerSocialLinks } from "./social";
 
 export type { EventSpeakerProfileRow };
@@ -70,6 +71,7 @@ export type RosterSpeaker = {
 	earliestDueAt: number | null;
 	profileId: string | null;
 	crm: SpeakerCrmSummary;
+	manager: { email: string; name: string | null } | null;
 };
 
 export type RosterFilters = {
@@ -374,6 +376,7 @@ export async function listEventSpeakerRoster(
 			earliestDueAt: null,
 			profileId: row.profile_id,
 			crm: { owner: null, tags: [], lastContactAt: null },
+			manager: null,
 		};
 		byPerson.set(row.person_id, speaker);
 		return speaker;
@@ -434,6 +437,13 @@ export async function listEventSpeakerRoster(
 	const crmSummaries = await listSpeakerCrmSummaries(db, eventId, [...byPerson.keys()]);
 	for (const speaker of byPerson.values()) {
 		speaker.crm = crmSummaries.get(speaker.personId) ?? { owner: null, tags: [], lastContactAt: null };
+	}
+
+	const handoffs = await listAcceptedHandoffsForEvent(db, eventId);
+	for (const handoff of handoffs) {
+		const speaker = byPerson.get(handoff.speaker_person_id);
+		if (!speaker || speaker.manager) continue;
+		speaker.manager = { email: handoff.manager_email, name: handoff.manager_name };
 	}
 
 	const ordered = [...byPerson.values()].sort((a, b) =>
@@ -725,24 +735,39 @@ export async function emailRosterSpeakers(
 	return { sent, skipped, templateKey };
 }
 
+export type RosterImportPlanRow = {
+	row: number;
+	email: string;
+	name: string;
+	action: "create" | "update";
+};
+
+export type RosterImportPreview =
+	| { ok: true; created: number; updated: number; rows: RosterImportPlanRow[] }
+	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> };
+
 export type RosterImportResult =
 	| { ok: true; imported: number; updated: number; rows: Array<{ row: number; email: string; action: "created" | "updated" }> }
 	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> };
 
-export async function importSpeakerRosterCsv(
-	db: D1Database,
-	args: { eventId: string; csv: string; now?: number },
-): Promise<RosterImportResult> {
-	try {
-		await requireWritableEventById(db, args.eventId);
-	} catch (error) {
-		if (error instanceof DemoEventWriteError) {
-			return { ok: false, error: "This demo event is read-only" };
-		}
-		throw error;
-	}
+type ValidatedRosterImportRow = {
+	rowNumber: number;
+	email: string;
+	name: string;
+	jobTitle: string;
+	company: string;
+	bio: string;
+	logisticsText: string;
+	workflowStatus: SpeakerWorkflowStatus;
+	socials: SpeakerSocials;
+};
 
-	const parsed = parseBoundedCsv(args.csv);
+function parseRosterImportRows(
+	csv: string,
+):
+	| { ok: true; validated: ValidatedRosterImportRow[] }
+	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> } {
+	const parsed = parseBoundedCsv(csv);
 	if (!parsed.ok) return { ok: false, error: parsed.error };
 	const required = ["email", "name"];
 	for (const header of required) {
@@ -752,9 +777,8 @@ export async function importSpeakerRosterCsv(
 	}
 
 	const issues: Array<{ row: number; error: string }> = [];
-	const actions: Array<{ row: number; email: string; action: "created" | "updated" }> = [];
-	let imported = 0;
-	let updated = 0;
+	const validated: ValidatedRosterImportRow[] = [];
+	const emailsInFile = new Set<string>();
 
 	for (const [index, record] of parsed.rows.entries()) {
 		const rowNumber = index + 2;
@@ -782,41 +806,131 @@ export async function importSpeakerRosterCsv(
 			issues.push({ row: rowNumber, error: `workflow_status must be one of ${SPEAKER_WORKFLOW_STATUSES.join(", ")}` });
 			continue;
 		}
+		if (emailsInFile.has(email)) {
+			issues.push({ row: rowNumber, error: "Duplicate email in CSV" });
+			continue;
+		}
+		emailsInFile.add(email);
+		validated.push({
+			rowNumber,
+			email,
+			name,
+			jobTitle,
+			company,
+			bio,
+			logisticsText,
+			workflowStatus: workflowRaw,
+			socials,
+		});
+	}
+
+	if (issues.length) return { ok: false, error: "Fix CSV validation errors before importing", rows: issues };
+	return { ok: true, validated };
+}
+
+export async function previewSpeakerRosterCsv(
+	db: D1Database,
+	args: { eventId: string; csv: string },
+): Promise<RosterImportPreview> {
+	try {
+		await requireWritableEventById(db, args.eventId);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return { ok: false, error: "This demo event is read-only" };
+		}
+		throw error;
+	}
+
+	const parsed = parseRosterImportRows(args.csv);
+	if (!parsed.ok) return parsed;
+
+	const rows: RosterImportPlanRow[] = [];
+	for (const row of parsed.validated) {
 		const existed = await db
 			.prepare(
 				`SELECT esp.id FROM event_speaker_profiles esp
 				 JOIN people p ON p.id = esp.person_id
 				 WHERE esp.event_id = ? AND p.email = ?`,
 			)
-			.bind(args.eventId, email)
+			.bind(args.eventId, row.email)
+			.first();
+		rows.push({
+			row: row.rowNumber,
+			email: row.email,
+			name: row.name,
+			action: existed ? "update" : "create",
+		});
+	}
+
+	return {
+		ok: true,
+		created: rows.filter((row) => row.action === "create").length,
+		updated: rows.filter((row) => row.action === "update").length,
+		rows,
+	};
+}
+
+export async function commitSpeakerRosterCsv(
+	db: D1Database,
+	args: { eventId: string; csv: string; now?: number },
+): Promise<RosterImportResult> {
+	try {
+		await requireWritableEventById(db, args.eventId);
+	} catch (error) {
+		if (error instanceof DemoEventWriteError) {
+			return { ok: false, error: "This demo event is read-only" };
+		}
+		throw error;
+	}
+
+	const parsed = parseRosterImportRows(args.csv);
+	if (!parsed.ok) return parsed;
+
+	const actions: Array<{ row: number; email: string; action: "created" | "updated" }> = [];
+	let imported = 0;
+	let updated = 0;
+
+	for (const row of parsed.validated) {
+		const existed = await db
+			.prepare(
+				`SELECT esp.id FROM event_speaker_profiles esp
+				 JOIN people p ON p.id = esp.person_id
+				 WHERE esp.event_id = ? AND p.email = ?`,
+			)
+			.bind(args.eventId, row.email)
 			.first();
 		const result = await upsertEventSpeakerProfile(db, {
 			eventId: args.eventId,
 			input: {
-				email,
-				name,
-				jobTitle: jobTitle || null,
-				company: company || null,
-				bio: bio || null,
-				logisticsText: logisticsText || null,
-				socials,
-				workflowStatus: workflowRaw,
+				email: row.email,
+				name: row.name,
+				jobTitle: row.jobTitle || null,
+				company: row.company || null,
+				bio: row.bio || null,
+				logisticsText: row.logisticsText || null,
+				socials: row.socials,
+				workflowStatus: row.workflowStatus,
 			},
 			now: args.now,
 		});
 		if (!result.ok) {
-			issues.push({ row: rowNumber, error: result.error });
-			continue;
+			return { ok: false, error: result.error, rows: [{ row: row.rowNumber, error: result.error }] };
 		}
 		if (existed) {
 			updated += 1;
-			actions.push({ row: rowNumber, email, action: "updated" });
+			actions.push({ row: row.rowNumber, email: row.email, action: "updated" });
 		} else {
 			imported += 1;
-			actions.push({ row: rowNumber, email, action: "created" });
+			actions.push({ row: row.rowNumber, email: row.email, action: "created" });
 		}
 	}
 
-	if (issues.length) return { ok: false, error: "Fix CSV validation errors before importing", rows: issues };
 	return { ok: true, imported, updated, rows: actions };
+}
+
+export async function importSpeakerRosterCsv(
+	db: D1Database,
+	args: { eventId: string; csv: string; now?: number },
+): Promise<RosterImportResult> {
+	return commitSpeakerRosterCsv(db, args);
 }

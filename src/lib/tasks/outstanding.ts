@@ -12,6 +12,7 @@ import {
 	listTasksForEvent,
 } from "@/lib/db/queries";
 import type { EventRow } from "@/lib/db/types";
+import { listPendingSlotAcksForEvent } from "@/lib/schedule/slot-ack";
 
 function parseAnswers(raw: string): Record<string, unknown> {
 	try {
@@ -85,12 +86,22 @@ export async function loadOutstandingTasksSnapshot(
 	}));
 
 	const groups = groupOutstandingTasks(rows);
+	const pendingSlotAcks = (await listPendingSlotAcksForEvent(db, event.id)).map((row) => ({
+		submissionId: row.submission_id,
+		submissionTitle: titleFromAnswers(parseAnswers(row.answers_json)),
+		personId: row.person_id,
+		personName: row.person_name,
+		personEmail: row.person_email,
+		startsAt: row.starts_at,
+		roomName: row.room_name,
+	}));
 	return {
 		eventId: event.id,
 		eventSlug: event.slug,
 		incompleteCount: rows.length,
 		groups,
 		pendingCoSpeakers,
+		pendingSlotAcks,
 		fetchedAt: Date.now(),
 	};
 }

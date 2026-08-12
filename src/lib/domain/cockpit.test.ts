@@ -19,6 +19,7 @@ function emptySnapshot(overrides: Partial<CockpitSnapshot> = {}): CockpitSnapsho
 		reviewers: [],
 		outstandingTasks: { incompleteCount: 0, groups: [] },
 		pendingCoSpeakers: [],
+		pendingSlotAcks: [],
 		needsReviewActivation: [],
 		needsReviewActivationTotal: 0,
 		unassignedReviews: [],

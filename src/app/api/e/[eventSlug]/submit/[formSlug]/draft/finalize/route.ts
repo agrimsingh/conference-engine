@@ -46,7 +46,7 @@ export async function POST(request: Request, context: Context) {
 	if (!validated.ok) return NextResponse.json(validated, { status: 400 });
 	let result: Awaited<ReturnType<typeof finalizeDraft>>;
 	try {
-		result = await finalizeDraft(db, { secret, draftId: draft.id, token, submitterName: name, answers: validated.visibleAnswers, speakers: validated.speakers, category: resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers) });
+		result = await finalizeDraft(db, { secret, draftId: draft.id, token, submitterName: name, answers: validated.visibleAnswers, speakers: validated.speakers, category: resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers), formRevisionId: loaded.revisionId });
 	} catch (error) {
 		if (isSubmissionLimitReachedError(error)) {
 			return NextResponse.json({ ok: false, errors: ["This CFP has reached its submission limit."] }, { status: 409 });

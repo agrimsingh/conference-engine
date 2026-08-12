@@ -7,6 +7,8 @@ export const MESSAGE_TEMPLATE_KEYS = [
 	"waitlist",
 	"co_speaker_invite",
 	"calendar_invite",
+	"calendar_reschedule",
+	"speaker_handoff",
 	"task_reminder",
 	"draft_reminder",
 	"speaker_announcement",
@@ -152,6 +154,38 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			.filter((line): line is string => line !== null)
 			.join("\n"),
 	}),
+	calendar_reschedule: (ctx) => ({
+		subject: `Time changed: ${ctx.title} @ ${ctx.eventName}`,
+		text: [
+			`Hey ${ctx.submitterName},`,
+			"",
+			`The scheduled time for "${ctx.title}" at ${ctx.eventName} changed.`,
+			ctx.roomName ? `Room: ${ctx.roomName}` : null,
+			ctx.startsAtIso && ctx.endsAtIso
+				? `When: ${ctx.startsAtIso} → ${ctx.endsAtIso}`
+				: null,
+			"",
+			"A calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal: /portal",
+			"",
+			REPLY_CTA,
+		]
+			.filter((line): line is string => line !== null)
+			.join("\n"),
+	}),
+	speaker_handoff: (ctx) => ({
+		subject: `Can you manage "${ctx.title}" for ${ctx.eventName}?`,
+		text: [
+			`Hey ${ctx.submitterName},`,
+			"",
+			`A speaker asked you to manage "${ctx.title}" for ${ctx.eventName}.`,
+			"You can complete onboarding and confirm the slot on their behalf.",
+			"",
+			`Accept: ${ctx.confirmUrl ?? "(link unavailable)"}`,
+			`Decline: ${ctx.declineUrl ?? "(link unavailable)"}`,
+			"",
+			REPLY_CTA,
+		].join("\n"),
+	}),
 	task_reminder: (ctx) => {
 		const count = ctx.outstandingCount ?? ctx.taskLabels?.length ?? 0;
 		const labels = ctx.taskLabels ?? [];
@@ -294,6 +328,8 @@ export function renderMessageTemplate(
 export function isOneShotTemplate(key: MessageTemplateKey): boolean {
 	return (
 		key !== "calendar_invite" &&
+		key !== "calendar_reschedule" &&
+		key !== "speaker_handoff" &&
 		key !== "task_reminder" &&
 		key !== "draft_reminder" &&
 		key !== "speaker_announcement" &&

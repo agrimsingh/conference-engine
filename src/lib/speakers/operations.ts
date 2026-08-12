@@ -1,4 +1,5 @@
 import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writability";
+import { canActAsSpeaker } from "./handoff";
 
 export type SpeakerActionAssignment = {
 	id: string;
@@ -70,7 +71,13 @@ export async function listSpeakerActionAssignments(db: D1Database, args: { event
 	const clauses: string[] = [];
 	const binds: string[] = [];
 	if (args.eventId) { clauses.push("a.event_id = ?"); binds.push(args.eventId); }
-	if (args.personId) { clauses.push("a.person_id = ?"); binds.push(args.personId); }
+	if (args.personId) {
+		clauses.push(`(a.person_id = ? OR EXISTS (
+			SELECT 1 FROM speaker_handoffs h
+			WHERE h.speaker_person_id = a.person_id AND h.manager_person_id = ? AND h.status = 'accepted'
+		))`);
+		binds.push(args.personId, args.personId);
+	}
 	const result = await db.prepare(`SELECT a.id, a.task_id, a.event_id, a.person_id, a.status, a.completed_at, t.title, t.instructions, t.due_at, p.name, p.email FROM speaker_action_task_assignments a JOIN speaker_action_tasks t ON t.id = a.task_id AND t.event_id = a.event_id JOIN people p ON p.id = a.person_id WHERE ${clauses.join(" AND ")} ORDER BY COALESCE(t.due_at, 9223372036854775807), t.title, p.email`).bind(...binds).all<{ id: string; task_id: string; event_id: string; person_id: string; status: "pending" | "completed"; completed_at: number | null; title: string; instructions: string | null; due_at: number | null; name: string | null; email: string }>();
 	return result.results.map((row) => ({ id: row.id, taskId: row.task_id, eventId: row.event_id, personId: row.person_id, title: row.title, instructions: row.instructions, dueAt: row.due_at, status: row.status, completedAt: row.completed_at, speakerName: row.name?.trim() || row.email, speakerEmail: row.email }));
 }
@@ -78,11 +85,11 @@ export async function listSpeakerActionAssignments(db: D1Database, args: { event
 export async function completeSpeakerActionAssignment(db: D1Database, args: { assignmentId: string; personId: string; now?: number }): Promise<{ ok: true; eventId: string } | { ok: false; error: string; status: number }> {
 	const row = await db.prepare("SELECT id, event_id, person_id, status FROM speaker_action_task_assignments WHERE id = ?").bind(args.assignmentId).first<{ id: string; event_id: string; person_id: string; status: string }>();
 	if (!row) return { ok: false, error: "Task not found", status: 404 };
-	if (row.person_id !== args.personId) return { ok: false, error: "Forbidden", status: 403 };
+	if (!(await canActAsSpeaker(db, args.personId, row.person_id))) return { ok: false, error: "Forbidden", status: 403 };
 	try { await requireWritableEventById(db, row.event_id); } catch (error) { if (error instanceof DemoEventWriteError) return { ok: false, error: "This task is read-only", status: 403 }; throw error; }
 	if (row.status !== "completed") {
 		const now = args.now ?? Date.now();
-		await db.prepare("UPDATE speaker_action_task_assignments SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND person_id = ? AND status = 'pending'").bind(now, now, row.id, args.personId).run();
+		await db.prepare("UPDATE speaker_action_task_assignments SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND person_id = ? AND status = 'pending'").bind(now, now, row.id, row.person_id).run();
 	}
 	return { ok: true, eventId: row.event_id };
 }

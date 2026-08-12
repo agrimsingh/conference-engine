@@ -123,6 +123,7 @@ export async function insertSubmission(
 		answers: AnswerMap;
 		speakers: SpeakerAnswer[];
 		category?: CategoryLabel | null;
+		formRevisionId?: string | null;
 	},
 ): Promise<string> {
 	await requireWritableEventById(db, args.eventId);
@@ -148,9 +149,9 @@ export async function insertSubmission(
 	const submissionStatement = db.prepare(
 			`INSERT INTO submissions (
 		id, form_id, event_id, status, answers_json, category,
-		submitter_email, submitter_name, submitter_person_id, created_at, updated_at, submitted_at
+		submitter_email, submitter_name, submitter_person_id, form_revision_id, created_at, updated_at, submitted_at
 	  ) VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?,
-	    (SELECT id FROM people WHERE email = ?), ?, ?, ?)`,
+	    (SELECT id FROM people WHERE email = ?), ?, ?, ?, ?)`,
 		)
 		.bind(
 			submissionId,
@@ -161,6 +162,7 @@ export async function insertSubmission(
 			submitterEmail,
 			args.submitterName,
 			submitterEmail,
+			args.formRevisionId ?? null,
 			now,
 			now,
 			now,

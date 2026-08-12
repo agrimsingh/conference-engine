@@ -15,6 +15,7 @@ export const EDITABLE_MESSAGE_TEMPLATE_KEYS = [
 	"task_reminder",
 	"speaker_announcement",
 	"calendar_invite",
+	"calendar_reschedule",
 ] as const;
 
 /** Safe keys organizers may pick from the roster bulk-email composer. */
@@ -76,6 +77,10 @@ const DEFAULTS: Record<EditableMessageTemplateKey, MessageTemplateDraft> = {
 	calendar_invite: {
 		subject: "Scheduled: {{title}} @ {{event_name}}",
 		text: `Hey {{submitter_name}},\n\n"{{title}}" is on the {{event_name}} agenda.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar invite (.ics) is attached.\n\n${REPLY_CTA}`,
+	},
+	calendar_reschedule: {
+		subject: "Time changed: {{title}} @ {{event_name}}",
+		text: `Hey {{submitter_name}},\n\nThe scheduled time for "{{title}}" at {{event_name}} changed.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal: /portal\n\n${REPLY_CTA}`,
 	},
 };
 

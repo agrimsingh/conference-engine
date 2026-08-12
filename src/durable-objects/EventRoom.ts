@@ -147,7 +147,7 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		const boundsError = validateEventScheduleBounds(event, input.startsAtMs, input.endsAtMs);
 		if (boundsError) return { ok: false, error: boundsError, status: 400 };
 		if (!isSubmissionStatus(submission.status)) return { ok: false, error: "Unknown submission status", status: 500 };
-		const current = await this.env.DB.prepare("SELECT id, ics_uid, created_at, track_id FROM agenda_slots WHERE submission_id = ?").bind(submission.id).first<{ id: string; ics_uid: string; created_at: number; track_id: string | null }>();
+		const current = await this.env.DB.prepare("SELECT id, ics_uid, created_at, track_id, starts_at, ends_at, room_name FROM agenda_slots WHERE submission_id = ?").bind(submission.id).first<{ id: string; ics_uid: string; created_at: number; track_id: string | null; starts_at: number; ends_at: number; room_name: string }>();
 		const lifecycle = await this.env.DB.prepare("SELECT ics_uid, sequence FROM agenda_calendar_lifecycles WHERE event_id = ? AND submission_id = ?").bind(submission.event_id, submission.id).first<{ ics_uid: string; sequence: number }>();
 		const room = await this.env.DB.prepare("SELECT id, name FROM event_rooms WHERE event_id = ? AND soft_deleted = 0 AND trim(name) = ?").bind(submission.event_id, roomName).first<{ id: string; name: string }>();
 		const roomCount = await this.env.DB.prepare("SELECT COUNT(*) AS count FROM event_rooms WHERE event_id = ? AND soft_deleted = 0").bind(submission.event_id).first<{ count: number }>();
@@ -208,17 +208,22 @@ export class EventRoom extends DurableObject<CloudflareEnv> {
 		const now = Date.now();
 		const slot = current ?? { id: crypto.randomUUID(), ics_uid: lifecycle?.ics_uid ?? stableAgendaUid(submission.event_id, submission.id), created_at: now };
 		const calendarSequence = lifecycle ? lifecycle.sequence + 1 : 0;
+		const rescheduled = current !== null && (
+			current.starts_at !== input.startsAtMs ||
+			current.ends_at !== input.endsAtMs ||
+			current.room_name !== roomName
+		);
 		await this.env.DB.batch([
 			this.env.DB.prepare("UPDATE submissions SET status = ?, updated_at = ? WHERE id = ?").bind(status, now, submission.id),
 			lifecycle
 				? this.env.DB.prepare("UPDATE agenda_calendar_lifecycles SET sequence = ?, updated_at = ? WHERE event_id = ? AND submission_id = ?").bind(calendarSequence, now, submission.event_id, submission.id)
 				: this.env.DB.prepare("INSERT INTO agenda_calendar_lifecycles (event_id, submission_id, ics_uid, sequence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(submission.event_id, submission.id, slot.ics_uid, calendarSequence, now, now),
 			current
-				? this.env.DB.prepare("UPDATE agenda_slots SET room_id = ?, room_name = ?, track_id = ?, starts_at = ?, ends_at = ?, updated_at = ? WHERE id = ?").bind(room?.id ?? null, roomName, trackId, input.startsAtMs, input.endsAtMs, now, slot.id)
-				: this.env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_id, track_id, room_name, starts_at, ends_at, ics_uid, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(slot.id, submission.event_id, submission.id, room?.id ?? null, trackId, roomName, input.startsAtMs, input.endsAtMs, slot.ics_uid, now, now),
+				? this.env.DB.prepare("UPDATE agenda_slots SET room_id = ?, room_name = ?, track_id = ?, starts_at = ?, ends_at = ?, ack_required = CASE WHEN ? = 1 THEN 1 ELSE ack_required END, updated_at = ? WHERE id = ?").bind(room?.id ?? null, roomName, trackId, input.startsAtMs, input.endsAtMs, rescheduled ? 1 : 0, now, slot.id)
+				: this.env.DB.prepare("INSERT INTO agenda_slots (id, event_id, submission_id, room_id, track_id, room_name, starts_at, ends_at, ics_uid, ack_required, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)").bind(slot.id, submission.event_id, submission.id, room?.id ?? null, trackId, roomName, input.startsAtMs, input.endsAtMs, slot.ics_uid, now, now),
 		]);
 		this.broadcast(JSON.stringify({ type: "invalidate", reason: "schedule.mutate", eventId: submission.event_id, at: now }));
-		return { ok: true, status, slot: { ...slot, event_id: submission.event_id, submission_id: submission.id, room_id: room?.id ?? null, track_id: trackId, room_name: roomName, starts_at: input.startsAtMs, ends_at: input.endsAtMs, updated_at: now, calendar_sequence: calendarSequence } };
+		return { ok: true, status, slot: { ...slot, event_id: submission.event_id, submission_id: submission.id, room_id: room?.id ?? null, track_id: trackId, room_name: roomName, starts_at: input.startsAtMs, ends_at: input.endsAtMs, updated_at: now, calendar_sequence: calendarSequence, rescheduled } };
 	}
 
 	private async configure(eventId: string, mutation: ConfigurationMutation): Promise<{ ok: true } | { ok: false; error: string; status: number }> {

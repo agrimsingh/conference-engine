@@ -434,14 +434,14 @@ const OPENAPI_DOCUMENT = {
 				},
 			},
 			post: {
-				summary: "Create or import speakers",
+				summary: "Create or update a speaker",
 				description:
-					"JSON speaker upsert or CSV import (`text/csv` / `{ csv }`).",
+					"JSON speaker upsert. CSV import is POST .../speakers/import/preview then .../import/commit.",
 				security: PAT_SECURITY,
 				parameters: [eventSlugParam],
 				responses: {
 					"200": {
-						description: "Created / imported",
+						description: "Created / updated",
 						content: {
 							"application/json": {
 								schema: { type: "object" },
@@ -451,6 +451,14 @@ const OPENAPI_DOCUMENT = {
 					"401": unauthorized,
 					"403": {
 						description: "Demo event is read-only",
+						content: {
+							"application/json": {
+								schema: { $ref: "#/components/schemas/ErrorResponse" },
+							},
+						},
+					},
+					"410": {
+						description: "CSV body rejected; use speakers/import/preview then commit",
 						content: {
 							"application/json": {
 								schema: { $ref: "#/components/schemas/ErrorResponse" },

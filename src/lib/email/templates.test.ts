@@ -16,6 +16,8 @@ const SPEAKER_REVIEWER_TEMPLATE_KEYS = [
 	"waitlist",
 	"co_speaker_invite",
 	"calendar_invite",
+	"calendar_reschedule",
+	"speaker_handoff",
 	"task_reminder",
 	"draft_reminder",
 	"speaker_announcement",

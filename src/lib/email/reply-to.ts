@@ -12,6 +12,8 @@ const REPLY_TO_TEMPLATE_KEYS = new Set<MessageTemplateKey>([
 	"waitlist",
 	"co_speaker_invite",
 	"calendar_invite",
+	"calendar_reschedule",
+	"speaker_handoff",
 	"task_reminder",
 	"draft_reminder",
 	"speaker_announcement",
@@ -32,9 +34,9 @@ export const REPLY_TO_TEMPLATE_FAMILIES: Record<ReplyToTemplateFamily, MessageTe
 	confirmation: ["submission_received"],
 	decision: ["acceptance", "rejection", "waitlist"],
 	reminders: ["task_reminder", "draft_reminder", "reviewer_outstanding_reminder"],
-	portal_invite: ["portal_magic_link", "co_speaker_invite", "reviewer_invite"],
+	portal_invite: ["portal_magic_link", "co_speaker_invite", "speaker_handoff", "reviewer_invite"],
 	announcements: ["speaker_announcement"],
-	calendar_invites: ["calendar_invite"],
+	calendar_invites: ["calendar_invite", "calendar_reschedule"],
 };
 
 export function templateUsesReplyTo(templateKey: MessageTemplateKey): boolean {
