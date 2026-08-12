@@ -4,6 +4,7 @@ import type {
 	DeliverableVersionRow,
 	SpeakerTaskRow,
 } from "@/lib/db/types";
+import { canActAsSpeaker } from "@/lib/speakers/handoff";
 
 export const MAX_DELIVERABLE_COMMENT_LENGTH = 4_000;
 export const MAX_DELIVERABLE_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -18,14 +19,19 @@ export async function listDeliverableBundles(
 	db: D1Database,
 	args: { eventId?: string; personId?: string },
 ): Promise<Map<string, DeliverableTaskBundle>> {
-	const where = args.eventId ? "st.event_id = ?" : "st.person_id = ?";
-	const bind = args.eventId ?? args.personId;
-	if (!bind) return new Map();
+	const where = args.eventId
+		? "st.event_id = ?"
+		: `(st.person_id = ? OR EXISTS (
+			SELECT 1 FROM speaker_handoffs h
+			WHERE h.speaker_person_id = st.person_id AND h.manager_person_id = ? AND h.status = 'accepted'
+		))`;
+	const binds = args.eventId ? [args.eventId] : args.personId ? [args.personId, args.personId] : [];
+	if (!binds.length) return new Map();
 	const tasks = await db.prepare(
 		`SELECT st.* FROM speaker_tasks st
 		 WHERE ${where} AND COALESCE(st.template_task_kind, 'file') = 'file'
 		 ORDER BY st.created_at DESC`,
-	).bind(bind).all<SpeakerTaskRow>();
+	).bind(...binds).all<SpeakerTaskRow>();
 	const bundles = new Map<string, DeliverableTaskBundle>(tasks.results.map((task) => [task.id, { task, versions: [], comments: [] }]));
 	if (!tasks.results.length) return bundles;
 	const ids = tasks.results.map((task) => task.id);
@@ -65,7 +71,9 @@ export async function addDeliverableComment(
 	const task = await db.prepare("SELECT * FROM speaker_tasks WHERE id = ?").bind(args.taskId).first<SpeakerTaskRow>();
 	if (!task) return { ok: false, status: 404, error: "Deliverable not found" };
 	if (args.eventId && task.event_id !== args.eventId) return { ok: false, status: 404, error: "Deliverable not found" };
-	if (args.personId && task.person_id !== args.personId) return { ok: false, status: 404, error: "Deliverable not found" };
+	if (args.personId && !(await canActAsSpeaker(db, args.personId, task.person_id))) {
+		return { ok: false, status: 404, error: "Deliverable not found" };
+	}
 	const hasVersion = await db.prepare("SELECT id FROM deliverable_versions WHERE task_id = ? LIMIT 1").bind(task.id).first<{ id: string }>();
 	if (!hasVersion) return { ok: false, status: 409, error: "Upload a file before commenting" };
 	const body = args.body.trim();
@@ -148,7 +156,8 @@ export async function resolveDeliverableVersion(
 		 INNER JOIN speaker_tasks st ON st.id = dv.task_id AND st.event_id = dv.event_id
 		 WHERE dv.id = ?`,
 	).bind(args.versionId).first<DeliverableVersionRow & { task_person_id: string }>();
-	if (!row || (args.eventId && row.event_id !== args.eventId) || (args.personId && row.task_person_id !== args.personId)) return null;
+	if (!row || (args.eventId && row.event_id !== args.eventId)) return null;
+	if (args.personId && !(await canActAsSpeaker(db, args.personId, row.task_person_id))) return null;
 	const asset = await db.prepare("SELECT * FROM assets WHERE id = ? AND event_id = ?").bind(row.asset_id, row.event_id).first<AssetRow>();
 	return asset ? { version: row, asset } : null;
 }

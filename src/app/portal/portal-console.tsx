@@ -16,6 +16,7 @@ import { PortalResourceList } from "./portal-resource-list";
 import { ProfileEditor } from "./profile-editor";
 import { TaskChecklist, type TaskView } from "./task-checklist";
 import { WithdrawButton } from "./withdraw-button";
+import { SessionOps } from "./session-ops";
 import type { PortalResourceRow } from "@/lib/db/types";
 import type { SpeakerActionAssignment } from "@/lib/speakers/operations";
 
@@ -46,6 +47,10 @@ export type PortalApplication = {
 	profileTasks: TaskView[];
 	prepTasks: TaskView[];
 	timezone: string | undefined;
+	needsSlotAck: boolean;
+	canHandoff: boolean;
+	handoffLabel: string | null;
+	actingAsManagerFor: string | null;
 };
 
 export type PortalEventProfile = {
@@ -323,6 +328,11 @@ export function PortalConsole({
 									<StatusPill tone={submissionStatusTone(app.status)}>
 										{app.statusLabel}
 									</StatusPill>
+									{app.actingAsManagerFor ? (
+										<StatusPill tone="neutral">
+											managing for {app.actingAsManagerFor}
+										</StatusPill>
+									) : null}
 								</div>
 								{app.slotLabel ? (
 									<p className="mt-1 text-xs text-neutral-500">{app.slotLabel}</p>
@@ -382,6 +392,12 @@ export function PortalConsole({
 										/>
 									</div>
 								) : null}
+								<SessionOps
+									submissionId={app.id}
+									needsSlotAck={app.needsSlotAck}
+									canHandoff={app.canHandoff && app.eventMode !== "demo"}
+									handoffLabel={app.handoffLabel}
+								/>
 							</li>
 						))}
 					</ul>

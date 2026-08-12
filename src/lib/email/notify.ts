@@ -189,6 +189,7 @@ export async function notifyCalendarInvite(
 		endsAtMs: number;
 		icsUid: string;
 		sequence?: number;
+		rescheduled?: boolean;
 		fromEmail: string;
 		runtime?: EmailDeliveryRuntime;
 	},
@@ -219,7 +220,7 @@ export async function notifyCalendarInvite(
 	const sends = await Promise.all(recipients.map(async (recipient) => {
 		const icsBytes = buildIcsInvite({ ...baseIcsInput, attendeeEmail: recipient.email });
 		const email = await sendTemplatedEmail(db, {
-			eventId: event.id, submissionId: submission.id, templateKey: "calendar_invite", toEmail: recipient.email,
+			eventId: event.id, submissionId: submission.id, templateKey: args.rescheduled ? "calendar_reschedule" : "calendar_invite", toEmail: recipient.email,
 			context: { eventName: event.name, submitterName: recipient.name || "there", title, roomName: args.roomName, startsAtIso: new Date(args.startsAtMs).toISOString(), endsAtIso: new Date(args.endsAtMs).toISOString() },
 			attachments: [{ filename: "invite.ics", content: icsBytes, contentType: "text/calendar; method=REQUEST; charset=utf-8" }],
 			force: true, runtime: args.runtime,

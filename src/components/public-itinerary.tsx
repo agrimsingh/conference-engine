@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
+import { PublicSpeakerLine } from "@/components/public-speaker-line";
 import {
 	DiscoverFacetSelect,
 	ScheduleQuerySelect,
@@ -20,7 +20,6 @@ import {
 	serializeItinerarySelection,
 	setSessionSelected,
 } from "@/lib/schedule/itinerary";
-import { speakerRoleLine } from "@/lib/speakers/public-directory";
 
 export type PublicItinerarySession = {
 	id: string;
@@ -273,30 +272,13 @@ export function PublicItinerary({
 												<div>
 													<p className="font-mono text-xs tabular-nums text-neutral-400">{formatDay(session.dayKey, timezone)} · {formatClock(session.startsAtMs, timezone)}–{formatClock(session.endsAtMs, timezone)}</p>
 													<Link className="mt-1 block font-medium text-neutral-100 hover:underline" href={session.detailHref}>{session.title}</Link>
-													{session.speakers.length > 0 ? (
-														<ul className="mt-1 flex flex-wrap gap-3">
-															{session.speakers.map((speaker, index) => {
-																const role = speakerRoleLine(speaker);
-																return (
-																	<li key={`${speaker.personId ?? speaker.name}-${index}`}>
-																		<PublicSpeakerAvatar
-																			eventSlug={eventSlug}
-																			personId={speaker.personId}
-																			name={speaker.name}
-																			hasHeadshot={speaker.hasHeadshot}
-																			size="sm"
-																			profileHref={
-																				basePath === "/e" && speaker.personId
-																					? `/e/${eventSlug}/speakers/${speaker.personId}`
-																					: null
-																			}
-																		/>
-																		{role ? <p className="mt-0.5 text-xs text-neutral-500">{role}</p> : null}
-																	</li>
-																);
-															})}
-														</ul>
-													) : null}
+													<PublicSpeakerLine
+														speakers={session.speakers}
+														eventSlug={eventSlug}
+														profileHrefFor={(personId) =>
+															basePath === "/e" ? `/e/${eventSlug}/speakers/${personId}` : null
+														}
+													/>
 													<dl className="mt-3 grid gap-x-4 gap-y-1 text-xs text-neutral-400 sm:grid-cols-3">
 														<div><dt className="inline font-medium text-neutral-500">Format: </dt><dd className="inline">{session.format}</dd></div>
 														<div><dt className="inline font-medium text-neutral-500">Track: </dt><dd className="inline">{session.trackName}</dd></div>

@@ -21,6 +21,7 @@ const LABELS: Record<EditableMessageTemplateKey, string> = {
 	task_reminder: "Task reminder",
 	speaker_announcement: "Speaker announcement",
 	calendar_invite: "Schedule and calendar",
+	calendar_reschedule: "Schedule change",
 };
 
 type SectionId = "templates" | "reminders" | "history";

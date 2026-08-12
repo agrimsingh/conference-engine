@@ -118,6 +118,7 @@ export async function loadCockpitSnapshot(
 			groups: outstanding.groups,
 		},
 		pendingCoSpeakers: outstanding.pendingCoSpeakers,
+		pendingSlotAcks: outstanding.pendingSlotAcks,
 		needsReviewActivation: needsActivation.rows.map(toSubmissionRef),
 		needsReviewActivationTotal: needsActivation.total,
 		unassignedReviews: unassigned.rows.map(toSubmissionRef),

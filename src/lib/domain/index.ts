@@ -166,6 +166,7 @@ export {
 	type OutstandingTaskRow,
 	type OutstandingTasksSnapshot,
 	type PendingCoSpeakerItem,
+	type PendingSlotAckItem,
 } from "./outstanding-tasks";
 
 export {

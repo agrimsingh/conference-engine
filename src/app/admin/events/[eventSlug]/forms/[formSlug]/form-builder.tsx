@@ -34,7 +34,7 @@ const SECTIONS: Array<{
 	{
 		id: "fields",
 		label: "Fields",
-		description: "Drag rows to reorder. Up and Down still work.",
+		description: "Working copy. Publish fields before submitters see changes.",
 	},
 	{
 		id: "add-field",
@@ -77,6 +77,8 @@ type Props = {
 	initialSections: FormSection[];
 	initialSubmissionCount: number;
 	initialFields: FieldRow[];
+	initialPublishedRevision: number | null;
+	initialWorkingCopyDirty: boolean;
 };
 
 function defaultSelectOptions(): SelectOption[] {
@@ -372,6 +374,8 @@ export function FormBuilder({
 	initialSections,
 	initialSubmissionCount,
 	initialFields,
+	initialPublishedRevision,
+	initialWorkingCopyDirty,
 }: Props) {
 	const router = useRouter();
 	const [section, setSectionState] = useState<FormBuilderSectionId>(initialSection);
@@ -423,7 +427,10 @@ export function FormBuilder({
 		} & ConfigDraft
 	) | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [info, setInfo] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	const [publishedRevision, setPublishedRevision] = useState(initialPublishedRevision);
+	const [workingCopyDirty, setWorkingCopyDirty] = useState(initialWorkingCopyDirty);
 	const [draft, setDraft] = useState({
 		key: "",
 		label: "",
@@ -499,6 +506,25 @@ export function FormBuilder({
 			setError(json.error || "Failed to save form");
 			return;
 		}
+		router.refresh();
+	}
+
+	async function publishFields() {
+		setBusy(true);
+		setError(null);
+		setInfo(null);
+		const res = await fetch(`/api/admin/events/${eventSlug}/forms/${formSlug}/publish`, {
+			method: "POST",
+		});
+		const json = (await res.json()) as { ok?: boolean; revision?: number; error?: string };
+		setBusy(false);
+		if (!res.ok || !json.ok) {
+			setError(json.error || "Could not publish fields");
+			return;
+		}
+		setPublishedRevision(json.revision ?? publishedRevision);
+		setWorkingCopyDirty(false);
+		setInfo(`Published field set v${json.revision}. New submissions use this version.`);
 		router.refresh();
 	}
 
@@ -739,6 +765,10 @@ export function FormBuilder({
 						<p aria-live="polite" role="alert" className={noticeClasses("negative")}>
 							{error}
 						</p>
+					) : info ? (
+						<p aria-live="polite" role="status" className={noticeClasses("positive")}>
+							{info}
+						</p>
 					) : null
 				}
 			>
@@ -835,11 +865,19 @@ export function FormBuilder({
 								<textarea className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100" rows={4} placeholder={"stage = Stage\nworkshop = Workshop"} value={categoryMapText} onChange={(e) => setCategoryMapText(e.target.value)} />
 							</label>
 						</details>
-						<div>
+						<div className="flex flex-wrap gap-2">
 							<Button type="button" disabled={busy} onClick={() => void saveMeta()}>
 								Save settings
 							</Button>
+							<Button type="button" variant="primary" disabled={busy} onClick={() => void publishFields()}>
+								Publish fields
+							</Button>
 						</div>
+						<p className="text-xs text-neutral-500">
+							{publishedRevision
+								? `Public form is on field set v${publishedRevision}${workingCopyDirty ? ". Working copy has unpublished changes." : "."}`
+								: "Public form still uses the working copy. Publish to freeze what submitters see."}
+						</p>
 					</div>
 				) : null}
 

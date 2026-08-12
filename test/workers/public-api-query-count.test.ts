@@ -177,10 +177,10 @@ describe("public API speaker loading", () => {
 			event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone },
 			slots: [{
 				id: "slot-a",
-				speakers: [{ name: "Ari", email: "ari@example.test" }],
+				speakers: [{ name: "Ari", personId: null }],
 			}, {
 				id: "slot-b",
-				speakers: [],
+				speakers: [{ name: "Speaker to be announced", personId: null }],
 			}],
 		});
 		expect(mocks.listSpeakersForSubmissions).toHaveBeenCalledTimes(1);

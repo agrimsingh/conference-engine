@@ -81,11 +81,13 @@ describe("EventRoom in the Workers runtime", () => {
 		const schedule = (startsAtMs: number) => room.fetch("https://event-room/schedule", { method: "POST", headers: { "content-type": "application/json", "x-ce-event-id": "calendar-room-event" }, body: JSON.stringify({ submissionId: "calendar-room-submission", roomName: "Main", startsAtMs, endsAtMs: startsAtMs + 1_800_000 }) });
 		const first = await schedule(start);
 		expect(first.status).toBe(200);
-		const firstBody = await first.json() as { slot: { ics_uid: string; calendar_sequence: number } };
+		const firstBody = await first.json() as { slot: { ics_uid: string; calendar_sequence: number; rescheduled?: boolean } };
 		expect(firstBody.slot.calendar_sequence).toBe(0);
+		expect(firstBody.slot.rescheduled).toBe(false);
 		const update = await schedule(start + 3_600_000);
-		const updateBody = await update.json() as { slot: { ics_uid: string; calendar_sequence: number } };
-		expect(updateBody.slot).toMatchObject({ ics_uid: firstBody.slot.ics_uid, calendar_sequence: 1 });
+		const updateBody = await update.json() as { slot: { ics_uid: string; calendar_sequence: number; rescheduled?: boolean } };
+		expect(updateBody.slot).toMatchObject({ ics_uid: firstBody.slot.ics_uid, calendar_sequence: 1, rescheduled: true });
+		expect(await env.DB.prepare("SELECT ack_required FROM agenda_slots WHERE submission_id = 'calendar-room-submission'").first()).toEqual({ ack_required: 1 });
 		const unplace = await room.fetch("https://event-room/schedule", { method: "DELETE", headers: { "content-type": "application/json", "x-ce-event-id": "calendar-room-event" }, body: JSON.stringify({ submissionId: "calendar-room-submission" }) });
 		const unplaceBody = await unplace.json() as { slot: { ics_uid: string; calendar_sequence: number } };
 		expect(unplaceBody.slot).toMatchObject({ ics_uid: firstBody.slot.ics_uid, calendar_sequence: 2 });

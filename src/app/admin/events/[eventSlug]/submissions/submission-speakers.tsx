@@ -12,6 +12,7 @@ export type SpeakerSummary = {
 	position: number;
 	status: CoSpeakerStatus;
 	addedAfterAcceptance: boolean;
+	managerLabel: string | null;
 };
 
 type Props = {
@@ -103,6 +104,9 @@ export function SubmissionSpeakers({ eventSlug, submissionId, speakers }: Props)
 								>
 									added late
 								</span>
+							) : null}
+							{speaker.managerLabel ? (
+								<span className="text-xs text-neutral-500">{speaker.managerLabel}</span>
 							) : null}
 						</span>
 						{speaker.position !== 0 ? (

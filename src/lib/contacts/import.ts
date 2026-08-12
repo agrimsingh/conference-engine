@@ -11,6 +11,17 @@ export type ContactImportResult =
 	  }
 	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> };
 
+export type ContactImportPlanRow = {
+	row: number;
+	email: string;
+	name: string;
+	action: "create" | "update";
+};
+
+export type ContactImportPreview =
+	| { ok: true; created: number; updated: number; rows: ContactImportPlanRow[] }
+	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> };
+
 type ValidatedImportRow = {
 	rowNumber: number;
 	email: string;
@@ -22,15 +33,12 @@ type ValidatedImportRow = {
 	tags: string[];
 };
 
-/**
- * Validate every CSV row first. Persist only when the whole file is valid so
- * `ok: false` never leaves a partial import.
- */
-export async function importAccountContactsCsv(
-	db: D1Database,
-	args: { accountId: string; csv: string; authorAccountId?: string | null; now?: number },
-): Promise<ContactImportResult> {
-	const parsed = parseBoundedCsv(args.csv);
+function parseContactImportRows(
+	csv: string,
+):
+	| { ok: true; validated: ValidatedImportRow[] }
+	| { ok: false; error: string; rows?: Array<{ row: number; error: string }> } {
+	const parsed = parseBoundedCsv(csv);
 	if (!parsed.ok) return { ok: false, error: parsed.error };
 
 	const hasEmail = parsed.headers.includes("email");
@@ -39,7 +47,6 @@ export async function importAccountContactsCsv(
 		return { ok: false, error: "CSV requires name and email columns" };
 	}
 
-	const now = args.now ?? Date.now();
 	const issues: Array<{ row: number; error: string }> = [];
 	const validated: ValidatedImportRow[] = [];
 	const emailsInFile = new Set<string>();
@@ -105,12 +112,58 @@ export async function importAccountContactsCsv(
 	if (issues.length) {
 		return { ok: false, error: "Fix CSV validation errors before importing", rows: issues };
 	}
+	return { ok: true, validated };
+}
 
+export async function previewAccountContactsCsv(
+	db: D1Database,
+	args: { accountId: string; csv: string },
+): Promise<ContactImportPreview> {
+	const parsed = parseContactImportRows(args.csv);
+	if (!parsed.ok) return parsed;
+
+	const rows: ContactImportPlanRow[] = [];
+	for (const row of parsed.validated) {
+		const existing = await db
+			.prepare(
+				`SELECT id FROM account_contacts
+				 WHERE account_id = ? AND email = ? COLLATE NOCASE`,
+			)
+			.bind(args.accountId, row.email)
+			.first<{ id: string }>();
+		rows.push({
+			row: row.rowNumber,
+			email: row.email,
+			name: row.name,
+			action: existing ? "update" : "create",
+		});
+	}
+
+	return {
+		ok: true,
+		created: rows.filter((row) => row.action === "create").length,
+		updated: rows.filter((row) => row.action === "update").length,
+		rows,
+	};
+}
+
+/**
+ * Validate every CSV row first. Persist only when the whole file is valid so
+ * `ok: false` never leaves a partial import.
+ */
+export async function commitAccountContactsCsv(
+	db: D1Database,
+	args: { accountId: string; csv: string; authorAccountId?: string | null; now?: number },
+): Promise<ContactImportResult> {
+	const parsed = parseContactImportRows(args.csv);
+	if (!parsed.ok) return parsed;
+
+	const now = args.now ?? Date.now();
 	const actions: Array<{ row: number; email: string; action: "created" | "updated" }> = [];
 	let imported = 0;
 	let updated = 0;
 
-	for (const row of validated) {
+	for (const row of parsed.validated) {
 		const existing = await db
 			.prepare(
 				`SELECT id, custom_fields_json FROM account_contacts
@@ -198,4 +251,11 @@ export async function importAccountContactsCsv(
 	}
 
 	return { ok: true, imported, updated, rows: actions };
+}
+
+export async function importAccountContactsCsv(
+	db: D1Database,
+	args: { accountId: string; csv: string; authorAccountId?: string | null; now?: number },
+): Promise<ContactImportResult> {
+	return commitAccountContactsCsv(db, args);
 }

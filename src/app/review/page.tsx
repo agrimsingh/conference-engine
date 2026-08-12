@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
+import { fieldLabelsForSubmissions } from "@/lib/cfp/form-revisions";
 import { getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getEventById,
 	getEventBySlug,
 	listEvaluationScoresForPlan,
-	listFormFields,
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
 import { renderDecisionPreviews } from "@/lib/domain";
@@ -118,18 +118,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const recusalBySubmission = new Map(
 		reviewerAssignments.map((assignment) => [assignment.submission_id, assignment.recused_at]),
 	);
-	const distinctFormIds = [...new Set(submissions.map((row) => row.form_id))];
-	const formFieldsByFormId = new Map(
-		await Promise.all(
-			distinctFormIds.map(async (formId) => [
-				formId,
-				new Map(
-					(await listFormFields(db, formId)).map((field) => [field.key, field.label]),
-				),
-			] as const),
-		),
-	);
-	const blindReviewer = identity.mode === "reviewer" && plan.blind_review === 1;
+	const fieldLabelsBySubmission = await fieldLabelsForSubmissions(db, submissions);
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
 		let parsedAnswers: Record<string, unknown> = {};
@@ -148,7 +137,10 @@ export default async function ReviewPage({ searchParams }: Props) {
 			// ignore
 		}
 		const recusedAt = identity.mode === "reviewer" ? (recusalBySubmission.get(row.id) ?? null) : null;
-		const safe = reviewerIdentityFields({ submitterName: row.submitter_name, submitterEmail: row.submitter_email, answers: parsedAnswers }, blindReviewer);
+		const identityFields = { submitterName: row.submitter_name, submitterEmail: row.submitter_email, answers: parsedAnswers };
+		const safe = identity.mode === "reviewer"
+			? reviewerIdentityFields(identityFields, plan.blind_review === 1)
+			: identityFields;
 		return {
 			id: row.id,
 			status: row.status,
@@ -173,7 +165,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 					const query = params.toString();
 					return `/api/review/submissions/${row.id}/fields/${encodeURIComponent(fieldKey)}/asset${query ? `?${query}` : ""}`;
 				},
-				fieldLabels: formFieldsByFormId.get(row.form_id),
+				fieldLabels: fieldLabelsBySubmission.get(row.id),
 			}),
 			previews: renderDecisionPreviews({
 				eventName: event.name,

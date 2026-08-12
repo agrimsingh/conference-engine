@@ -4,6 +4,11 @@ import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { rowToFieldDef, countFormSubmissions } from "@/lib/cfp/form-admin";
+import {
+	getFormRevision,
+	snapshotWorkingForm,
+	snapshotsEqual,
+} from "@/lib/cfp/form-revisions";
 import { getDb } from "@/lib/db/cloudflare";
 import { getFormBySlug, listFormFields } from "@/lib/db/queries";
 import dynamic from "next/dynamic";
@@ -34,6 +39,11 @@ export default async function AdminFormBuilderPage({ params, searchParams }: Pro
 		listFormFields(db, form.id),
 		countFormSubmissions(db, form.id),
 	]);
+	const published = form.published_revision_id
+		? await getFormRevision(db, form.published_revision_id)
+		: null;
+	const working = await snapshotWorkingForm(db, form);
+	const workingCopyDirty = !published || !snapshotsEqual(working, published.snapshot);
 	const fields = rows.map((row) => {
 		const def = rowToFieldDef(row);
 		return {
@@ -65,7 +75,7 @@ export default async function AdminFormBuilderPage({ params, searchParams }: Pro
 				<PageHeader
 					eyebrow="Form builder"
 					title={form.title}
-					description={`Slug ${form.slug}. Soft-delete preserves historical answers keyed by field key.`}
+					description={`Slug ${form.slug}. Publish a field set so in-flight submissions keep the questions they answered.`}
 				/>
 				<div className="mt-8">
 					<FormBuilder
@@ -89,6 +99,8 @@ export default async function AdminFormBuilderPage({ params, searchParams }: Pro
 						initialSections={parseFormSections(form.sections_json)}
 						initialSubmissionCount={submissionCount}
 						initialFields={fields}
+						initialPublishedRevision={published?.revision ?? null}
+						initialWorkingCopyDirty={workingCopyDirty}
 					/>
 				</div>
 			</main>

@@ -5,6 +5,7 @@ import { Chip, StatusPill, submissionStatusTone } from "@/components/ui";
 import { DecisionButtons } from "@/components/decision-buttons";
 import { SubmissionAnswersList } from "@/components/submission-answers-list";
 import { assertCanManageEvent } from "@/lib/auth/admin";
+import { fieldLabelsForSubmission } from "@/lib/cfp/form-revisions";
 import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
 import { getDb } from "@/lib/db/cloudflare";
 import {
@@ -12,7 +13,6 @@ import {
 	getSubmissionById,
 	listAdminSubmissionIds,
 	listAssignmentsForSubmission,
-	listFormFields,
 	listLabelsForSubmissions,
 	listOutboundForSubmission,
 	listPeopleByIds,
@@ -20,6 +20,7 @@ import {
 	listSpeakersForSubmission,
 	listTasksForSubmission,
 } from "@/lib/db/queries";
+import { listHandoffsForSubmissions } from "@/lib/speakers/handoff";
 import {
 	displayCategory,
 	DECISION_REGISTRY,
@@ -76,14 +77,15 @@ export default async function AdminSubmissionDetailPage({
 
 	const activePlan = await getActiveEvaluationPlan(db, event.id);
 
-	const [speakers, labelsMap, tasks, configuredTemplates, outboundMessages, formFields] =
+	const [speakers, labelsMap, tasks, configuredTemplates, outboundMessages, fieldLabels, handoffs] =
 		await Promise.all([
 			listSpeakersForSubmission(db, submissionId),
 			listLabelsForSubmissions(db, [submissionId]),
 			listTasksForSubmission(db, submissionId),
 			listEventMessageTemplates(db, event.id),
 			listOutboundForSubmission(db, submissionId),
-			listFormFields(db, row.form_id),
+			fieldLabelsForSubmission(db, row),
+			listHandoffsForSubmissions(db, [submissionId]),
 		]);
 
 	const [reviewers, assignments] = activePlan
@@ -131,7 +133,6 @@ export default async function AdminSubmissionDetailPage({
 		}),
 	) as Record<DecisionAction, RenderedMessage>;
 
-	const fieldLabels = new Map(formFields.map((field) => [field.key, field.label]));
 	const answerDisplays = buildSubmissionAnswerDisplays(answers, {
 		submissionId: row.id,
 		downloadHref: (fieldKey) =>
@@ -139,14 +140,26 @@ export default async function AdminSubmissionDetailPage({
 		fieldLabels,
 	});
 
-	const speakerSummaries: SpeakerSummary[] = speakers.map((speaker) => ({
-		id: speaker.id,
-		name: speaker.name,
-		email: speaker.email,
-		position: speaker.position,
-		status: speaker.status,
-		addedAfterAcceptance: speaker.added_after_acceptance === 1,
-	}));
+	const speakerSummaries: SpeakerSummary[] = speakers.map((speaker) => {
+		const handoff = handoffs.find(
+			(row) =>
+				row.speaker_person_id === speaker.person_id &&
+				(row.status === "accepted" || row.status === "pending"),
+		);
+		return {
+			id: speaker.id,
+			name: speaker.name,
+			email: speaker.email,
+			position: speaker.position,
+			status: speaker.status,
+			addedAfterAcceptance: speaker.added_after_acceptance === 1,
+			managerLabel: handoff
+				? handoff.status === "accepted"
+					? `Managed by ${handoff.manager_name || handoff.manager_email}`
+					: `Handoff pending: ${handoff.manager_email}`
+				: null,
+		};
+	});
 
 	const assignedReviewerIds = assignments.map((assignment) => assignment.reviewer_id);
 	const labels = labelsMap.get(submissionId) ?? [];

@@ -53,7 +53,7 @@ export async function POST(request: Request, context: RouteContext) {
 	if (!result || typeof result !== "object" || Array.isArray(result)) return NextResponse.json({ ok: false, error: "Invalid room response" }, { status: 502 });
 	const value = result as Record<string, unknown>;
 	if (value.ok !== true) return NextResponse.json({ ok: false, error: typeof value.error === "string" ? value.error : "Schedule mutation failed" }, { status: mutationResponse.status });
-	const slot = value.slot as { room_name: string; starts_at: number; ends_at: number; ics_uid: string; calendar_sequence: number };
+	const slot = value.slot as { room_name: string; starts_at: number; ends_at: number; ics_uid: string; calendar_sequence: number; rescheduled?: boolean };
 	const calendarInviteStatus = submission.submitter_email ? "queued" : "not_applicable";
 	if (calendarInviteStatus === "queued") {
 		after(async () => {
@@ -65,6 +65,7 @@ export async function POST(request: Request, context: RouteContext) {
 					endsAtMs: slot.ends_at,
 					icsUid: slot.ics_uid,
 					sequence: slot.calendar_sequence,
+					rescheduled: slot.rescheduled === true,
 					fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
 				});
 			} catch (error) {

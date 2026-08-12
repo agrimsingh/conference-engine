@@ -103,7 +103,7 @@ const OPENAPI_DOCUMENT = {
 											startsAt: 1720000800000,
 											endsAt: 1720004400000,
 											speakers: [
-												{ name: "Ada Lovelace", email: "ada@example.com" },
+												{ name: "Ada Lovelace", personId: "person_ada" },
 											],
 										},
 									],
@@ -279,10 +279,10 @@ const OPENAPI_DOCUMENT = {
 			},
 			ScheduleSpeaker: {
 				type: "object",
-				required: ["name", "email"],
+				required: ["name", "personId"],
 				properties: {
 					name: { type: "string" },
-					email: { type: "string" },
+					personId: { type: ["string", "null"] },
 				},
 			},
 			ScheduleMedia: {

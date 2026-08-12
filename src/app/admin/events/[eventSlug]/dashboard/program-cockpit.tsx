@@ -245,6 +245,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 	const counts = cockpitBlockerCounts(snapshot);
 	const total = cockpitTotalBlockers(snapshot);
 	const [pendingCoSpeakersExpanded, togglePendingCoSpeakers] = useExpanded();
+	const [pendingSlotAcksExpanded, togglePendingSlotAcks] = useExpanded();
 	const [outstandingTasksExpanded, toggleOutstandingTasks] = useExpanded();
 	const [needsReviewActivationExpanded, toggleNeedsReviewActivation] = useExpanded();
 	const [unassignedReviewsExpanded, toggleUnassignedReviews] = useExpanded();
@@ -256,6 +257,10 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 	const visiblePendingCoSpeakers = cockpitSectionPreview(
 		snapshot.pendingCoSpeakers,
 		pendingCoSpeakersExpanded,
+	);
+	const visiblePendingSlotAcks = cockpitSectionPreview(
+		snapshot.pendingSlotAcks,
+		pendingSlotAcksExpanded,
 	);
 	const visibleOutstandingTaskGroups = cockpitSectionPreview(
 		snapshot.outstandingTasks.groups,
@@ -294,6 +299,7 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 		[
 			["Tasks", counts.outstandingTasks, "tasks"],
 			["Co-speakers", counts.pendingCoSpeakers, "co-speakers"],
+			["Time changes", counts.pendingSlotAcks, "slot-acks"],
 			["Needs plan", counts.needsReviewActivation, "needs-plan"],
 			["Unassigned", counts.unassignedReviews, "unassigned"],
 			["Incomplete reviews", counts.incompleteReviews, "incomplete-reviews"],
@@ -423,6 +429,52 @@ export function ProgramCockpit({ eventSlug, initialSnapshot }: Props) {
 						onToggle={togglePendingCoSpeakers}
 						controls="cockpit-co-speakers"
 						sectionLabel="co-speakers awaiting confirmation"
+					/>
+				</section>
+			) : null}
+
+			{snapshot.pendingSlotAcks.length > 0 ? (
+				<section
+					id="cockpit-slot-acks"
+					className="scroll-mt-4 border-b border-neutral-800 pb-6"
+				>
+					<div className="flex flex-wrap items-baseline justify-between gap-2">
+						<p className="font-medium text-neutral-100">Speakers who need to confirm a new time</p>
+						<span className="text-xs text-neutral-500">
+							{snapshot.pendingSlotAcks.length} pending
+						</span>
+					</div>
+					<ul className="mt-3 divide-y divide-neutral-800">
+						{visiblePendingSlotAcks.map((item) => (
+							<li
+								key={`${item.submissionId}:${item.personId}`}
+								className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+							>
+								<span>
+									<span className="font-medium text-neutral-200">
+										{item.personName || item.personEmail}
+									</span>
+									<span className="text-neutral-500">
+										{" · "}
+										<Link
+											href={`/admin/events/${eventSlug}/submissions/${item.submissionId}`}
+											className="text-neutral-500 hover:text-neutral-100 hover:underline"
+										>
+											{item.submissionTitle}
+										</Link>
+										{` · ${item.roomName}`}
+									</span>
+								</span>
+								<StatusPill tone="warning">needs confirm</StatusPill>
+							</li>
+						))}
+					</ul>
+					<ShowMoreToggle
+						itemCount={snapshot.pendingSlotAcks.length}
+						expanded={pendingSlotAcksExpanded}
+						onToggle={togglePendingSlotAcks}
+						controls="cockpit-slot-acks"
+						sectionLabel="speakers who need to confirm a new time"
 					/>
 				</section>
 			) : null}

@@ -59,6 +59,7 @@ export type CfpFormRow = {
 	drafts_enabled: number;
 	submission_limit: number;
 	kind?: "public" | "system";
+	published_revision_id?: string | null;
 	created_at: number;
 	updated_at: number;
 };
@@ -104,6 +105,7 @@ export type SubmissionRow = {
 	supporting_url?: string | null;
 	item_kind?: SubmissionItemKind;
 	agenda_visibility?: AgendaVisibility;
+	form_revision_id?: string | null;
 	created_at: number;
 	updated_at: number;
 	submitted_at: number | null;
@@ -328,6 +330,7 @@ export type AgendaSlotRow = {
 	starts_at: number;
 	ends_at: number;
 	ics_uid: string;
+	ack_required?: number;
 	created_at: number;
 	updated_at: number;
 };

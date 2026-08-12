@@ -91,7 +91,7 @@ function parsePanel(value: string | null): SpeakerPanel {
 const SPEAKER_PANELS: Array<{ id: SpeakerPanel; label: string; description: string }> = [
 	{ id: "roster", label: "Roster", description: "Search, filter, email, and open CRM." },
 	{ id: "add", label: "Add / edit", description: "Create a roster entry or edit the selected speaker." },
-	{ id: "import", label: "Import CSV", description: "Bulk import speaker profiles." },
+	{ id: "import", label: "Import CSV", description: "Preview speaker profiles, then import." },
 	{
 		id: "content-sessions",
 		label: "Session content",
@@ -123,6 +123,11 @@ export function SpeakerRoster({
 	const [q, setQ] = useState(initialQuery);
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
 	const [csv, setCsv] = useState("email,name,job_title,company,bio,logistics,workflow_status,twitter,linkedin,github,website,facebook\n");
+	const [csvPreview, setCsvPreview] = useState<{
+		created: number;
+		updated: number;
+		rows: Array<{ row: number; email: string; name: string; action: "create" | "update" }>;
+	} | null>(null);
 	const [emailTemplateKey, setEmailTemplateKey] = useState<"task_reminder" | "speaker_announcement">("task_reminder");
 	const [emailSubject, setEmailSubject] = useState("Update from {{event_name}}");
 	const [emailBody, setEmailBody] = useState("Hi {{submitter_name}},\n\n");
@@ -235,11 +240,43 @@ export function SpeakerRoster({
 		}
 	}
 
+	async function previewCsv() {
+		setPending(true);
+		setNotice(null);
+		try {
+			const response = await fetch(`/api/admin/events/${eventSlug}/speakers/import/preview`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ csv }),
+			});
+			const data = await response.json() as {
+				ok?: boolean;
+				created?: number;
+				updated?: number;
+				rows?: Array<{ row: number; email: string; name: string; action: "create" | "update" }>;
+				error?: string;
+			};
+			if (!response.ok || !data.ok) setNotice(data.error ?? "Could not preview CSV");
+			else {
+				setCsvPreview({
+					created: data.created ?? 0,
+					updated: data.updated ?? 0,
+					rows: data.rows ?? [],
+				});
+				setNotice(`Preview ready: ${data.created ?? 0} new, ${data.updated ?? 0} updates. Nothing written yet.`);
+			}
+		} catch {
+			setNotice("Network error");
+		} finally {
+			setPending(false);
+		}
+	}
+
 	async function importCsv() {
 		setPending(true);
 		setNotice(null);
 		try {
-			const response = await fetch(`/api/admin/events/${eventSlug}/speakers`, {
+			const response = await fetch(`/api/admin/events/${eventSlug}/speakers/import/commit`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ csv }),
@@ -253,6 +290,7 @@ export function SpeakerRoster({
 			if (!response.ok || !data.ok) setNotice(data.error ?? "Import failed");
 			else {
 				setNotice(`Imported ${data.imported ?? 0}, updated ${data.updated ?? 0}.`);
+				setCsvPreview(null);
 				await refresh();
 			}
 		} catch {
@@ -649,6 +687,11 @@ export function SpeakerRoster({
 														? ` · submissions: ${speaker.submissionStatuses.join(", ")}`
 														: " · roster-only"}
 												</p>
+												{speaker.manager ? (
+													<p className="mt-1 text-xs text-neutral-500">
+														Managed by {speaker.manager.name || speaker.manager.email}
+													</p>
+												) : null}
 												{speaker.tasks.length > 0 ? (
 													<p className="mt-1 text-xs text-neutral-500">
 														{speaker.pendingTaskCount} pending task
@@ -896,23 +939,63 @@ export function SpeakerRoster({
 					<div className="space-y-4">
 						<p className="text-sm text-neutral-400">
 							Columns: email, name, job_title, company, bio, logistics, workflow_status,
-							twitter, linkedin, github, website, facebook.
+							twitter, linkedin, github, website, facebook. Preview the plan, then import.
 						</p>
 						<textarea
 							aria-label="Speaker CSV"
 							value={csv}
-							onChange={(event) => setCsv(event.target.value)}
+							onChange={(event) => {
+								setCsv(event.target.value);
+								setCsvPreview(null);
+							}}
 							rows={8}
 							className={`w-full font-mono text-xs ${INPUT_CLASSES}`}
 						/>
-						<button
-							type="button"
-							disabled={pending || csv.trim().length === 0}
-							onClick={() => void importCsv()}
-							className={buttonClasses("secondary")}
-						>
-							Import speakers
-						</button>
+						<div className="flex flex-wrap gap-2">
+							<button
+								type="button"
+								disabled={pending || csv.trim().length === 0}
+								onClick={() => void previewCsv()}
+								className={buttonClasses("secondary")}
+							>
+								Preview import
+							</button>
+							<button
+								type="button"
+								disabled={pending || !csvPreview}
+								onClick={() => void importCsv()}
+								className={buttonClasses("primary")}
+							>
+								Import speakers
+							</button>
+						</div>
+						{csvPreview ? (
+							<div className="overflow-x-auto rounded-lg border border-neutral-800">
+								<p className="border-b border-neutral-800 px-3 py-2 text-xs text-neutral-400">
+									{csvPreview.created} new · {csvPreview.updated} updates. Nothing is written until you import.
+								</p>
+								<table className="min-w-full text-left text-xs text-neutral-300">
+									<thead className="text-neutral-500">
+										<tr>
+											<th className="px-3 py-2 font-medium">Row</th>
+											<th className="px-3 py-2 font-medium">Name</th>
+											<th className="px-3 py-2 font-medium">Email</th>
+											<th className="px-3 py-2 font-medium">Plan</th>
+										</tr>
+									</thead>
+									<tbody>
+										{csvPreview.rows.map((row) => (
+											<tr key={`${row.row}-${row.email}`} className="border-t border-neutral-800">
+												<td className="px-3 py-2 tabular-nums text-neutral-500">{row.row}</td>
+												<td className="px-3 py-2">{row.name}</td>
+												<td className="px-3 py-2">{row.email}</td>
+												<td className="px-3 py-2">{row.action === "create" ? "Create" : "Update"}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : null}
 					</div>
 				) : null}
 

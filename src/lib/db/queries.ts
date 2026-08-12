@@ -962,11 +962,17 @@ export async function listTasksForPerson(
 ): Promise<SpeakerTaskRow[]> {
 	const result = await db
 		.prepare(
-			`SELECT * FROM speaker_tasks
-       WHERE person_id = ?
+			`SELECT * FROM (
+         SELECT t.* FROM speaker_tasks t WHERE t.person_id = ?
+         UNION
+         SELECT t.* FROM speaker_tasks t
+         JOIN speaker_handoffs h
+           ON h.speaker_person_id = t.person_id AND h.status = 'accepted'
+         WHERE h.manager_person_id = ?
+       )
        ORDER BY created_at ASC`,
 		)
-		.bind(personId)
+		.bind(personId, personId)
 		.all<SpeakerTaskRow>();
 	return result.results;
 }
@@ -1281,10 +1287,12 @@ export async function listSubmissionsForPerson(
 			`SELECT DISTINCT s.*
        FROM submissions s
        LEFT JOIN submission_speakers ss ON ss.submission_id = s.id
-       WHERE s.submitter_person_id = ? OR ss.person_id = ?
+       LEFT JOIN speaker_handoffs h
+         ON h.submission_id = s.id AND h.status = 'accepted'
+       WHERE s.submitter_person_id = ? OR ss.person_id = ? OR h.manager_person_id = ?
        ORDER BY s.updated_at DESC`,
 		)
-		.bind(personId, personId)
+		.bind(personId, personId, personId)
 		.all<SubmissionRow>();
 	return result.results;
 }

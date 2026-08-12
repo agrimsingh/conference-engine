@@ -6,6 +6,7 @@ export function suppressBlindIdentity(answers: Record<string, unknown>): Record<
 }
 
 export function reviewerIdentityFields<T extends { submitterName: string | null; submitterEmail: string | null; answers: Record<string, unknown> }>(row: T, blind: boolean): T {
-	if (!blind) return row;
-	return { ...row, submitterName: null, submitterEmail: null, answers: suppressBlindIdentity(row.answers) };
+	const withoutEmail = { ...row, submitterEmail: null };
+	if (!blind) return withoutEmail;
+	return { ...withoutEmail, submitterName: null, answers: suppressBlindIdentity(row.answers) };
 }

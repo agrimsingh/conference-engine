@@ -15,6 +15,11 @@ import {
 	listFormFields,
 } from "@/lib/db/queries";
 import { helpTextFromStoredConfig } from "@/lib/cfp/form-admin";
+import {
+	categoryRouteFromSnapshot,
+	fieldsFromSnapshot,
+	getFormRevision,
+} from "@/lib/cfp/form-revisions";
 import type { CfpFormRow, EventRow } from "@/lib/db/types";
 
 export type LoadedCfpForm = {
@@ -23,6 +28,7 @@ export type LoadedCfpForm = {
 	fields: FormFieldDef[];
 	sections: FormSection[];
 	categoryRoute: CategoryRoute | null;
+	revisionId: string | null;
 };
 
 export async function loadCfpForm(
@@ -39,6 +45,20 @@ export async function loadCfpForm(
 		: await getPublicFormBySlug(db, event.id, formSlug);
 	if (!form) return null;
 
+	const published = form.published_revision_id
+		? await getFormRevision(db, form.published_revision_id)
+		: null;
+	if (published) {
+		return {
+			event,
+			form,
+			fields: fieldsFromSnapshot(published.snapshot),
+			sections: published.snapshot.sections,
+			categoryRoute: categoryRouteFromSnapshot(published.snapshot),
+			revisionId: published.id,
+		};
+	}
+
 	const rows = await listFormFields(db, form.id);
 	const fields: FormFieldDef[] = rows.map((row) => {
 		if (!isFieldType(row.field_type)) {
@@ -52,8 +72,6 @@ export async function loadCfpForm(
 			required: row.required === 1,
 			position: row.position,
 			visibilityRule: parseVisibilityRule(row.visibility_rule),
-			// Speaker bounds are form policy, so a later settings edit applies to
-			// every speaker block without mutating historical field definitions.
 			config:
 				config.kind === "speaker_block"
 					? { ...config, minSpeakers: form.min_speakers, maxSpeakers: form.max_speakers }
@@ -69,5 +87,6 @@ export async function loadCfpForm(
 		fields,
 		sections: parseFormSections(form.sections_json),
 		categoryRoute: parseCategoryRoute(form.category_routing_json),
+		revisionId: null,
 	};
 }

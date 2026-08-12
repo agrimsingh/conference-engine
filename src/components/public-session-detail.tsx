@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/cloudflare";
 import { loadPublicSession, safeExternalUrl } from "@/lib/sessions/session";
 import { formatClock } from "@/lib/schedule/time";
-import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
+import { PublicSpeakerLine } from "@/components/public-speaker-line";
 import { SessionShareActions } from "@/components/session-share-actions";
 import { ShowMoreText } from "@/components/show-more-text";
+import { isPublicTbaSpeaker } from "@/lib/speakers/public-display";
 
 function answersFromJson(raw: string): Record<string, unknown> {
 	try {
@@ -60,25 +61,15 @@ export async function PublicSessionDetail({
 				<h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-neutral-100">
 					{title}
 				</h1>
-				{session.speakers.length > 0 ? (
-					<ul className="mt-4 flex flex-wrap gap-4">
-						{session.speakers.map((speaker) => (
-							<li key={speaker.id}>
-								<PublicSpeakerAvatar
-									eventSlug={session.event.slug}
-									personId={speaker.personId}
-									name={speaker.name}
-									hasHeadshot={speaker.hasHeadshot}
-									profileHref={
-										showSpeakerDirectory && speaker.personId
-											? `/e/${session.event.slug}/speakers/${speaker.personId}`
-											: null
-									}
-								/>
-							</li>
-						))}
-					</ul>
-				) : null}
+				<PublicSpeakerLine
+					speakers={session.speakers}
+					eventSlug={session.event.slug}
+					size="md"
+					listClassName="mt-4 flex flex-wrap gap-4"
+					profileHrefFor={(personId) =>
+						showSpeakerDirectory ? `/e/${session.event.slug}/speakers/${personId}` : null
+					}
+				/>
 				<div className="mt-5">
 					<SessionShareActions path={detailPath} icsHref={icsHref} />
 				</div>
@@ -95,12 +86,12 @@ export async function PublicSessionDetail({
 					</div>
 				</section>
 			) : null}
-			{session.speakers.some((speaker) => speaker.bio) ? (
+			{session.speakers.some((speaker) => speaker.bio && !isPublicTbaSpeaker(speaker)) ? (
 				<section className="mt-8">
 					<h2 className="text-lg font-medium text-neutral-100">Speakers</h2>
 					<ul className="mt-3 space-y-3">
-						{session.speakers.map((speaker) => (
-							<li key={speaker.id}>
+						{session.speakers.filter((speaker) => speaker.bio && !isPublicTbaSpeaker(speaker)).map((speaker) => (
+							<li key={speaker.id ?? speaker.name}>
 								<p className="font-medium text-neutral-100">{speaker.name}</p>
 								{speaker.bio ? (
 									<div className="mt-1">

@@ -21,6 +21,8 @@ import { parseSpeakerSocial } from "@/lib/speakers/social";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
 import { parseSavedTaskFormFields } from "@/lib/speakers/task-forms";
 import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
+import { listHandoffsForSubmissions } from "@/lib/speakers/handoff";
+import { slotAckStateForActor } from "@/lib/schedule/slot-ack";
 import { listPublishedPortalResourcesForSpeaker } from "@/lib/resources/resources";
 import {
 	isProfileTaskKey,
@@ -91,7 +93,7 @@ export default async function PortalPage({ searchParams }: Props) {
 		...profileEvents.results.map((row) => row.event_id),
 	]);
 	const events = new Map(eventRows.map((event) => [event.id, event]));
-	const [speakersBySubmission, profileRows, slotRows] = await Promise.all([
+	const [speakersBySubmission, profileRows, slotRows, handoffs, ackStates] = await Promise.all([
 		listSpeakersForSubmissions(
 			db,
 			submissions.map((submission) => submission.id),
@@ -104,6 +106,15 @@ export default async function PortalPage({ searchParams }: Props) {
 		listAgendaSlotsBySubmissionIds(
 			db,
 			submissions.map((submission) => submission.id),
+		),
+		listHandoffsForSubmissions(
+			db,
+			submissions.map((submission) => submission.id),
+		),
+		Promise.all(
+			submissions.map((row) =>
+				slotAckStateForActor(db, { submissionId: row.id, actorPersonId: session.personId }),
+			),
 		),
 	]);
 	const profilesByEvent = new Map(
@@ -149,16 +160,38 @@ export default async function PortalPage({ searchParams }: Props) {
 		};
 	}
 
-	const applications: PortalApplication[] = submissions.map((row) => {
+	const applications: PortalApplication[] = submissions.map((row, index) => {
 		const answers = parseAnswers(row.answers_json);
 		const event = events.get(row.event_id);
 		const slot = slotsBySubmission.get(row.id);
 		const submissionTasks = tasks
 			.filter((task) => task.submission_id === row.id)
 			.map(toTaskView);
-		const speakers = (speakersBySubmission.get(row.id) ?? []).filter(
-			(speaker) => speaker.position > 0,
+		const allSpeakers = speakersBySubmission.get(row.id) ?? [];
+		const speakers = allSpeakers.filter((speaker) => speaker.position > 0);
+		const incoming = handoffs.find(
+			(handoff) =>
+				handoff.submission_id === row.id &&
+				handoff.manager_person_id === session.personId &&
+				handoff.status === "accepted",
 		);
+		const outgoing = handoffs.find(
+			(handoff) =>
+				handoff.submission_id === row.id &&
+				handoff.speaker_person_id === session.personId &&
+				(handoff.status === "pending" || handoff.status === "accepted"),
+		);
+		const isListedSpeaker =
+			row.submitter_person_id === session.personId ||
+			allSpeakers.some(
+				(speaker) =>
+					speaker.person_id === session.personId &&
+					speaker.status !== "removed" &&
+					speaker.status !== "declined",
+			);
+		const managedSpeaker = incoming
+			? allSpeakers.find((speaker) => speaker.person_id === incoming.speaker_person_id)
+			: null;
 		return {
 			id: row.id,
 			eventId: row.event_id,
@@ -175,6 +208,7 @@ export default async function PortalPage({ searchParams }: Props) {
 					? `${slot.room_name} · ${formatEventTime(slot.starts_at, event.timezone)}`
 					: null,
 			canWithdraw:
+				!incoming &&
 				isSubmissionStatus(row.status) &&
 				canTransitionSubmission(row.status, "withdrawn"),
 			removesFromSchedule:
@@ -195,6 +229,17 @@ export default async function PortalPage({ searchParams }: Props) {
 				isSessionPrepTaskKey(task.key),
 			),
 			timezone: event?.timezone,
+			needsSlotAck: ackStates[index]?.needsAck === true,
+			canHandoff: isListedSpeaker && !incoming && outgoing?.status !== "accepted",
+			handoffLabel:
+				outgoing?.status === "accepted"
+					? `Managed by ${outgoing.manager_email}`
+					: outgoing?.status === "pending"
+						? `Handoff sent to ${outgoing.manager_email}`
+						: null,
+			actingAsManagerFor: incoming
+				? managedSpeaker?.name || managedSpeaker?.email || "speaker"
+				: null,
 		};
 	});
 

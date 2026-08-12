@@ -9,6 +9,11 @@ import {
 import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { safeExternalUrl } from "@/lib/sessions/session";
+import {
+	mapPublicSessionSpeakers,
+	PUBLIC_TBA_SPEAKER_NAME,
+	publicSpeakerSourceFromRow,
+} from "@/lib/speakers/public-display";
 
 export type PublicScheduleSpeakerJson = {
 	personId: string | null;
@@ -122,21 +127,30 @@ export async function buildPublicScheduleJson(
 				googleDocUrl: safeExternalUrl(slot.google_doc_url),
 				supportingUrl: safeExternalUrl(slot.supporting_url),
 			},
-			speakers: speakers
-				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => {
-					const profile = speaker.person_id ? profileByPerson.get(speaker.person_id) : undefined;
+			speakers: mapPublicSessionSpeakers(
+				speakers.map(publicSpeakerSourceFromRow),
+				(named) => {
+					const profile = named.personId ? profileByPerson.get(named.personId) : undefined;
 					return {
-						personId: speaker.person_id,
-						name: speaker.name.trim() || "Speaker",
+						personId: named.personId,
+						name: named.name,
 						jobTitle: profile?.jobTitle ?? null,
 						company: profile?.company ?? null,
 						hasHeadshot: profile?.hasHeadshot ?? false,
-						profileUrl: speaker.person_id
-							? `/e/${event.slug}/speakers/${speaker.person_id}`
+						profileUrl: named.personId
+							? `/e/${event.slug}/speakers/${named.personId}`
 							: null,
 					};
-				}),
+				},
+				{
+					personId: null,
+					name: PUBLIC_TBA_SPEAKER_NAME,
+					jobTitle: null,
+					company: null,
+					hasHeadshot: false,
+					profileUrl: null,
+				},
+			),
 		});
 	}
 

@@ -2,6 +2,7 @@ import { isSpeakerTaskKey, SPEAKER_TASK_TYPE_REGISTRY } from "@/lib/domain";
 import { getSpeakerTaskById } from "@/lib/db/queries";
 import type { AssetRow, SpeakerTaskRow } from "@/lib/db/types";
 import { implicitlyConfirmByTaskCompletion } from "./co-speakers";
+import { canActAsSpeaker } from "./handoff";
 import { DemoEventWriteError, requireWritableEventById } from "@/lib/events/writability";
 import { parseSavedTaskFormFields, validateTaskFormAnswers } from "./task-forms";
 
@@ -15,13 +16,23 @@ export type CompleteFileResult =
 
 export const MAX_SPEAKER_BIO_LENGTH = 10_000;
 
+async function requireSpeakerActor(
+	db: D1Database,
+	speakerPersonId: string,
+	actorPersonId: string,
+): Promise<{ ok: false; error: string; status: number } | null> {
+	if (await canActAsSpeaker(db, actorPersonId, speakerPersonId)) return null;
+	return { ok: false, error: "Forbidden", status: 403 };
+}
+
 export async function completeFormTask(
 	db: D1Database,
 	args: { taskId: string; personId: string; answers: unknown },
 ): Promise<CompleteTextResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	if (task.person_id !== args.personId) return { ok: false, error: "Forbidden", status: 403 };
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);
 	} catch (error) {
@@ -46,9 +57,8 @@ export async function completeTextTask(
 ): Promise<CompleteTextResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	if (task.person_id !== args.personId) {
-		return { ok: false, error: "Forbidden", status: 403 };
-	}
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);
 	} catch (error) {
@@ -118,9 +128,8 @@ export async function completeFileTask(
 ): Promise<CompleteFileResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	if (task.person_id !== args.personId) {
-		return { ok: false, error: "Forbidden", status: 403 };
-	}
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);
 	} catch (error) {

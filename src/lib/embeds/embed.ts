@@ -8,6 +8,11 @@ import {
 import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { filterPublicEmbedSessions, publicSessionFormat } from "@/lib/schedule/public-format";
+import {
+	mapPublicSessionSpeakers,
+	PUBLIC_TBA_SPEAKER_NAME,
+	publicSpeakerSourceFromRow,
+} from "@/lib/speakers/public-display";
 
 export const EMBED_WIDGET_TYPES = ["sessions", "speakers", "agenda", "itinerary", "speaker_gallery"] as const;
 export type EmbedWidgetType = (typeof EMBED_WIDGET_TYPES)[number];
@@ -236,19 +241,28 @@ export async function buildPublicEmbedPayload(db: D1Database, eventSlug: string,
 			track: track.name,
 			startsAt: slot.starts_at,
 			endsAt: slot.ends_at,
-			speakers: (speakerMap.get(slot.submission_id) ?? [])
-				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => {
-					const profile = speaker.person_id ? speakerDirectory.get(speaker.person_id) : undefined;
+			speakers: mapPublicSessionSpeakers(
+				(speakerMap.get(slot.submission_id) ?? []).map(publicSpeakerSourceFromRow),
+				(named) => {
+					const profile = named.personId ? speakerDirectory.get(named.personId) : undefined;
 					return {
-						id: speaker.person_id,
-						name: profile?.display_name ?? (speaker.name.trim() || "Speaker"),
+						id: named.personId,
+						name: profile?.display_name ?? named.name,
 						jobTitle: profile?.job_title ?? null,
 						company: profile?.company ?? null,
-						headshotUrl: profile?.has_headshot === 1 && speaker.person_id ? `/api/e/${event.slug}/people/${speaker.person_id}/headshot` : null,
-						url: speaker.person_id ? `/e/${event.slug}/speakers/${speaker.person_id}` : null,
+						headshotUrl: profile?.has_headshot === 1 && named.personId ? `/api/e/${event.slug}/people/${named.personId}/headshot` : null,
+						url: named.personId ? `/e/${event.slug}/speakers/${named.personId}` : null,
 					};
-				}),
+				},
+				{
+					id: null,
+					name: PUBLIC_TBA_SPEAKER_NAME,
+					jobTitle: null,
+					company: null,
+					headshotUrl: null,
+					url: null,
+				},
+			),
 			url: `/e/${event.slug}/sessions/${slot.submission_id}`,
 		};
 	});

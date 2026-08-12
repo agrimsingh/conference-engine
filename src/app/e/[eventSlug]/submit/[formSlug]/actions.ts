@@ -72,6 +72,7 @@ export async function submitCfpAction(input: {
 			answers: validated.visibleAnswers,
 			speakers: validated.speakers,
 			category,
+			formRevisionId: loaded.revisionId,
 		});
 	} catch (error) {
 		if (isSubmissionLimitReachedError(error)) {

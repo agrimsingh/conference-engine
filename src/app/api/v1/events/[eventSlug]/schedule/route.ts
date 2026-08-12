@@ -11,6 +11,11 @@ import {
 import { isPublicAgendaVisibility, isPublicScheduleStatus, titleFromAnswers } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import { safeExternalUrl } from "@/lib/sessions/session";
+import {
+	mapPublicSessionSpeakers,
+	PUBLIC_TBA_SPEAKER_NAME,
+	publicSpeakerSourceFromRow,
+} from "@/lib/speakers/public-display";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string }>;
@@ -81,13 +86,17 @@ export async function GET(request: Request, context: RouteContext) {
 			},
 			startsAt: slot.starts_at,
 			endsAt: slot.ends_at,
-			// Public schedule payload mirrors the public page: confirmed only.
-			speakers: speakers
-				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => ({
-					name: speaker.name,
-					email: speaker.email,
-				})),
+			speakers: mapPublicSessionSpeakers(
+				speakers.map(publicSpeakerSourceFromRow),
+				(named) => ({
+					name: named.name,
+					personId: named.personId,
+				}),
+				{
+					name: PUBLIC_TBA_SPEAKER_NAME,
+					personId: null,
+				},
+			),
 		});
 	}
 
