@@ -28,8 +28,8 @@ function launcherFor(perspective: DemoPerspective): LauncherCard {
 		case "applicant":
 			return {
 				eyebrow: "Applicant",
-				title: "Interactive CFP form",
-				body: "Open the real conditional form for the seeded demo event. Click through formats and fields; submissions, drafts, and uploads stay blocked.",
+				title: "The demo CFP",
+				body: "Open the real form. Click through formats. Submissions stay blocked.",
 				primary: {
 					href: `/e/${DEMO_EVENT_SLUG}/submit/cfp`,
 					label: "Open demo CFP",
@@ -42,8 +42,8 @@ function launcherFor(perspective: DemoPerspective): LauncherCard {
 		case "attendee":
 			return {
 				eyebrow: "Attendee",
-				title: "Published program",
-				body: "Only published sessions appear on the public schedule. Speakers and the embed use the same seeded event.",
+				title: "Published programme",
+				body: "Only published sessions appear. Speakers and the embed read the same event.",
 				primary: {
 					href: `/e/${DEMO_EVENT_SLUG}/schedule`,
 					label: "Open public schedule",
@@ -56,28 +56,28 @@ function launcherFor(perspective: DemoPerspective): LauncherCard {
 		case "organizer":
 			return {
 				eyebrow: "Organizer",
-				title: "Full lifecycle walkthrough",
-				body: "The public demo is read-only. Create your own event (Conference preset is the default) and run the programme end-to-end — that is what judges evaluate.",
-				primary: { href: "/admin", label: "Create event / sign in" },
+				title: "Run it in your event",
+				body: "The public demo does not write. Create an event and run the programme there.",
+				primary: { href: "/admin", label: "Create your event" },
 				secondary: {
 					href: `/e/${DEMO_EVENT_SLUG}/schedule`,
 					label: "See published schedule",
 				},
 				steps: [
-					"Create event → Setup checklist → open the CFP (status Open + close date).",
-					"Submit once as a speaker → confirm email → thank-you → /portal.",
-					"Review: activate plan → add reviewer → assign → score via /review?token=…",
-					"Accept + send email (default) → portal Profile/Prep tasks appear.",
-					"Schedule: place on the grid (watch calendar-invite status) → Publish.",
-					"Public: /e/[slug]/schedule + speakers + an embed widget.",
+					"Create an event, open the CFP, set a close date.",
+					"Submit once as a speaker and confirm the email.",
+					"Add a reviewer, assign, score.",
+					"Accept, then send the email. Portal tasks appear.",
+					"Place talks on the grid, then publish.",
+					"Public schedule, speakers, and the embed update together.",
 				],
 			};
 		case "reviewer":
 			return {
 				eyebrow: "Reviewer",
 				title: "Review needs your event",
-				body: "Scoring boards are token-bound to an evaluation plan. Create an event, open a CFP, and assign reviewers to see the real board.",
-				primary: { href: "/admin", label: "Create event / sign in" },
+				body: "Create an event, open a CFP, and assign reviewers. They score on a board they get a link to.",
+				primary: { href: "/admin", label: "Create your event" },
 				secondary: {
 					href: `/e/${DEMO_EVENT_SLUG}/submit/cfp`,
 					label: "Browse demo CFP",
@@ -87,8 +87,8 @@ function launcherFor(perspective: DemoPerspective): LauncherCard {
 			return {
 				eyebrow: "Speaker",
 				title: "Portal needs your invite",
-				body: "The speaker portal is magic-link email for people on your event. Demo fixture emails are not a public login path.",
-				primary: { href: "/admin", label: "Create event / sign in" },
+				body: "The speaker portal is a magic-link email for people on your event. Demo fixture emails are not a public login.",
+				primary: { href: "/admin", label: "Create your event" },
 				secondary: {
 					href: `/e/${DEMO_EVENT_SLUG}/speakers`,
 					label: "Public speakers",
@@ -106,17 +106,12 @@ export default async function DemoPage({ searchParams }: Props) {
 		<main className="px-4 py-6 text-neutral-100 sm:px-6 sm:py-10">
 			<div className="mx-auto max-w-3xl">
 				<header className="border-b border-neutral-800 pb-6">
-					<span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300">
-						Playable read-only surfaces
-					</span>
-					<h1 className="mt-5 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-						Demo launcher
+					<h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+						Demo
 					</h1>
 					<p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-neutral-400">
-						Jump into real product routes for the seeded{" "}
-						<code className="text-neutral-300">demo-cfp-to-stage</code> event. Public CFP and
-						schedule are interactive; writes stay blocked. Organizer, reviewer, and speaker
-						workflows need your own event.
+						Public CFP and schedule are real routes. Writes stay blocked.
+						Review, accept, and the speaker portal need an event you create.
 					</p>
 					<nav aria-label="Demo perspective" className="mt-5 flex flex-wrap gap-2">
 						{DEMO_PERSPECTIVES.map((item) => {
