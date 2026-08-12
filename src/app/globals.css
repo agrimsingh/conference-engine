@@ -19,6 +19,26 @@ body {
 	font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Landing hero: the one authored motion moment — the mid-drag card hovers. */
+@keyframes drag-hover {
+	from {
+		transform: rotate(1.5deg) translateY(0);
+	}
+	to {
+		transform: rotate(1.8deg) translateY(-3px);
+	}
+}
+
+.drag-card {
+	transform: rotate(1.5deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.drag-card {
+		animation: drag-hover 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+	}
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,

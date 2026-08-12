@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
 	title: "conference-engine",
 	description:
-		"The work between the open call and the first session. CFP, review, decisions, speaker ops, schedule, and publish in one workspace.",
+		"The open-source alternative to Sessionboard and Sessionize. CFP to published schedule. You run it.",
 };
 
 export default function RootLayout({
@@ -34,10 +34,10 @@ export default function RootLayout({
 					dangerouslySetInnerHTML={{
 						__html: `<!--
 IMPECCABLE CONTRACT (seed f223cb45)
-THESIS: The product is the hero. Organizer release-decisions chrome opens the page; refuses the tall centered hero with a screenshot in a browser frame.
+THESIS: The product is the hero. The schedule grid diorama opens the page; refuses the tall centered hero with a screenshot in a browser frame.
 OWN-WORLD: Near-black ground (#0a0a0b), off-white text, emerald #10b981 accent, red reserved for conflict/error, 1px neutral-800 borders, Geist. Canon dev-tool register at Linear/Vercel/Resend/Stripe/PostHog craft.
-STORY: An organizer understands they can create and run their event in the hosted product today, with playable read-only demo surfaces and self-hosting as supporting proof and secondary paths.
-FIRST VIEWPORT: Slim translucent nav with organizer sign-in; compact left-aligned headline "The work between the call and the first session." with one solid create-event action and one neutral demo link; coded admin chrome for staged accept/decline with a left-aligned Release decisions action, three principles beside it (one programme, after accept, nothing leaks).
+STORY: An organizer understands they can create and run their event in the hosted product today. The coded admin chrome is clickable across CFP, review, accept, speaker ops, schedule, and publish. Self-hosting is a supporting path.
+FIRST VIEWPORT: Slim translucent nav with organizer sign-in; compact left-aligned headline "The work between the call and the first session." with one solid create-event action and one neutral demo link; full-bleed schedule grid with unscheduled rail, mid-drag emerald card, and speaker-conflict banner. Clickable admin chrome lives below.
 FORM: Category standard played straight — user-chosen standing exit; approved comp 3 (.impeccable/mocks/comp-3-productfirst.png).
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`,

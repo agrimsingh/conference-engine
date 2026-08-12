@@ -8,9 +8,9 @@ const DEMO_EVENT = "demo-cfp-to-stage";
 const REPO_URL = "https://github.com/agrimsingh/conference-engine";
 
 export const metadata: Metadata = {
-	title: "Compare — conference-engine",
+	title: "Compare · conference-engine",
 	description:
-		"How conference-engine compares to Sessionboard and Sessionize, what it deliberately skips, and how to run your own copy.",
+		"The programme job, not the $40k suite. How this compares to Sessionboard and Sessionize, and how to run your own copy.",
 };
 
 const COMPARE_ROWS: {
@@ -81,57 +81,12 @@ const COMPARE_ROWS: {
 	},
 ];
 
-const SHIPS: { title: string; body: string; href: string; label: string }[] = [
-	{
-		title: "Custom CFP forms",
-		body: "Conditionals and category routing. Open forms show the close date and per-submitter limits.",
-		href: `/e/${DEMO_EVENT}/submit/cfp`,
-		label: "Open demo CFP",
-	},
-	{
-		title: "Speaker portal",
-		body: "Bios, headshots, slides, and supporting docs through a magic link — including withdraw.",
-		href: "/demo?perspective=speaker",
-		label: "How the portal works",
-	},
-	{
-		title: "Templated speaker mail",
-		body: "Reminders and calendar invites from the communications console once you run your event.",
-		href: "/demo?perspective=organizer",
-		label: "Organizer walkthrough",
-	},
-	{
-		title: "Review and scoring",
-		body: "Tokenized reviewer boards and an organizer review workspace against a rubric.",
-		href: "/demo?perspective=reviewer",
-		label: "How review works",
-	},
-	{
-		title: "Drag schedule + conflicts",
-		body: "List, day, week, track, and room views. Public pages show published sessions only.",
-		href: `/e/${DEMO_EVENT}/schedule`,
-		label: "Public schedule",
-	},
-	{
-		title: "Outstanding-tasks board",
-		body: "Live cockpit for who is blocking the programme — unreviewed, unnotified, incomplete prep, unplaced accepts.",
-		href: "/demo?perspective=organizer",
-		label: "See the walkthrough",
-	},
-	{
-		title: "Speaker CRM",
-		body: "Cross-event contacts with tags, segments, a sourcing pipeline, CSV import, and push into an event roster.",
-		href: "/admin/contacts",
-		label: "Open contacts",
-	},
-];
-
 const DOES_NOT: string[] = [
 	"Ticketing, payments, or registration checkout",
-	"Marketing automation or a conference CMS (speaker CRM ships; the rest stays out)",
-	"AI-assisted review (struck; humans score)",
-	"Pulling Airtable or Accelevents edits back into the programme — those are one-way exits",
-	"Password accounts — organizers sign in with a magic link",
+	"Marketing automation or a conference CMS. Speaker CRM ships.",
+	"AI-assisted review. Humans score.",
+	"Pulling Airtable or Accelevents edits back into the programme. Those are one-way exits.",
+	"Password accounts. Organizers sign in with a magic link.",
 ];
 
 function ArrowIcon() {
@@ -158,34 +113,28 @@ export default function ComparePage() {
 
 			<main>
 				<section className="mx-auto max-w-7xl px-4 pb-10 pt-14 sm:px-6 sm:pt-16">
-					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-						Compare
-					</p>
-					<h1 className="mt-3 max-w-3xl text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">
-						Programme software without the suite tax
+					<h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">
+						The programme job, not the $40k suite.
 					</h1>
 					<p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-neutral-400">
-						conference-engine is an open-source alternative to the{" "}
-						<em className="not-italic text-neutral-300">program</em> side of
-						Sessionboard and Sessionize: CFP → review → accept → speaker prep →
-						schedule → publish. Fast for organisers mid-cycle — not another
-						CRM with a schedule bolted on.
+						Sessionboard is a $40k suite. Sessionize bills per event. This is
+						the programme job, open source, on an account you control.
 					</p>
 					<div className="mt-6 flex flex-wrap items-center gap-5 text-sm font-medium">
-						<a
-							href="#self-host"
-							className={`inline-flex items-center gap-2 px-4 py-2 ${buttonClasses("primary")}`}
-						>
-							Self-host quickstart
-							<ArrowIcon />
-						</a>
 						<Link
 							href="/admin"
-							className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
+							className={`inline-flex items-center gap-2 px-4 py-2 ${buttonClasses("primary")}`}
 						>
-							Create an event on the hosted product
+							Create your event
 							<ArrowIcon />
 						</Link>
+						<a
+							href="#self-host"
+							className="inline-flex items-center gap-1.5 text-neutral-300 hover:text-neutral-100"
+						>
+							Clone it yourself
+							<ArrowIcon />
+						</a>
 					</div>
 				</section>
 
@@ -200,12 +149,8 @@ export default function ComparePage() {
 					>
 						Against Sessionboard and Sessionize
 					</h2>
-					<p className="mt-3 max-w-2xl text-pretty text-sm text-neutral-400">
-						Sessionboard sells Program inside a large hosted suite. Sessionize
-						is closer in shape at per-event pricing. We ship only the programme
-						job, with a live “who is blocking?” board and the option to run it
-						yourself.
-					</p>
+
+					{/* Mobile: stacked cards */}
 
 					{/* Mobile: stacked cards */}
 					<ul className="mt-8 space-y-3 md:hidden">
@@ -268,8 +213,7 @@ export default function ComparePage() {
 						</table>
 					</div>
 					<p className="mt-3 text-xs text-neutral-500">
-						Competitor cells are positioning sketches, not a feature audit.
-						Route-level map of what this tip ships:{" "}
+						The table is positioning, not a feature audit.{" "}
 						<a
 							href={`${REPO_URL}/blob/main/PARITY.md`}
 							target="_blank"
@@ -277,50 +221,9 @@ export default function ComparePage() {
 							className="underline underline-offset-2 hover:text-neutral-300"
 						>
 							PARITY.md
-						</a>
-						.
+						</a>{" "}
+						is the route map.
 					</p>
-				</section>
-
-				<section
-					id="ships"
-					aria-labelledby="ships-heading"
-					className="border-y border-neutral-800 bg-neutral-900/40"
-				>
-					<div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
-						<h2
-							id="ships-heading"
-							className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl"
-						>
-							What ships today
-						</h2>
-						<p className="mt-3 max-w-2xl text-pretty text-sm text-neutral-400">
-							Firm programme requirements from the brief, mapped to live
-							product surfaces. Green links open the public demo where one
-							exists.
-						</p>
-						<ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-							{SHIPS.map((item) => (
-								<li key={item.title}>
-									<div className="flex h-full flex-col rounded-xl border border-neutral-800 bg-neutral-950/60 px-4 py-4">
-										<h3 className="text-sm font-medium text-neutral-100">
-											{item.title}
-										</h3>
-										<p className="mt-2 flex-1 text-pretty text-sm leading-relaxed text-neutral-400">
-											{item.body}
-										</p>
-										<Link
-											href={item.href}
-											className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300"
-										>
-											{item.label}
-											<ArrowIcon />
-										</Link>
-									</div>
-								</li>
-							))}
-						</ul>
-					</div>
 				</section>
 
 				<section
@@ -332,11 +235,11 @@ export default function ComparePage() {
 						id="not-heading"
 						className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl"
 					>
-						What we deliberately skip
+						What we skip
 					</h2>
 					<p className="mt-3 max-w-2xl text-pretty text-sm text-neutral-400">
-						The job is the programme lifecycle — not the org chart. Adjacent
-						scope stays out even when it looks easy.
+						The job is the programme. Adjacent scope stays out even when it
+						looks easy.
 					</p>
 					<ul className="mt-8 max-w-2xl space-y-3 border-t border-neutral-800 pt-6">
 						{DOES_NOT.map((item) => (
@@ -365,23 +268,12 @@ export default function ComparePage() {
 								id="self-host-heading"
 								className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl"
 							>
-								Self-host quickstart
+								You keep the data
 							</h2>
 							<p className="mt-3 max-w-lg text-pretty text-sm leading-relaxed text-neutral-400">
-								One repo on your own Cloudflare account. Programme data,
-								speaker uploads, and live schedule updates stay with you. No
-								servers to babysit. Full setup, secrets, and migrations live in
-								the README.
+								Clone it onto your Cloudflare account. There is no per-event
+								invoice.
 							</p>
-							<ol className="mt-6 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-neutral-300">
-								<li>Create storage and session resources in your account.</li>
-								<li>Point config at those resources; set the public origin.</li>
-								<li>Put secrets (auth, optional email provider).</li>
-								<li>
-									Apply migrations in order, then{" "}
-									<code className="text-neutral-200">npm run deploy</code>.
-								</li>
-							</ol>
 							<a
 								href={`${REPO_URL}#deploy-sketch`}
 								target="_blank"
@@ -406,9 +298,7 @@ npm run deploy`}
 				<div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-neutral-400 sm:px-6">
 					<div className="flex items-center gap-2">
 						<LogoMark />
-						<span>
-							conference-engine — CFP to stage for conference organizers
-						</span>
+						<span>conference-engine</span>
 					</div>
 					<div className="flex flex-wrap items-center gap-5">
 						<Link className="hover:text-neutral-100" href="/">
