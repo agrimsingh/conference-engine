@@ -2,6 +2,11 @@ import { getEventBySlug, getSubmissionById, listAgendaTracks, listSpeakersForSub
 import type { SubmissionRow } from "@/lib/db/types";
 import { displayCategory } from "@/lib/domain";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
+import {
+	mapPublicSessionSpeakers,
+	PUBLIC_TBA_SPEAKER_NAME,
+	publicSpeakerSourceFromRow,
+} from "@/lib/speakers/public-display";
 import { ensureTaskTemplates, materializeAcceptedSpeaker, prepareMaterializationWriteFence, MaterializationClaimLostError, MATERIALIZATION_WRITE_FENCE_PREDICATE, type MaterializationWriteFence, type MaterializedSpeakerResources } from "@/lib/speakers/materialize";
 import { hasFormulaPrefix, parseBoundedCsv, type CsvRecord } from "./csv";
 import { canonicalizeCsvRecord, csvHasTitleColumn } from "./import-columns";
@@ -400,7 +405,7 @@ export async function cloneSession(db: D1Database, args: { targetEventId: string
 }
 
 export type PublicSessionSpeaker = {
-	id: string;
+	id: string | null;
 	personId: string | null;
 	name: string;
 	bio: string | null;
@@ -449,6 +454,7 @@ export async function loadPublicSession(db: D1Database, eventSlug: string, submi
 			headshotByPerson.set(profile.person_id, Boolean(profile.headshot_asset_id));
 		}
 	}
+	let confirmedIndex = 0;
 	return {
 		event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone },
 		submission: row,
@@ -461,15 +467,29 @@ export async function loadPublicSession(db: D1Database, eventSlug: string, submi
 			trackId: row.agenda_track_id,
 			trackName: track.name,
 		},
-		speakers: confirmed.map((speaker) => ({
-			id: speaker.id,
-			personId: speaker.person_id,
-			name: speaker.name.trim() || "Speaker",
-			bio: speaker.bio,
-			hasHeadshot: speaker.person_id
-				? (headshotByPerson.get(speaker.person_id) ?? false)
-				: false,
-		})),
+		speakers: mapPublicSessionSpeakers<PublicSessionSpeaker>(
+			speakers.map(publicSpeakerSourceFromRow),
+			(named) => {
+				const source = confirmed[confirmedIndex];
+				confirmedIndex += 1;
+				return {
+					id: source?.id ?? null,
+					personId: named.personId,
+					name: named.name,
+					bio: source?.bio ?? null,
+					hasHeadshot: named.personId
+						? (headshotByPerson.get(named.personId) ?? false)
+						: false,
+				};
+			},
+			{
+				id: null,
+				personId: null,
+				name: PUBLIC_TBA_SPEAKER_NAME,
+				bio: null,
+				hasHeadshot: false,
+			},
+		),
 	};
 }
 
