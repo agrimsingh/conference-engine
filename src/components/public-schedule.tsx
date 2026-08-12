@@ -18,7 +18,7 @@ import {
 	type PublicScheduleTrack,
 } from "@/lib/schedule/public-tracks";
 import { EmptyState } from "@/components/ui";
-import { PublicSpeakerAvatar } from "@/components/public-speaker-avatar";
+import { PublicSpeakerLine } from "@/components/public-speaker-line";
 import { PublicItinerary } from "@/components/public-itinerary";
 import { ScheduleQuerySelect } from "@/components/schedule-query-select";
 import {
@@ -31,7 +31,11 @@ import {
 	parseDayKey,
 	weekDayKeys,
 } from "@/lib/schedule/time";
-import { speakerRoleLine } from "@/lib/speakers/public-directory";
+import {
+	mapPublicSessionSpeakers,
+	PUBLIC_TBA_SPEAKER_NAME,
+	publicSpeakerSourceFromRow,
+} from "@/lib/speakers/public-display";
 
 export type ScheduleView = "itinerary" | "my-schedule" | "day" | "week" | "track" | "room";
 
@@ -140,30 +144,14 @@ function SpeakerLine({
 	eventSlug: string;
 	basePath: PublicScheduleBasePath;
 }) {
-	if (speakers.length === 0) return null;
 	return (
-		<ul className="mt-1 flex flex-wrap gap-3">
-			{speakers.map((speaker, index) => {
-				const role = speakerRoleLine(speaker);
-				return (
-					<li key={`${speaker.personId ?? speaker.name}-${index}`}>
-						<PublicSpeakerAvatar
-							eventSlug={eventSlug}
-							personId={speaker.personId}
-							name={speaker.name}
-							hasHeadshot={speaker.hasHeadshot}
-							size="sm"
-							profileHref={
-								basePath === "/e" && speaker.personId
-									? `/e/${eventSlug}/speakers/${speaker.personId}`
-									: null
-							}
-						/>
-						{role ? <p className="mt-0.5 text-xs text-neutral-500">{role}</p> : null}
-					</li>
-				);
-			})}
-		</ul>
+		<PublicSpeakerLine
+			speakers={speakers}
+			eventSlug={eventSlug}
+			profileHrefFor={(personId) =>
+				basePath === "/e" ? `/e/${eventSlug}/speakers/${personId}` : null
+			}
+		/>
 	);
 }
 
@@ -283,18 +271,26 @@ export async function PublicSchedule({
 			startsAtMs: slot.starts_at,
 			endsAtMs: slot.ends_at,
 			status: slot.submission_status,
-			speakers: speakers
-				.filter((speaker) => speaker.status === "confirmed")
-				.map((speaker) => {
-					const profile = speaker.person_id ? profileByPerson.get(speaker.person_id) : undefined;
+			speakers: mapPublicSessionSpeakers(
+				speakers.map(publicSpeakerSourceFromRow),
+				(named) => {
+					const profile = named.personId ? profileByPerson.get(named.personId) : undefined;
 					return {
-						personId: speaker.person_id,
-						name: speaker.name.trim() || "Speaker",
+						personId: named.personId,
+						name: named.name,
 						jobTitle: profile?.jobTitle ?? null,
 						company: profile?.company ?? null,
 						hasHeadshot: profile?.hasHeadshot ?? false,
 					};
-				}),
+				},
+				{
+					personId: null,
+					name: PUBLIC_TBA_SPEAKER_NAME,
+					jobTitle: null,
+					company: null,
+					hasHeadshot: false,
+				},
+			),
 			dayKey: dayKeyInTimeZone(slot.starts_at, event.timezone),
 			detailHref: `${basePath}/${event.slug}/sessions/${slot.submission_id}`,
 		});
