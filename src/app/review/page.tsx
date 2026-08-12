@@ -129,7 +129,6 @@ export default async function ReviewPage({ searchParams }: Props) {
 			] as const),
 		),
 	);
-	const blindReviewer = identity.mode === "reviewer" && plan.blind_review === 1;
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
 		let parsedAnswers: Record<string, unknown> = {};
@@ -148,7 +147,10 @@ export default async function ReviewPage({ searchParams }: Props) {
 			// ignore
 		}
 		const recusedAt = identity.mode === "reviewer" ? (recusalBySubmission.get(row.id) ?? null) : null;
-		const safe = reviewerIdentityFields({ submitterName: row.submitter_name, submitterEmail: row.submitter_email, answers: parsedAnswers }, blindReviewer);
+		const identityFields = { submitterName: row.submitter_name, submitterEmail: row.submitter_email, answers: parsedAnswers };
+		const safe = identity.mode === "reviewer"
+			? reviewerIdentityFields(identityFields, plan.blind_review === 1)
+			: identityFields;
 		return {
 			id: row.id,
 			status: row.status,
