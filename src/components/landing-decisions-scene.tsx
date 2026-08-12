@@ -96,7 +96,7 @@ export function LandingDecisionsScene() {
 						decline
 					</p>
 					<div className="mt-4">
-						<span className={buttonClasses("primary")}>Release decisions</span>
+						<span className={buttonClasses("secondary")}>Release decisions</span>
 					</div>
 					<p className="mt-2 max-w-md text-[13px] leading-relaxed text-neutral-500">
 						Decisions stay private until you release. Then submitters get the

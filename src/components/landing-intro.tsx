@@ -103,7 +103,7 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 			<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
 				Live for organizers
 			</p>
-			<h1 className="mt-3 max-w-5xl text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl lg:text-6xl">
+			<h1 className="mt-3 max-w-5xl text-balance text-[1.75rem] font-semibold leading-tight tracking-[-0.02em] sm:text-5xl lg:text-6xl">
 				The work between the call{" "}
 				<span className="text-emerald-400">and the first session.</span>
 			</h1>
@@ -131,14 +131,11 @@ export function LandingHero({ demoEvent }: { demoEvent: string }) {
 			<p className="mt-4 text-xs text-neutral-500">
 				Public demo is read-only · agents use per-event API tokens
 			</p>
-			<div className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(17rem,0.75fr)] lg:items-start lg:gap-12">
+			<div className="mt-12 space-y-8">
 				<LandingDecisionsScene />
-				<ol className="border-t border-neutral-800">
+				<ol className="grid gap-6 border-t border-neutral-800 pt-6 sm:grid-cols-3 sm:gap-8">
 					{PRINCIPLES.map((item) => (
-						<li
-							key={item.title}
-							className="border-b border-neutral-800 py-4"
-						>
+						<li key={item.title}>
 							<p className="text-sm font-medium text-neutral-100">
 								{item.title}
 							</p>
