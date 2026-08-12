@@ -7,6 +7,7 @@ import { SubmissionAnswersList } from "@/components/submission-answers-list";
 import { buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
 import type { DecisionAction, RenderedMessage } from "@/lib/domain";
 import type { SubmissionAnswerDisplay } from "@/lib/cfp/submission-answers";
+import { nextUnscoredVisibleIndex } from "@/lib/evaluation/review-advance";
 
 type CriterionView = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number; type: "numeric" | "dropdown" | "text"; options: string[] };
 type CriterionScoreView = { id: string; criterionId: string; score: number; valueText: string | null; comment: string | null; reviewerId: string | null };
@@ -29,7 +30,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 	const [focusIndex, setFocusIndex] = useState(0);
 	const [criterionIndex, setCriterionIndex] = useState(0);
 	const visible = useMemo(() => submissions.filter((row) => {
-		const matchesQuery = `${row.title} ${row.submitterName ?? ""} ${row.submitterEmail ?? ""} ${row.category}`.toLowerCase().includes(query.trim().toLowerCase());
+		const matchesQuery = `${row.title} ${row.submitterName ?? ""} ${row.category}`.toLowerCase().includes(query.trim().toLowerCase());
 		return matchesQuery && (status === "all" || row.status === status);
 	}), [query, status, submissions]);
 	const activeAssignments = submissions.filter((row) => row.recusedAt == null);
@@ -107,7 +108,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 		}
 	}
 
-	async function scoreSubmission(row: SubmissionView) {
+	async function scoreSubmission(row: SubmissionView, options?: { advance?: boolean; index?: number }) {
 		if (row.recusedAt != null) { setError("You recused this assignment."); return; }
 		if (!criteria.length) { setError("This plan has no rubric criteria. Ask an organizer to add one."); return; }
 		setPendingId(row.id); setError(null);
@@ -123,6 +124,22 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 			const response = await fetch("/api/review/score", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, eventSlug, submissionId: row.id, criterionScores }) });
 			const data = await response.json() as { ok?: boolean; error?: string };
 			if (!response.ok || !data.ok) { setError(data.error ?? "Score failed"); return; }
+			if (options?.advance) {
+				const fromIndex = options.index ?? visible.findIndex((item) => item.id === row.id);
+				const next = nextUnscoredVisibleIndex(
+					visible.map((item) => ({
+						id: item.id,
+						recusedAt: item.recusedAt,
+						authoredScoreCount: authoredScores(item, reviewerId).length,
+					})),
+					fromIndex,
+					criteria.length,
+				);
+				if (next !== null) {
+					setFocusIndex(next);
+					setCriterionIndex(0);
+				}
+			}
 			router.refresh();
 		} catch { setError("Network error"); } finally { setPendingId(null); }
 	}
@@ -162,7 +179,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 						<div className="flex flex-wrap items-start justify-between gap-3">
 							<div>
 								<p className="font-medium text-neutral-100">{row.title}</p>
-								<p className="mt-1 text-neutral-400">{row.submitterName} · {row.submitterEmail}</p>
+								{row.submitterName ? <p className="mt-1 text-neutral-400">{row.submitterName}</p> : null}
 								<p className="mt-1 text-xs text-neutral-500">{row.category}{row.format ? ` · ${row.format}` : ""} · {row.assignment}</p>
 							</div>
 							<StatusPill tone={submissionStatusTone(row.status)}>{row.status.replaceAll("_", " ")}{avg !== null ? ` · avg ${avg.toFixed(1)}` : ""}</StatusPill>
@@ -240,7 +257,10 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 								);
 							})}
 							{row.recusedAt == null ? (
-								<button type="button" disabled={busy} onClick={() => void scoreSubmission(row)} className={buttonClasses("secondary")}>{busy ? "Saving…" : "Save rubric review"}</button>
+								<div className="flex flex-wrap gap-2">
+									<button type="button" disabled={busy} onClick={() => void scoreSubmission(row, { index })} className={buttonClasses("secondary")}>{busy ? "Saving…" : "Save rubric review"}</button>
+									<button type="button" disabled={busy} onClick={() => void scoreSubmission(row, { advance: true, index })} className={buttonClasses("primary")}>{busy ? "Saving…" : "Save and next"}</button>
+								</div>
 							) : null}
 						</div>
 							{canDecide ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}

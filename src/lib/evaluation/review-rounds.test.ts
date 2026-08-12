@@ -34,10 +34,18 @@ describe("review rounds", () => {
 		expect(validateCriterionScores(criteria, [{ criterionId: "score", value: 4 }, { criterionId: "recommendation", value: "Strong accept" }, { criterionId: "comments", value: "Specific feedback" }])).toMatchObject({ ok: false, status: 400 });
 	});
 
-	it("suppresses reviewer identity without changing the organizer view", () => {
+	it("always strips submitter email from reviewer payloads", () => {
+		const row = { submitterName: "Priya Raman", submitterEmail: "priya@example.com", answers: { title: "Taming CI", abstract: "Builds", company: "Latticework Systems", coAuthorName: "Marcus Okafor" } };
+		expect(reviewerIdentityFields(row, false)).toEqual({
+			submitterName: "Priya Raman",
+			submitterEmail: null,
+			answers: { title: "Taming CI", abstract: "Builds", company: "Latticework Systems", coAuthorName: "Marcus Okafor" },
+		});
+	});
+
+	it("strips submitter name and identity-bearing answers when blind", () => {
 		const row = { submitterName: "Priya Raman", submitterEmail: "priya@example.com", answers: { title: "Taming CI", abstract: "Builds", company: "Latticework Systems", coAuthorName: "Marcus Okafor" } };
 		expect(reviewerIdentityFields(row, true)).toEqual({ submitterName: null, submitterEmail: null, answers: { title: "Taming CI", abstract: "Builds" } });
-		expect(reviewerIdentityFields(row, false)).toEqual(row);
 	});
 
 });
