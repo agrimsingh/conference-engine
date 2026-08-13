@@ -14,7 +14,7 @@ type CriterionScoreView = { id: string; criterionId: string; score: number; valu
 type ScoreView = { id: string; score: number; comment: string | null; scoredBy: string };
 type SubmissionView = {
 	id: string; status: string; submitterName: string | null; submitterEmail: string | null; title: string; category: string; format: string | null;
-	answers: SubmissionAnswerDisplay[]; assignment: string; recusedAt: number | null; previews: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
+	answers: SubmissionAnswerDisplay[]; assignment: string; recusedAt: number | null; previews?: Record<DecisionAction, RenderedMessage>; scores: ScoreView[]; criterionScores: CriterionScoreView[];
 };
 type Props = { eventSlug: string; token: string; canDecide: boolean; reviewerId: string | null; criteria: CriterionView[]; submissions: SubmissionView[] };
 
@@ -263,7 +263,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 								</div>
 							) : null}
 						</div>
-						{canDecide && reviewerId === null ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
+						{canDecide && reviewerId === null && row.previews ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
 					</li>
 				);
 			})}

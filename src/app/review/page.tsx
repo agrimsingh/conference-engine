@@ -126,6 +126,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 	const recusalBySubmission = new Map(
 		reviewerAssignments.map((assignment) => [assignment.submission_id, assignment.recused_at]),
 	);
+	const canDecide = canUseReviewDecisionControls(identity, admin);
 	const fieldLabelsBySubmission = await fieldLabelsForSubmissions(db, submissions);
 	const rows = submissions.map((row) => {
 		let title = "(untitled)";
@@ -175,12 +176,16 @@ export default async function ReviewPage({ searchParams }: Props) {
 				},
 				fieldLabels: fieldLabelsBySubmission.get(row.id),
 			}),
-			previews: renderDecisionMessagePreviews(messageTemplates, {
-				eventName: event.name,
-				submitterName: row.submitter_name ?? "there",
-				title,
-				portalUrl,
-			}),
+			...(canDecide
+				? {
+						previews: renderDecisionMessagePreviews(messageTemplates, {
+							eventName: event.name,
+							submitterName: row.submitter_name ?? "there",
+							title,
+							portalUrl,
+						}),
+					}
+				: {}),
 			scores: (scoresBySubmission.get(row.id) ?? []).filter((s) => identity.mode === "committee" || s.reviewer_id === identity.reviewer.id).map((s) => ({
 				id: s.id,
 				score: s.score,
@@ -222,7 +227,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 			<ReviewBoard
 				eventSlug={event.slug}
 				token={accessToken}
-				canDecide={canUseReviewDecisionControls(identity, admin)}
+				canDecide={canDecide}
 				reviewerId={identity.reviewer?.id ?? null}
 				criteria={criteria.map((criterion) => ({
 					id: criterion.id,
