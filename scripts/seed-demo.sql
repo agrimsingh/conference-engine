@@ -117,7 +117,7 @@ WITH demo_event AS (
 	SELECT f.id, f.event_id FROM cfp_forms f JOIN demo_event e ON e.id = f.event_id
 	WHERE f.id = 'demo-cfp-form' AND f.slug = 'cfp'
 ), fixtures(n, name, status, format, title, abstract, duration, category, position) AS (VALUES
-	('amara-diallo', 'Amara Diallo', 'published', 'stage', 'Shipping agents that recover', 'Patterns for durable agent operations.', 45, 'Agents', 1),
+	('amara-diallo', 'Amara Diallo', 'published', 'stage', 'Shipping agents that recover', 'Patterns for durable agent operations: how to keep tool-using systems useful when dependencies fail, retries become unsafe, and the operator needs an honest view of what happened. We will trace the boundary between automatic recovery and an escalation, then turn that trace into practical acceptance criteria for the next release.', 45, 'Agents', 1),
 	('jonas-weber', 'Jonas Weber', 'published', 'stage', 'What actually breaks in production', 'A field report from operating agent systems.', 45, 'Platform', 2),
 	('priya-nair', 'Priya Nair', 'published', 'stage', 'Evals beyond vibes', 'A practical quality loop for AI products.', 30, 'Practice', 3),
 	('diego-reyes', 'Diego Reyes', 'published', 'stage', 'Structured outputs at scale', 'How typed contracts keep integrations dependable.', 30, 'Platform', 4),
@@ -201,6 +201,16 @@ JOIN submissions s ON s.id = 'demo-sub-' || x.n AND s.event_id = e.id
 JOIN people p ON p.id = s.submitter_person_id AND p.email = lower(replace(x.n, '-', '.')) || '@example.invalid'
 WHERE NOT EXISTS (SELECT 1 FROM speaker_profiles WHERE id = 'demo-profile-' || x.n);
 
+-- The demo's original fictional portrait is a checked-in public fixture, so
+-- local and remote SQL reseeds have an image without requiring an R2 upload.
+WITH demo_event AS (
+	SELECT id FROM events
+	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
+)
+INSERT OR IGNORE INTO assets (id, event_id, r2_key, content_type, filename, uploaded_by_person_id, created_at)
+SELECT 'demo-headshot-amara', e.id, 'public/demo/amara-diallo-headshot.webp', 'image/webp', 'amara-diallo-headshot.webp', 'demo-person-amara-diallo', 1790000000000
+FROM demo_event e;
+
 WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
@@ -218,6 +228,7 @@ UPDATE speaker_profiles
 SET
 	job_title = (SELECT x.job_title FROM fixtures x WHERE speaker_profiles.person_id = 'demo-person-' || x.n),
 	company = (SELECT x.company FROM fixtures x WHERE speaker_profiles.person_id = 'demo-person-' || x.n),
+	headshot_asset_id = CASE WHEN person_id = 'demo-person-amara-diallo' THEN 'demo-headshot-amara' ELSE NULL END,
 	updated_at = 1790000000000
 WHERE event_id IN (SELECT id FROM demo_event)
 	AND person_id IN (SELECT 'demo-person-' || n FROM fixtures);
@@ -226,6 +237,11 @@ UPDATE submissions
 SET answers_json = '{"format":"lightning","title":"The MCP ecosystem one year in","abstract":"An architecture tour with production lessons.","duration_minutes":15}',
 	updated_at = 1790000000000
 WHERE id = 'demo-sub-zoe-martin' AND event_id = 'demo-cfp-to-stage-2026';
+
+UPDATE submissions
+SET answers_json = '{"format":"stage","title":"Shipping agents that recover","abstract":"Patterns for durable agent operations: how to keep tool-using systems useful when dependencies fail, retries become unsafe, and the operator needs an honest view of what happened. We will trace the boundary between automatic recovery and an escalation, then turn that trace into practical acceptance criteria for the next release.","duration_minutes":45}',
+	updated_at = 1790000000000
+WHERE id = 'demo-sub-amara-diallo' AND event_id = 'demo-cfp-to-stage-2026';
 
 WITH demo_event AS (
 	SELECT id FROM events
@@ -376,7 +392,7 @@ WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
 ), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
-	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":[],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","jobTitle","company","abstract","format"]}'),
 	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
 	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),
@@ -390,7 +406,7 @@ WITH demo_event AS (
 	SELECT id FROM events
 	WHERE id = 'demo-cfp-to-stage-2026' AND slug = 'demo-cfp-to-stage' AND mode = 'demo'
 ), fixtures(id, name, slug, widget_type, config_json) AS (VALUES
-	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":["demo-track-agents"],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
+	('demo-embed-sessions', 'Featured sessions', 'sessions', 'sessions', '{"brandColor":"#2563eb","trackIds":[],"formats":["Stage","Lightning"],"rooms":["Main Stage"],"visibleFields":["title","time","room","track","speakers","jobTitle","company","abstract","format"]}'),
 	('demo-embed-speakers', 'Speaker directory', 'speakers', 'speakers', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["headshot","jobTitle","company","bio"]}'),
 	('demo-embed-agenda', 'Conference agenda', 'agenda', 'agenda', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers","abstract","format"]}'),
 	('demo-embed-itinerary', 'Build your itinerary', 'itinerary', 'itinerary', '{"brandColor":"#2563eb","trackIds":[],"formats":[],"rooms":[],"visibleFields":["title","time","room","track","speakers"]}'),

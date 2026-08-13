@@ -29,6 +29,7 @@ import {
 	adminQueueSql,
 	decisionNotifiedSqlExists,
 	isDecisionOutcomeStatus,
+	REVIEW_BOARD_STATUS_SQL,
 	SUBMISSION_QUEUE_TABS,
 	type SubmissionQueueTab,
 } from "@/lib/domain";
@@ -967,7 +968,9 @@ export async function listTasksForPerson(
          UNION
          SELECT t.* FROM speaker_tasks t
          JOIN speaker_handoffs h
-           ON h.speaker_person_id = t.person_id AND h.status = 'accepted'
+           ON h.speaker_person_id = t.person_id
+          AND h.submission_id = t.submission_id
+          AND h.status = 'accepted'
          WHERE h.manager_person_id = ?
        )
        ORDER BY created_at ASC`,
@@ -1350,7 +1353,7 @@ export async function listReviewableSubmissions(
 		.prepare(
 			`SELECT * FROM submissions
        WHERE event_id = ?
-         AND status IN ('submitted', 'under_review', 'accepted', 'rejected')
+         AND status IN (${REVIEW_BOARD_STATUS_SQL})
        ORDER BY created_at DESC`,
 		)
 		.bind(eventId)

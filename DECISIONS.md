@@ -33,7 +33,7 @@ All true with runtime evidence:
 
 - Public `/e/[slug]/schedule` shows slots only for submissions in `published` (`scheduled` is organizer-only until explicitly published).
 - Rooms live in `event_rooms` (seeded: Main Stage, Room B, Workshop Lab); slots still store `room_name` text.
-- `EventRoom` HTTP `POST /broadcast` on schedule mutate; soft-fails under plain `next dev` without DO.
+- `EventRoom` HTTP `POST /broadcast` on schedule mutate. `npm run dev` starts a separate local owner Worker because Wrangler cannot expose an internal Durable Object through OpenNext's Node-side platform proxy; invoking `next dev` directly still lacks the DO.
 
 ## Wed realtime + API notes
 
@@ -57,4 +57,3 @@ Auto sync (migration `0039`): optional daily push at 01:00 UTC from the integrat
 ## Admin agent API / per-event PATs (2026-08-10)
 
 Agents need the same organizer jobs without a browser session. Mint per-event personal access tokens under Settings → API tokens (`ce_pat_…`, shown once, hash stored). `Authorization: Bearer ce_pat_…` authorizes admin JSON routes and `/api/v1` reads for that event only (cookie sessions still work on admin routes). Token-management routes are the exception: they require a cookie session, because a leaked PAT that can mint successors survives its own revocation. Demo events stay write-blocked. Contract: `/api/admin/openapi.json`. `PUBLIC_API_KEY` remains an optional deployment-wide `/api/v1` operator escape hatch only with `PUBLIC_API_KEY_CROSS_EVENT=1` (also `true` or `yes`).
-

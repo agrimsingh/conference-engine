@@ -19,6 +19,7 @@ import { WithdrawButton } from "./withdraw-button";
 import { SessionOps } from "./session-ops";
 import type { PortalResourceRow } from "@/lib/db/types";
 import type { SpeakerActionAssignment } from "@/lib/speakers/operations";
+import { EditProposalButton } from "./edit-proposal-button";
 
 export type PortalSection = "home" | "applications" | "profile" | "prep";
 
@@ -30,6 +31,7 @@ export type PortalCoSpeaker = {
 	invitedAt: number | null;
 	confirmedAt: number | null;
 	position: number;
+	role: string;
 };
 
 export type PortalApplication = {
@@ -40,6 +42,7 @@ export type PortalApplication = {
 	title: string;
 	status: string;
 	statusLabel: string;
+	canEditProposal: boolean;
 	slotLabel: string | null;
 	canWithdraw: boolean;
 	removesFromSchedule: boolean;
@@ -345,15 +348,18 @@ export function PortalConsole({
 								{app.coSpeakers.length > 0 ? (
 									<div className="mt-3 border-t border-neutral-800 pt-3">
 										<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-											Co-speakers
+											Speakers
 										</p>
 										<ul className="mt-2 space-y-1 text-xs text-neutral-400">
 											{app.coSpeakers.map((speaker) => (
 												<li key={speaker.id}>
+													<span className="font-medium text-neutral-300">{speaker.role}:</span>{" "}
 													{speaker.name || speaker.email} · {speaker.status}
 													{speaker.invitedAt
 														? ` · invited ${new Date(speaker.invitedAt).toISOString().slice(0, 10)}`
-														: " · invite not sent"}
+														: speaker.position === 0
+															? ""
+															: " · invite not sent"}
 													{speaker.confirmedAt
 														? ` · confirmed ${new Date(speaker.confirmedAt).toISOString().slice(0, 10)}`
 														: ""}
@@ -364,6 +370,9 @@ export function PortalConsole({
 								) : null}
 
 								<div className="mt-4 flex flex-wrap gap-2">
+									{app.canEditProposal ? (
+										<EditProposalButton submissionId={app.id} />
+									) : null}
 									{incompleteCount(app.prepTasks) > 0 ||
 									(isAcceptedProgrammeStatus(app.status) &&
 										app.prepTasks.length > 0) ? (

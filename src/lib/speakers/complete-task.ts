@@ -20,8 +20,9 @@ async function requireSpeakerActor(
 	db: D1Database,
 	speakerPersonId: string,
 	actorPersonId: string,
+	submissionId: string,
 ): Promise<{ ok: false; error: string; status: number } | null> {
-	if (await canActAsSpeaker(db, actorPersonId, speakerPersonId)) return null;
+	if (await canActAsSpeaker(db, actorPersonId, speakerPersonId, submissionId)) return null;
 	return { ok: false, error: "Forbidden", status: 403 };
 }
 
@@ -31,7 +32,7 @@ export async function completeFormTask(
 ): Promise<CompleteTextResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId, task.submission_id);
 	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);
@@ -57,7 +58,7 @@ export async function completeTextTask(
 ): Promise<CompleteTextResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId, task.submission_id);
 	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);
@@ -128,7 +129,7 @@ export async function completeFileTask(
 ): Promise<CompleteFileResult> {
 	const task = await getSpeakerTaskById(db, args.taskId);
 	if (!task) return { ok: false, error: "Task not found", status: 404 };
-	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId);
+	const forbidden = await requireSpeakerActor(db, task.person_id, args.personId, task.submission_id);
 	if (forbidden) return forbidden;
 	try {
 		await requireWritableEventById(db, task.event_id);

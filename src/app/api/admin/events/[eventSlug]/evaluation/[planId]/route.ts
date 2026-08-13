@@ -26,7 +26,7 @@ export async function PATCH(request: Request, context: Context) {
 	if (!isJsonObject(parsed.value)) return NextResponse.json({ ok: false, error: "Expected JSON object" }, { status: 400 });
 	const { name, status, openAt, closeAt, blindReview, assignmentCap } = parsed.value;
 	if (name !== undefined && typeof name !== "string") return NextResponse.json({ ok: false, error: "name must be a string" }, { status: 400 });
-	if (status !== undefined && status !== "draft" && status !== "closed") return NextResponse.json({ ok: false, error: "status must be draft or closed" }, { status: 400 });
+	if (status !== undefined && status !== "draft" && status !== "closed" && status !== "active") return NextResponse.json({ ok: false, error: "status must be draft, closed, or active" }, { status: 400 });
 	for (const [key, value] of Object.entries({ openAt, closeAt, assignmentCap })) if (value !== undefined && value !== null && typeof value !== "number") return NextResponse.json({ ok: false, error: `${key} must be a number or null` }, { status: 400 });
 	if (blindReview !== undefined && typeof blindReview !== "boolean") return NextResponse.json({ ok: false, error: "blindReview must be boolean" }, { status: 400 });
 	try {

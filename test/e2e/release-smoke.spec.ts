@@ -34,14 +34,14 @@ test.describe("release smoke: public surfaces", () => {
 
 		await page.goto("/demo");
 		await expect(page.getByRole("navigation", { name: "Demo perspective" })).toBeVisible();
-		await expect(page.getByText("Playable read-only surfaces")).toBeVisible();
+		await expect(page.getByText("Public CFP and schedule are real routes. Writes stay blocked.")).toBeVisible();
 
 		const perspectiveNav = page.getByRole("navigation", { name: "Demo perspective" });
 		for (const [label, perspective, title] of [
-			["Organizer", "organizer", "Full lifecycle walkthrough"],
+			["Organizer", "organizer", "Run it in your event"],
 			["Reviewer", "reviewer", "Review needs your event"],
 			["Speaker", "speaker", "Portal needs your invite"],
-			["Attendee", "attendee", "Published program"],
+			["Attendee", "attendee", "Published programme"],
 		] as const) {
 			// Click by href + wait for the card title. WebKit was flaking on
 			// name-matched soft-nav after the taller organizer walkthrough card:
@@ -58,7 +58,7 @@ test.describe("release smoke: public surfaces", () => {
 				"page",
 			);
 		}
-		await expect(page.getByText("Published program")).toBeVisible();
+		await expect(page.getByText("Published programme")).toBeVisible();
 		await screenshot("03-demo-attendee", testInfo, page);
 
 		await page.getByRole("link", { name: "Open public schedule" }).click();

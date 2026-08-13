@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { coSpeakerStatusTone, StatusPill } from "@/components/ui";
-import type { CoSpeakerStatus } from "@/lib/domain";
+import { speakerRoleLabel, type CoSpeakerStatus } from "@/lib/domain";
 
 export type SpeakerSummary = {
 	id: string;
@@ -88,6 +88,9 @@ export function SubmissionSpeakers({ eventSlug, submissionId, speakers }: Props)
 						className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm text-neutral-300"
 					>
 						<span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+							<span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+								{speakerRoleLabel(speaker.position)}
+							</span>
 							<span className="font-medium text-neutral-100">
 								{speaker.name || speaker.email}
 							</span>

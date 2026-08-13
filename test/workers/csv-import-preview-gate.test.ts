@@ -40,13 +40,7 @@ describe("CSV import preview gate", () => {
 			.run();
 		mocks.authorizeContactsApi.mockResolvedValue({ ok: true, account });
 
-		const response = await contactsImport(
-			new Request("https://conference.example.test/api/admin/contacts/import", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ csv: "name,email\nGate Person,gate-contact@example.test\n" }),
-			}),
-		);
+		const response = await contactsImport();
 		expect(response.status).toBe(410);
 		expect(await response.json()).toMatchObject({ ok: false });
 		expect(
@@ -111,13 +105,7 @@ describe("CSV import preview gate", () => {
 			ok: false,
 			response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
 		});
-		const response = await contactsImport(
-			new Request("https://conference.example.test/api/admin/contacts/import", {
-				method: "POST",
-				headers: { "content-type": "text/csv" },
-				body: "name,email\nA,a@example.test\n",
-			}),
-		);
+		const response = await contactsImport();
 		expect(response.status).toBe(401);
 	});
 });

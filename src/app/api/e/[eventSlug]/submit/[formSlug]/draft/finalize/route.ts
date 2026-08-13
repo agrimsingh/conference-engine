@@ -30,7 +30,7 @@ export async function POST(request: Request, context: Context) {
 		loadDraftForResume(db, { secret, token }),
 		loadCfpForm(db, eventSlug, formSlug, { requireOpen: true }),
 	]);
-	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form, Date.now())) return NextResponse.json({ ok: false, errors: ["CFP form not found or unavailable"] }, { status: 404 });
+	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || (draft.status !== "submitted" && loaded.form.drafts_enabled !== 1) || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form, Date.now())) return NextResponse.json({ ok: false, errors: ["CFP form not found or unavailable"] }, { status: 404 });
 	try {
 		assertEventWritable(loaded.event);
 	} catch (error) {

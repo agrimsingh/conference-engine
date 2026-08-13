@@ -4,6 +4,7 @@ import { useState, type ChangeEvent } from "react";
 import { INPUT_CLASSES } from "@/components/ui";
 import { uploadAcceptAttr } from "@/lib/cfp/file-upload";
 import { isFileUploadAnswer, type FileUploadAnswer, type FormFieldDef, type SpeakerAnswer } from "@/lib/domain/form-fields";
+import { speakerRoleLabel } from "@/lib/domain/co-speakers";
 
 export type CfpFieldInputProps = {
 	field: FormFieldDef;
@@ -206,7 +207,7 @@ export function CfpFieldInput({
 							className="grid gap-2 rounded-md border border-neutral-800 bg-neutral-900 p-3 sm:grid-cols-2"
 						>
 							<p className="col-span-full text-xs font-medium uppercase tracking-wide text-neutral-500">
-								{index === 0 ? "Primary speaker" : `Co-speaker ${index}`}
+								{speakerRoleLabel(index)}
 							</p>
 							<label className="flex flex-col gap-1">
 								<span>Name</span>
@@ -264,7 +265,7 @@ export function CfpFieldInput({
 							className="self-start text-sm text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
 							onClick={() => onChange([...speakers, { name: "", email: "", bio: "" }])}
 						>
-							Add co-speaker
+							Add co-author
 						</button>
 					) : null}
 				</fieldset>

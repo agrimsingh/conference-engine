@@ -5,7 +5,7 @@ import {
 import type { EvaluationCriterionRow, EvaluationPlanRow, EvaluationScoreRow, ReviewerRow } from "@/lib/db/types";
 import {
 	IllegalSubmissionTransitionError,
-	isReviewableSubmissionStatus,
+	isReviewBoardSubmissionStatus,
 	isSubmissionStatus,
 	isValidScore,
 	transitionSubmission,
@@ -129,11 +129,7 @@ export async function upsertEvaluationScore(
 		}
 	}
 
-	if (
-		!isReviewableSubmissionStatus(submission.status) &&
-		submission.status !== "accepted" &&
-		submission.status !== "rejected"
-	) {
+	if (!isReviewBoardSubmissionStatus(submission.status)) {
 		return {
 			ok: false,
 			error: `Cannot score submission in status ${submission.status}`,

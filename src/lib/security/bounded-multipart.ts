@@ -49,10 +49,12 @@ export async function readBoundedMultipartFormData(request: Request, maxBytes: n
 			try { await reader.cancel(); } finally { release(); }
 		},
 	});
-	const parsingRequest = new Request(request.url, {
+	const parsingRequestInit: RequestInit & { duplex: "half" } = {
 		method: request.method,
 		headers: { "content-type": contentType },
 		body,
-	});
+		duplex: "half",
+	};
+	const parsingRequest = new Request(request.url, parsingRequestInit);
 	return parsingRequest.formData();
 }

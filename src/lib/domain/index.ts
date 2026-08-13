@@ -99,17 +99,22 @@ export {
 	isPostAcceptance,
 	MAX_CO_SPEAKERS,
 	POST_ACCEPTANCE_STATUSES,
+	speakerRoleLabel,
 	type CoSpeakerStatus,
 } from "./co-speakers";
 
 export {
 	isEvaluationPlanStatus,
 	isReviewableSubmissionStatus,
+	isReviewBoardSubmissionStatus,
 	isValidScore,
 	EVALUATION_PLAN_STATUSES,
 	REVIEWABLE_SUBMISSION_STATUSES,
+	REVIEW_BOARD_SUBMISSION_STATUSES,
+	REVIEW_BOARD_STATUS_SQL,
 	type EvaluationPlanStatus,
 	type ReviewableSubmissionStatus,
+	type ReviewBoardSubmissionStatus,
 } from "./evaluation";
 
 export {

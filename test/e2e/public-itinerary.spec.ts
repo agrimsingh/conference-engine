@@ -7,12 +7,17 @@ test("attendee switches days and builds a persistent personal schedule", async (
 	await expect(page.getByRole("heading", { name: "Itinerary" })).toBeVisible();
 	await expect(page.getByRole("link", { name: "Shipping agents that recover" })).toBeVisible();
 
-	const dayLinks = page.getByRole("navigation", { name: "Event days" }).getByRole("link");
+	const dayLinks = page
+		.getByRole("navigation", { name: "Event days" })
+		.getByRole("link")
+		.filter({ hasNotText: "All days" });
 	expect(await dayLinks.count()).toBeGreaterThanOrEqual(2);
-	const selectedDayLabel = await dayLinks.nth(1).textContent();
-	await dayLinks.nth(1).click();
-	await expect(dayLinks.nth(1)).toHaveAttribute("aria-current", "date");
-	await expect(page.locator("header p").filter({ hasText: "Asia/Singapore" })).toContainText(selectedDayLabel ?? "");
+	const selectedDayLink = dayLinks.nth(1);
+	const selectedDayLabel = await selectedDayLink.getAttribute("title");
+	if (!selectedDayLabel) throw new Error("Expected the second event day to expose its full date label");
+	await selectedDayLink.click();
+	await expect(selectedDayLink).toHaveAttribute("aria-current", "date");
+	await expect(page.locator("header p").filter({ hasText: "Asia/Singapore" })).toContainText(selectedDayLabel);
 	await expect(page.getByRole("link", { name: "Eval pipelines in CI" })).toBeVisible();
 	await expect(page.getByRole("link", { name: "Shipping agents that recover" })).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath("itinerary-day-switch.png"), fullPage: true });

@@ -32,15 +32,17 @@ export async function canActAsSpeaker(
 	db: D1Database,
 	actorPersonId: string,
 	speakerPersonId: string,
+	submissionId: string,
 ): Promise<boolean> {
 	if (actorPersonId === speakerPersonId) return true;
 	const row = await db
 		.prepare(
 			`SELECT 1 AS ok FROM speaker_handoffs
-			 WHERE manager_person_id = ? AND speaker_person_id = ? AND status = 'accepted'
+			 WHERE manager_person_id = ? AND speaker_person_id = ?
+			   AND submission_id = ? AND status = 'accepted'
 			 LIMIT 1`,
 		)
-		.bind(actorPersonId, speakerPersonId)
+		.bind(actorPersonId, speakerPersonId, submissionId)
 		.first<{ ok: number }>();
 	return Boolean(row);
 }

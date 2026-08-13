@@ -32,3 +32,8 @@ export const POST_ACCEPTANCE_STATUSES = [
 export function isPostAcceptance(status: string): boolean {
 	return (POST_ACCEPTANCE_STATUSES as readonly string[]).includes(status);
 }
+
+/** Role shown on CFP, portal, organizer submission, and review results. */
+export function speakerRoleLabel(position: number): string {
+	return position === 0 ? "Primary speaker" : "Co-author";
+}

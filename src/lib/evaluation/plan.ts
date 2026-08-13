@@ -147,12 +147,18 @@ export async function createEvaluationPlan(
 
 export async function updateEvaluationPlan(
 	db: D1Database,
-	args: { eventId: string; planId: string; name?: string; status?: "draft" | "closed"; openAt?: number | null; closeAt?: number | null; blindReview?: boolean; assignmentCap?: number | null },
+	args: { eventId: string; planId: string; name?: string; status?: "draft" | "closed" | "active"; openAt?: number | null; closeAt?: number | null; blindReview?: boolean; assignmentCap?: number | null },
 ): Promise<EvaluationPlanRow> {
 	const current = await getEvaluationPlanForEvent(db, args);
 	if (!current) throw new EvaluationPlanValidationError("Evaluation plan not found", 404);
-	if (current.status === "active" && args.status && args.status !== "closed") {
+	if (current.status === "active" && args.status === "draft") {
 		throw new EvaluationPlanValidationError("Active plans can only be closed or renamed");
+	}
+	if (current.status === "closed" && args.status === "draft") {
+		throw new EvaluationPlanValidationError("Closed rounds can be reopened or renamed");
+	}
+	if (args.status === "active" && current.status === "draft") {
+		throw new EvaluationPlanValidationError("Activate a draft from Review rounds, not by patching status");
 	}
 	const name = args.name === undefined ? current.name : args.name.trim();
 	if (!name) throw new EvaluationPlanValidationError("Plan name is required");
@@ -165,8 +171,17 @@ export async function updateEvaluationPlan(
 	});
 	const blind_review = args.blindReview === undefined ? current.blind_review : args.blindReview ? 1 : 0;
 	const updated_at = Date.now();
-	await db.prepare(`UPDATE evaluation_plans SET name = ?, status = ?, open_at = ?, close_at = ?, blind_review = ?, assignment_cap = ?, updated_at = ? WHERE id = ? AND event_id = ?`)
-		.bind(name, status, dates.open_at, dates.close_at, blind_review, dates.assignment_cap, updated_at, args.planId, args.eventId).run();
+	const apply = db.prepare(`UPDATE evaluation_plans SET name = ?, status = ?, open_at = ?, close_at = ?, blind_review = ?, assignment_cap = ?, updated_at = ? WHERE id = ? AND event_id = ?`)
+		.bind(name, status, dates.open_at, dates.close_at, blind_review, dates.assignment_cap, updated_at, args.planId, args.eventId);
+	if (status === "active" && current.status === "closed") {
+		await db.batch([
+			db.prepare(`UPDATE evaluation_plans SET status = 'closed', updated_at = ? WHERE event_id = ? AND status = 'active' AND id != ?`)
+				.bind(updated_at, args.eventId, args.planId),
+			apply,
+		]);
+	} else {
+		await apply.run();
+	}
 	return { ...current, name, status, open_at: dates.open_at, close_at: dates.close_at, blind_review, assignment_cap: dates.assignment_cap, updated_at };
 }
 
@@ -214,7 +229,7 @@ export async function ensureDefaultCriteria(db: D1Database, planId: string): Pro
 }
 
 export async function createCriterion(db: D1Database, args: { planId: string; label: string; description?: string; weight: number; scaleMin?: number; scaleMax?: number; criterionType?: "numeric" | "dropdown" | "text"; options?: string[] }): Promise<EvaluationCriterionRow> {
-	await assertCriteriaMutable(db, args.planId);
+	await assertCriteriaMutable(db, args.planId, "add");
 	const values = validateCriterion(args);
 	const next = await db.prepare(`SELECT COALESCE(MAX(position), -1) + 1 AS position FROM evaluation_criteria WHERE plan_id = ?`)
 		.bind(args.planId).first<{ position: number }>();
@@ -226,7 +241,7 @@ export async function createCriterion(db: D1Database, args: { planId: string; la
 }
 
 export async function updateCriterion(db: D1Database, args: { planId: string; criterionId: string; label?: string; description?: string | null; weight?: number; scaleMin?: number; scaleMax?: number; position?: number; criterionType?: "numeric" | "dropdown" | "text"; options?: string[] }): Promise<EvaluationCriterionRow> {
-	await assertCriteriaMutable(db, args.planId);
+	await assertCriteriaMutable(db, args.planId, "edit");
 	const current = await db.prepare(`SELECT * FROM evaluation_criteria WHERE id = ? AND plan_id = ? AND soft_deleted = 0`)
 		.bind(args.criterionId, args.planId).first<EvaluationCriterionRow>();
 	if (!current) throw new EvaluationPlanValidationError("Criterion not found", 404);
@@ -240,7 +255,7 @@ export async function updateCriterion(db: D1Database, args: { planId: string; cr
 }
 
 export async function deleteCriterion(db: D1Database, args: { planId: string; criterionId: string }): Promise<void> {
-	await assertCriteriaMutable(db, args.planId);
+	await assertCriteriaMutable(db, args.planId, "edit");
 	const criterion = await db.prepare(`SELECT id FROM evaluation_criteria WHERE id = ? AND plan_id = ? AND soft_deleted = 0`).bind(args.criterionId, args.planId).first();
 	if (!criterion) throw new EvaluationPlanValidationError("Criterion not found", 404);
 	const count = await db.prepare(`SELECT COUNT(*) AS count FROM evaluation_criteria WHERE plan_id = ? AND soft_deleted = 0`).bind(args.planId).first<{ count: number }>();
@@ -248,10 +263,21 @@ export async function deleteCriterion(db: D1Database, args: { planId: string; cr
 	await db.prepare(`UPDATE evaluation_criteria SET soft_deleted = 1, updated_at = ? WHERE id = ? AND plan_id = ?`).bind(Date.now(), args.criterionId, args.planId).run();
 }
 
-async function assertCriteriaMutable(db: D1Database, planId: string): Promise<void> {
+export type CriteriaMutation = "add" | "edit";
+
+/** Drafts are fully mutable. Active rounds may gain criteria; existing rows stay frozen. Closed rounds are frozen. */
+export function criteriaMutationError(status: string, kind: CriteriaMutation): string | null {
+	if (status === "draft") return null;
+	if (kind === "add" && status === "active") return null;
+	if (kind === "add") return "Cannot add criteria to a closed round";
+	return "Existing criteria are frozen once a plan is activated";
+}
+
+async function assertCriteriaMutable(db: D1Database, planId: string, kind: CriteriaMutation): Promise<void> {
 	const plan = await db.prepare(`SELECT status FROM evaluation_plans WHERE id = ?`).bind(planId).first<{ status: string }>();
 	if (!plan) throw new EvaluationPlanValidationError("Evaluation plan not found", 404);
-	if (plan.status !== "draft") throw new EvaluationPlanValidationError("Criteria are frozen once a plan is activated", 409);
+	const error = criteriaMutationError(plan.status, kind);
+	if (error) throw new EvaluationPlanValidationError(error, 409);
 }
 
 

@@ -22,6 +22,7 @@ import { resolveReviewIdentity } from "@/lib/evaluation/score";
 import { listCriteria } from "@/lib/evaluation/plan";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
 import { ReviewBoard } from "./review-board";
+import { canUseReviewDecisionControls } from "./review-access";
 import { reviewerIdentityFields } from "@/lib/evaluation/blind";
 
 type Props = {
@@ -213,7 +214,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 			<ReviewBoard
 				eventSlug={event.slug}
 				token={accessToken}
-				canDecide={admin}
+				canDecide={canUseReviewDecisionControls(identity, admin)}
 				reviewerId={identity.reviewer?.id ?? null}
 				criteria={criteria.map((criterion) => ({
 					id: criterion.id,

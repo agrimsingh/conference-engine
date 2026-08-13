@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { getDb } from "@/lib/db/cloudflare";
 import { getActiveEvaluationPlan, listAssignmentsForPlan, listEvaluationScoresForPlan, listReviewableSubmissions } from "@/lib/db/queries";
+import { REVIEW_BOARD_STATUS_SQL } from "@/lib/domain";
 import { listCriteria, listEvaluationPlans } from "@/lib/evaluation/plan";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
@@ -61,7 +62,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 			FROM submission_speakers ss
 			INNER JOIN submissions s ON s.id = ss.submission_id
 			WHERE s.event_id = ?
-				AND s.status IN ('submitted', 'under_review', 'accepted', 'rejected')
+				AND s.status IN (${REVIEW_BOARD_STATUS_SQL})
 			ORDER BY ss.submission_id, ss.position, ss.name`).bind(event.id).all<{
 				submission_id: string;
 				name: string;
@@ -87,11 +88,11 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 		const row = workload.get(assignment.reviewer_id);
 		if (row) row.assigned += 1;
 	}
-	const speakersBySubmission = new Map<string, Array<{ name: string; email: string; status: string }>>();
+	const speakersBySubmission = new Map<string, Array<{ name: string; email: string; status: string; position: number }>>();
 	for (const speaker of speakerRows.results) {
 		speakersBySubmission.set(speaker.submission_id, [
 			...(speakersBySubmission.get(speaker.submission_id) ?? []),
-			{ name: speaker.name, email: speaker.email, status: speaker.status },
+			{ name: speaker.name, email: speaker.email, status: speaker.status, position: speaker.position },
 		]);
 	}
 	return (
