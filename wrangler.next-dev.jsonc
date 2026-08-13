@@ -1,0 +1,50 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "conference-engine-next-dev-bindings",
+	"compatibility_date": "2026-08-08",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"images": {
+		"binding": "IMAGES"
+	},
+	"vars": {
+		"RESEND_FROM_EMAIL": "team@65labs.org",
+		"APP_ORIGIN": "https://conference-engine.65labs.org",
+		"APP_NAME": "conference-engine",
+		"ADMIN_BYPASS_ENABLED": "0",
+		"AIRTABLE_BASE_ID": "appzkYZYKU3sG6vRM",
+		"AIRTABLE_TABLE_NAME": "Submissions"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "conference-engine",
+			"database_id": "021b5626-e4ba-44d2-bbfd-69b99d483efb",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "FILES",
+			"bucket_name": "conference-engine-assets"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "1062f9c0bed04ca2b7102bee84b3de39",
+			"preview_id": "104f076cc5e34024b3e7f720e2c8e901"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "EVENT_ROOM",
+				"class_name": "EventRoom",
+				"script_name": "conference-engine-event-room-dev"
+			}
+		]
+	}
+}

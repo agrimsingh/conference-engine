@@ -14,11 +14,12 @@ import {
 } from "@/lib/evaluation/score-matrix-sort";
 import { activationReviewPath } from "./activation-result";
 import { parseBulkDecisionResult } from "./bulk-decision-result";
+import { ReviewPresenters } from "./review-presenters";
 
 type Plan = { id: string; name: string; status: string; openAt: number | null; closeAt: number | null; blindReview: boolean; assignmentCap: number | null; scorecardSummary?: string[] };
 type Criterion = { id: string; label: string; description: string | null; weight: number; scaleMin: number; scaleMax: number; type: "numeric" | "dropdown" | "text"; options: string[] };
 type Reviewer = { id: string; name: string; email: string | null; revokedAt: number | null; assigned: number; scored: number };
-type SubmissionSpeaker = { name: string; email: string; status: string };
+type SubmissionSpeaker = { name: string; email: string; status: string; position: number };
 type Submission = { id: string; title: string; submitter: string; speakers: SubmissionSpeaker[]; status: string; assignedReviewerIds: string[]; scored: boolean; criterionScoreCount: number };
 type AggregateScore = { submissionId: string; reviewerId: string | null; scoredBy: string; score: number; comment: string | null };
 type CriterionScore = { submissionId: string; reviewerId: string | null; criterionId: string; score: number; valueText: string | null; comment: string | null };
@@ -141,6 +142,10 @@ export function ReviewWorkspace({
 	);
 	const statusBySubmission = useMemo(
 		() => new Map(submissions.map((submission) => [submission.id, submission.status])),
+		[submissions],
+	);
+	const speakersBySubmission = useMemo(
+		() => new Map(submissions.map((submission) => [submission.id, submission.speakers])),
 		[submissions],
 	);
 	const sortedMatrixRows = useMemo(
@@ -335,6 +340,7 @@ export function ReviewWorkspace({
 							</Button>
 						) : null}
 						{plan && active ? <Button variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { status: "closed" })}>Close active plan</Button> : null}
+						{plan && plan.status === "closed" ? <Button variant="secondary" disabled={pending} onClick={() => void request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}`, "PATCH", { status: "active" })}>Reopen selected round</Button> : null}
 					</div>
 				</div>
 			) : null}
@@ -345,19 +351,20 @@ export function ReviewWorkspace({
 				) : (
 					<div className="space-y-4">
 						<div className="flex flex-wrap items-end gap-2">
-							<input value={criterionLabel} onChange={(event) => setCriterionLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Criterion label" aria-label="Criterion label" />
-							<select value={criterionType} onChange={(event) => setCriterionType(event.target.value as Criterion["type"])} className={INPUT_CLASSES} aria-label="Criterion type"><option value="numeric">Numeric rating</option><option value="dropdown">Dropdown</option><option value="text">Free text</option></select>
-							<input value={criterionWeight} onChange={(event) => setCriterionWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label="Criterion weight" />
-							{criterionType === "dropdown" ? <textarea value={criterionOptions} onChange={(event) => setCriterionOptions(event.target.value)} className={INPUT_CLASSES} rows={3} aria-label="Dropdown options, one per line" /> : null}
-							<Button disabled={pending || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight), criterionType, options: criterionType === "dropdown" ? criterionOptions.split("\n") : undefined })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button>
+							<input value={criterionLabel} onChange={(event) => setCriterionLabel(event.target.value)} className={INPUT_CLASSES} placeholder="Criterion label" aria-label="Criterion label" disabled={plan.status === "closed"} />
+							<select value={criterionType} onChange={(event) => setCriterionType(event.target.value as Criterion["type"])} className={INPUT_CLASSES} aria-label="Criterion type" disabled={plan.status === "closed"}><option value="numeric">Numeric rating</option><option value="dropdown">Dropdown</option><option value="text">Free text</option></select>
+							<input value={criterionWeight} onChange={(event) => setCriterionWeight(event.target.value)} className={`${INPUT_CLASSES} w-20`} inputMode="decimal" aria-label="Criterion weight" disabled={plan.status === "closed"} />
+							{criterionType === "dropdown" ? <textarea value={criterionOptions} onChange={(event) => setCriterionOptions(event.target.value)} className={INPUT_CLASSES} rows={3} aria-label="Dropdown options, one per line" disabled={plan.status === "closed"} /> : null}
+							<Button disabled={pending || plan.status === "closed" || !criterionLabel.trim()} onClick={async () => { if (await request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria`, "POST", { label: criterionLabel, weight: Number(criterionWeight), criterionType, options: criterionType === "dropdown" ? criterionOptions.split("\n") : undefined })) { setCriterionLabel(""); setCriterionWeight("1"); } }}>Add criterion</Button>
 						</div>
+						{plan.status === "active" ? <p className="text-xs text-neutral-500">Existing criteria stay frozen after activation. You can still add numeric, dropdown, or free-text fields.</p> : null}
 						<ul className="divide-y divide-neutral-800 border border-neutral-800">
 							{criteria.map((criterion) => (
 								<CriterionItem
 									key={criterion.id}
 									criterion={criterion}
-									disabled={pending}
-									canRemove={criteria.length > 1}
+									disabled={pending || plan.status !== "draft"}
+									canRemove={criteria.length > 1 && plan.status === "draft"}
 									onSave={(body) => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "PATCH", body)}
 									onRemove={() => request(`/api/admin/events/${eventSlug}/evaluation/${plan.id}/criteria/${criterion.id}`, "DELETE")}
 								/>
@@ -405,7 +412,7 @@ export function ReviewWorkspace({
 								<li key={reviewer.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm">
 									<div>
 										<p className="font-medium text-neutral-200">{reviewer.name}{reviewer.revokedAt ? " · revoked" : ""}</p>
-										<p className="mt-0.5 text-xs text-neutral-500">{reviewer.email ?? "no email"} · {reviewer.assigned} assigned · {reviewer.scored} submitted reviews</p>
+										<p className="mt-0.5 text-xs text-neutral-500">{reviewer.email ?? "no email"} · {reviewer.assigned} assigned · {reviewer.scored} complete</p>
 									</div>
 									{active && reviewer.revokedAt === null ? (
 										<div className="flex flex-wrap gap-2">
@@ -564,12 +571,7 @@ export function ReviewWorkspace({
 									<div className="min-w-0 flex-1">
 										<p className="truncate font-medium text-neutral-200">{submission.title}</p>
 										<p className="truncate text-xs text-neutral-500">Submitted by {submission.submitter} · {submission.assignedReviewerIds.length} assigned · {submission.criterionScoreCount} criterion scores</p>
-										<p className="mt-1 text-xs text-neutral-400">
-											<span className="font-medium text-neutral-300">Presenters:</span>{" "}
-											{submission.speakers.length > 0
-												? submission.speakers.map((speaker) => `${speaker.name} <${speaker.email}> (${speaker.status})`).join(" · ")
-												: "No presenters attached"}
-										</p>
+										<ReviewPresenters speakers={submission.speakers} />
 									</div>
 									<StatusPill tone={submissionStatusTone(submission.status)}>{submission.status.replaceAll("_", " ")}</StatusPill>
 								</li>
@@ -628,9 +630,11 @@ export function ReviewWorkspace({
 										</tr>
 									</thead>
 									<tbody>
-										{sortedMatrixRows.map((submission) => (
+										{sortedMatrixRows.map((submission) => {
+											const speakers = speakersBySubmission.get(submission.id) ?? [];
+											return (
 											<tr key={submission.id} className="border-b border-neutral-900/80">
-												<td className="max-w-[14rem] truncate px-2 py-2 text-neutral-200">{submission.title}</td>
+												<td className="max-w-[14rem] px-2 py-2 text-neutral-200"><p className="truncate">{submission.title}</p><ReviewPresenters speakers={speakers} /></td>
 												<td className="px-2 py-2 text-neutral-400">{submission.status.replaceAll("_", " ")}</td>
 												{matrix.reviewers.map((reviewer) => {
 													const cell = matrix.cells[submission.id]?.[reviewer.id];
@@ -664,7 +668,8 @@ export function ReviewWorkspace({
 													{submission.average === null ? "—" : String(submission.average)}
 												</td>
 											</tr>
-										))}
+											);
+										})}
 									</tbody>
 								</table>
 							</div>

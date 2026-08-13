@@ -16,6 +16,7 @@ import {
 	canTransitionSubmission,
 	isSpeakerTaskKey,
 	isSubmissionStatus,
+	speakerRoleLabel,
 } from "@/lib/domain";
 import { parseSpeakerSocial } from "@/lib/speakers/social";
 import { readPortalSessionFromCookie } from "@/lib/speakers/portal-session";
@@ -23,6 +24,7 @@ import { parseSavedTaskFormFields } from "@/lib/speakers/task-forms";
 import { listSpeakerActionAssignments } from "@/lib/speakers/operations";
 import { listHandoffsForSubmissions } from "@/lib/speakers/handoff";
 import { slotAckStateForActor } from "@/lib/schedule/slot-ack";
+import { listPortalEditableSubmissionIds } from "@/lib/cfp/portal-edit-access";
 import { listPublishedPortalResourcesForSpeaker } from "@/lib/resources/resources";
 import {
 	isProfileTaskKey,
@@ -74,6 +76,7 @@ export default async function PortalPage({ searchParams }: Props) {
 		actionTasks,
 		portalResources,
 		profileEvents,
+		editableSubmissionIds,
 	] = await Promise.all([
 		listSubmissionsForPerson(db, session.personId),
 		listTasksForPerson(db, session.personId),
@@ -86,6 +89,7 @@ export default async function PortalPage({ searchParams }: Props) {
 			)
 			.bind(session.personId)
 			.all<{ event_id: string }>(),
+		listPortalEditableSubmissionIds(db, session.personId),
 	]);
 
 	const eventRows = await listEventsByIds(db, [
@@ -168,7 +172,7 @@ export default async function PortalPage({ searchParams }: Props) {
 			.filter((task) => task.submission_id === row.id)
 			.map(toTaskView);
 		const allSpeakers = speakersBySubmission.get(row.id) ?? [];
-		const speakers = allSpeakers.filter((speaker) => speaker.position > 0);
+		const speakers = allSpeakers.filter((speaker) => speaker.status !== "removed");
 		const incoming = handoffs.find(
 			(handoff) =>
 				handoff.submission_id === row.id &&
@@ -203,6 +207,7 @@ export default async function PortalPage({ searchParams }: Props) {
 					: "(untitled)",
 			status: row.status,
 			statusLabel: speakerApplicationStatusLabel(row.status),
+			canEditProposal: editableSubmissionIds.has(row.id),
 			slotLabel:
 				slot && event
 					? `${slot.room_name} · ${formatEventTime(slot.starts_at, event.timezone)}`
@@ -221,6 +226,7 @@ export default async function PortalPage({ searchParams }: Props) {
 				invitedAt: speaker.invited_at,
 				confirmedAt: speaker.confirmed_at,
 				position: speaker.position,
+				role: speakerRoleLabel(speaker.position),
 			})),
 			profileTasks: submissionTasks.filter((task) =>
 				isProfileTaskKey(task.key),

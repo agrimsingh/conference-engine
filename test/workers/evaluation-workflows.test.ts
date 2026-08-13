@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { setBulkSubmissionReviewers, setSubmissionReviewers } from "@/lib/evaluation/assignments";
 import { bulkDecideSubmissions } from "@/lib/evaluation/decisions";
 import { bulkLabelSubmissions } from "@/lib/evaluation/labels";
-import { activateEvaluationPlan, createCriterion, createEvaluationPlan, deleteCriterion, listCriteria, updateCriterion } from "@/lib/evaluation/plan";
+import { activateEvaluationPlan, createCriterion, createEvaluationPlan, deleteCriterion, listCriteria, updateCriterion, updateEvaluationPlan } from "@/lib/evaluation/plan";
 import { createReviewer, regenerateReviewerToken, revokeReviewer } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan, resolveReviewIdentity, upsertEvaluationScore } from "@/lib/evaluation/score";
 
@@ -36,9 +36,37 @@ describe("evaluation workflows", () => {
 		expect(await listCriteria(env.DB, plan.id)).toHaveLength(3);
 		const activation = await activateEvaluationPlan(env.DB, { eventId: "eval-criteria-event", planId: plan.id });
 		if (!activation.ok) throw new Error(activation.error);
-		await expect(createCriterion(env.DB, { planId: plan.id, label: "Late criterion", weight: 1 })).rejects.toMatchObject({ status: 409 });
+		const added = await createCriterion(env.DB, { planId: plan.id, label: "Late criterion", weight: 1, criterionType: "text" });
+		expect(added).toMatchObject({ label: "Late criterion", criterion_type: "text" });
+		expect(await listCriteria(env.DB, plan.id)).toHaveLength(4);
 		await expect(updateCriterion(env.DB, { planId: plan.id, criterionId: plan.criteria[0]!.id, label: "Changed after activation" })).rejects.toMatchObject({ status: 409 });
 		await expect(deleteCriterion(env.DB, { planId: plan.id, criterionId: plan.criteria[0]!.id })).rejects.toMatchObject({ status: 409 });
+		await env.DB.prepare("UPDATE evaluation_plans SET status = 'closed' WHERE id = ?").bind(plan.id).run();
+		await expect(createCriterion(env.DB, { planId: plan.id, label: "After close", weight: 1 })).rejects.toMatchObject({ status: 409 });
+	});
+
+	it("reopens a closed round by closing the current active, then accepts new criteria", async () => {
+		await seedEvent("eval-reopen-event");
+		const initial = await createEvaluationPlan(env.DB, { eventId: "eval-reopen-event", name: "Initial Review" });
+		const final = await createEvaluationPlan(env.DB, { eventId: "eval-reopen-event", name: "Final Review" });
+		const activated = await activateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: initial.id });
+		if (!activated.ok) throw new Error(activated.error);
+		await expect(updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: initial.id, status: "draft" })).rejects.toMatchObject({ message: "Active plans can only be closed or renamed" });
+		await expect(updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: final.id, status: "active" })).rejects.toMatchObject({ message: "Activate a draft from Review rounds, not by patching status" });
+		await updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: initial.id, status: "closed" });
+		const second = await activateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: final.id });
+		if (!second.ok) throw new Error(second.error);
+		await expect(updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: initial.id, status: "draft" })).rejects.toMatchObject({ message: "Closed rounds can be reopened or renamed" });
+		const reopened = await updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: initial.id, status: "active" });
+		expect(reopened.status).toBe("active");
+		expect(await env.DB.prepare("SELECT name, status FROM evaluation_plans WHERE event_id = ? ORDER BY name").bind("eval-reopen-event").all()).toMatchObject({
+			results: [{ name: "Final Review", status: "closed" }, { name: "Initial Review", status: "active" }],
+		});
+		const added = await createCriterion(env.DB, { planId: initial.id, label: "Recommendation", weight: 1, criterionType: "dropdown", options: ["Accept", "Maybe", "Reject"] });
+		expect(added).toMatchObject({ label: "Recommendation", criterion_type: "dropdown" });
+		await expect(createCriterion(env.DB, { planId: final.id, label: "Should fail", weight: 1 })).rejects.toMatchObject({ status: 409 });
+		await expect(updateEvaluationPlan(env.DB, { eventId: "eval-reopen-event", planId: final.id, status: "active" })).resolves.toMatchObject({ status: "active" });
+		expect((await env.DB.prepare("SELECT status FROM evaluation_plans WHERE id = ?").bind(initial.id).first())?.status).toBe("closed");
 	});
 
 	it("invalidates old reviewer tokens on regeneration and revocation", async () => {
@@ -92,6 +120,14 @@ describe("evaluation workflows", () => {
 		expect(await listCriterionScoresForPlan(env.DB, draft.id)).toHaveLength(criteria.length - 1);
 		const foreign = await upsertEvaluationScore(env.DB, { token: reviewer.token, submissionId: "eval-other-submission", criterionScores: scoreInput });
 		expect(foreign).toMatchObject({ ok: false, status: 404 });
+		await env.DB.prepare("UPDATE submissions SET status = 'published' WHERE id = ?").bind("eval-live-submission").run();
+		const remaining = await listCriteria(env.DB, draft.id);
+		const publishedRescore = await upsertEvaluationScore(env.DB, {
+			token: reviewer.token,
+			submissionId: "eval-live-submission",
+			criterionScores: remaining.map((criterion, index) => ({ criterionId: criterion.id, score: index + 3 })),
+		});
+		expect(publishedRescore).toMatchObject({ ok: true });
 	});
 
 	it("keeps every selected submission unchanged when a bulk assignment write fails", async () => {

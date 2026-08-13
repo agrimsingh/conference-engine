@@ -50,12 +50,16 @@ export default async function PublicSpeakerProfilePage({ params }: PageProps) {
 				All speakers
 			</Link>
 			<header className="mt-6 border-b border-neutral-800 pb-6">
-				<PublicSpeakerAvatar
-					eventSlug={event.slug}
-					personId={speaker.person_id}
-					name={speaker.display_name}
-					hasHeadshot={speaker.has_headshot === 1}
-				/>
+				<div className="flex items-center gap-3">
+					<PublicSpeakerAvatar
+						eventSlug={event.slug}
+						personId={speaker.person_id}
+						name={speaker.display_name}
+						hasHeadshot={speaker.has_headshot === 1}
+						showName={false}
+					/>
+					<h1 className="text-xl font-semibold text-neutral-100">{speaker.display_name}</h1>
+				</div>
 				{affiliation ? (
 					<p className="mt-2 text-sm text-neutral-400">{affiliation}</p>
 				) : null}

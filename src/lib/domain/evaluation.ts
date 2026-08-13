@@ -23,3 +23,24 @@ export function isReviewableSubmissionStatus(
 ): status is ReviewableSubmissionStatus {
 	return (REVIEWABLE_SUBMISSION_STATUSES as readonly string[]).includes(status);
 }
+
+/** Statuses that stay on the review board, results table, and score API after decisions/scheduling. */
+export const REVIEW_BOARD_SUBMISSION_STATUSES = [
+	"submitted",
+	"under_review",
+	"accepted",
+	"rejected",
+	"scheduled",
+	"published",
+] as const;
+
+export type ReviewBoardSubmissionStatus =
+	(typeof REVIEW_BOARD_SUBMISSION_STATUSES)[number];
+
+export function isReviewBoardSubmissionStatus(
+	status: string,
+): status is ReviewBoardSubmissionStatus {
+	return (REVIEW_BOARD_SUBMISSION_STATUSES as readonly string[]).includes(status);
+}
+
+export const REVIEW_BOARD_STATUS_SQL = REVIEW_BOARD_SUBMISSION_STATUSES.map((status) => `'${status}'`).join(", ");

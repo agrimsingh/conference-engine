@@ -51,6 +51,40 @@ async function draftSnapshot(draftId: string) {
 }
 
 describe("draft route guards", () => {
+	it("round-trips a title-only draft through save and resume before submission", async () => {
+		const resumeToken = "cfp-title-only-resume-token";
+		await seed({ eventId: "draft-resume-event", eventSlug: "draft-resume", formId: "draft-resume-form", formSlug: "cfp", draftToken: resumeToken });
+		const context = { params: Promise.resolve({ eventSlug: "draft-resume", formSlug: "cfp" }) };
+		const saved = await saveDraft(
+			jsonRequest("https://conference.example.test/api/e/draft-resume/submit/cfp/draft/save", "PUT", {
+				token: resumeToken,
+				submitterName: "Draft Speaker",
+				answers: { title: "A title saved before the abstract" },
+			}),
+			context,
+		);
+		expect(saved.status).toBe(200);
+		const savedBody = await saved.json() as { ok: boolean; draftId: string; token: string };
+		expect(savedBody).toMatchObject({ ok: true, draftId: "draft-resume-form-draft" });
+		expect(savedBody.token).not.toBe(resumeToken);
+
+		const resumed = await loadDraft(
+			new Request(`https://conference.example.test/api/e/draft-resume/submit/cfp/draft?token=${savedBody.token}`),
+			context,
+		);
+		expect(resumed.status).toBe(200);
+		expect(await resumed.json()).toMatchObject({
+			ok: true,
+			draft: {
+				status: "draft",
+				submitterName: "Draft Speaker",
+				answers: { title: "A title saved before the abstract" },
+				submissionId: null,
+			},
+		});
+		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ?").bind("draft-resume-event").first()).toEqual({ count: 0 });
+	});
+
 	it("does not load, save, or finalize a token through another event/form URL", async () => {
 		await seed({ eventId: "draft-owner-event", eventSlug: "draft-owner", formId: "draft-owner-form", formSlug: "cfp" });
 		await seed({ eventId: "draft-other-event", eventSlug: "draft-other", formId: "draft-other-form", formSlug: "cfp", draftToken: "cfp-draft-other-token" });

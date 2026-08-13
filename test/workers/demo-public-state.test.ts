@@ -1,6 +1,13 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import demoSeed from "../../scripts/seed-demo.sql?raw";
+
+vi.mock("@/lib/db/cloudflare", () => ({
+	getDb: async () => env.DB,
+	getFilesBucket: async () => env.FILES,
+}));
+
+import { GET as getPublicHeadshot } from "@/app/api/e/[eventSlug]/people/[personId]/headshot/route";
 import { listPublicSpeakersForEvent } from "@/lib/db/queries";
 import { buildPublicEmbedPayload, parseEmbedInput } from "@/lib/embeds/embed";
 
@@ -87,10 +94,10 @@ describe("demo public state", () => {
 		expect(speakers.length).toBeGreaterThanOrEqual(5);
 		expect(speakers.filter((speaker) => speaker.job_title && speaker.company).length).toBeGreaterThanOrEqual(3);
 		expect(speakers.filter((speaker) => speaker.has_headshot === 0).map((speaker) => speaker.display_name))
-			.toContain("Amara Diallo");
+			.toContain("Jonas Weber");
 	});
 
-	it("seeds five validated, event-scoped public embeds and publishes only published sessions", async () => {
+	it("seeds rich published embeds with real imagery and a deliberate fallback", async () => {
 		await runDemoSeed();
 
 		const embeds = await env.DB.prepare(`SELECT id, name, slug, widget_type, config_json
@@ -116,11 +123,28 @@ describe("demo public state", () => {
 			const config = JSON.parse(embeds.results.find((embed) => embed.slug === slug)!.config_json) as { visibleFields: string[] };
 			expect(config.visibleFields).toEqual(expect.arrayContaining(["headshot", "jobTitle", "company", "bio"]));
 		}
+		const sessionsConfig = JSON.parse(embeds.results.find((embed) => embed.slug === "sessions")!.config_json) as { visibleFields: string[] };
+		expect(sessionsConfig.visibleFields).toEqual(expect.arrayContaining(["speakers", "jobTitle", "company"]));
 		const filteredSessions = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "sessions");
-		expect(filteredSessions?.sessions).toHaveLength(2);
-		expect(filteredSessions?.sessions.every((session) => session.trackId === "demo-track-agents" && ["Stage", "Lightning"].includes(session.format) && session.room === "Main Stage")).toBe(true);
+		expect(filteredSessions?.sessions.length).toBeGreaterThanOrEqual(3);
+		expect(filteredSessions?.sessions.every((session) => ["Stage", "Lightning"].includes(session.format) && session.room === "Main Stage")).toBe(true);
+		const longDescriptionSession = filteredSessions?.sessions.find((session) => session.id === "demo-sub-amara-diallo");
+		expect(longDescriptionSession?.abstract.length).toBeGreaterThan(180);
 		const speakerPayload = await buildPublicEmbedPayload(env.DB, "demo-cfp-to-stage", "speakers");
-		expect(speakerPayload?.speakers).toContainEqual(expect.objectContaining({ name: "Amara Diallo", jobTitle: "Staff Engineer", company: "Resilient Labs" }));
+		expect(speakerPayload?.speakers).toContainEqual(expect.objectContaining({
+			name: "Amara Diallo",
+			jobTitle: "Staff Engineer",
+			company: "Resilient Labs",
+			headshotUrl: "/api/e/demo-cfp-to-stage/people/demo-person-amara-diallo/headshot",
+		}));
+		expect(speakerPayload?.speakers).toContainEqual(expect.objectContaining({ name: "Jonas Weber", headshotUrl: null }));
+		expect(await env.DB.prepare("SELECT r2_key FROM assets WHERE id = ? AND event_id = ?").bind("demo-headshot-amara", demoEventId).first())
+		.toEqual({ r2_key: "public/demo/amara-diallo-headshot.webp" });
+		const headshot = await getPublicHeadshot(new Request("https://conference.example.test/headshot"), {
+			params: Promise.resolve({ eventSlug: "demo-cfp-to-stage", personId: "demo-person-amara-diallo" }),
+		});
+		expect(headshot.status).toBe(307);
+		expect(headshot.headers.get("location")).toBe("https://conference.example.test/demo/amara-diallo-headshot.webp");
 
 		await env.DB.prepare("UPDATE public_embeds SET name = 'Stale agenda', config_json = '{}', updated_at = ? WHERE id = ? AND event_id = ?").bind(1_790_000_000_000, "demo-embed-agenda", demoEventId).run();
 		await runDemoSeed();

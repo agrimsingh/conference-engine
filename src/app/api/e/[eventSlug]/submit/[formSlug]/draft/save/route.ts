@@ -26,7 +26,7 @@ export async function PUT(request: Request, context: Context) {
 	const draft = await loadDraftForResume(db, { secret, token });
 	const { eventSlug, formSlug } = await context.params;
 	const loaded = await loadCfpForm(db, eventSlug, formSlug);
-	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1 || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form)) return NextResponse.json({ ok: false, error: "Draft link is invalid, expired, or this CFP is unavailable" }, { status: 404 });
+	if (!draft || !loaded || draft.eventId !== loaded.event.id || draft.formId !== loaded.form.id || (draft.status !== "submitted" && loaded.form.drafts_enabled !== 1) || loaded.form.status !== "open" || !isCfpOpenNow(loaded.form)) return NextResponse.json({ ok: false, error: "Draft link is invalid, expired, or this CFP is unavailable" }, { status: 404 });
 	try {
 		assertEventWritable(loaded.event);
 	} catch (error) {

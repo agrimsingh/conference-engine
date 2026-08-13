@@ -1,0 +1,32 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "conference-engine-event-room-dev",
+	"main": "src/durable-objects/EventRoomDevWorker.ts",
+	"compatibility_date": "2026-08-08",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "conference-engine",
+			"database_id": "021b5626-e4ba-44d2-bbfd-69b99d483efb",
+			"migrations_dir": "migrations"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "EVENT_ROOM",
+				"class_name": "EventRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["EventRoom"]
+		}
+	]
+}

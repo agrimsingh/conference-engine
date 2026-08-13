@@ -9,6 +9,7 @@ describe("content deliverables", () => {
 	const now = Date.UTC(2027, 3, 1);
 	beforeAll(async () => {
 		await env.DB.batch([
+			env.DB.prepare("INSERT INTO accounts (id, email, name, created_at, updated_at) VALUES ('cnt-organizer', 'jordan@content.example.test', 'Jordan Alvarez', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, mode, created_at, updated_at) VALUES ('cnt-event', 'cnt-event', 'Content event', 'UTC', 'live', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO events (id, slug, name, timezone, mode, created_at, updated_at) VALUES ('cnt-foreign', 'cnt-foreign', 'Foreign event', 'UTC', 'live', ?, ?)").bind(now, now),
 			env.DB.prepare("INSERT INTO cfp_forms (id, event_id, slug, title, status, created_at, updated_at) VALUES ('cnt-form', 'cnt-event', 'cfp', 'CFP', 'open', ?, ?)").bind(now, now),
@@ -37,6 +38,13 @@ describe("content deliverables", () => {
 		expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM assets WHERE event_id = 'cnt-event'").first()).toEqual({ count: 2 });
 		const comment = await addDeliverableComment(env.DB, { taskId: priyaTask.id, personId: "cnt-priya", authorKind: "speaker", authorPersonId: "cnt-priya", authorName: "Priya Raman", body: "Draft deck - final version coming Friday." });
 		expect(comment).toMatchObject({ ok: true });
+		const organizerReply = await addDeliverableComment(env.DB, { taskId: priyaTask.id, eventId: "cnt-event", authorKind: "organizer", authorAccountId: "cnt-organizer", authorName: "Jordan Alvarez", body: "Thanks Priya — the final deck is approved." });
+		expect(organizerReply).toMatchObject({ ok: true });
+		const thread = (await listDeliverableBundles(env.DB, { eventId: "cnt-event" })).get(priyaTask.id)?.comments;
+		expect(thread?.map(({ author_kind, author_name, body }) => ({ author_kind, author_name, body }))).toEqual([
+			{ author_kind: "speaker", author_name: "Priya Raman", body: "Draft deck - final version coming Friday." },
+			{ author_kind: "organizer", author_name: "Jordan Alvarez", body: "Thanks Priya — the final deck is approved." },
+		]);
 		expect(await addDeliverableComment(env.DB, { taskId: priyaTask.id, personId: "cnt-marcus", authorKind: "speaker", authorPersonId: "cnt-marcus", authorName: "Marcus", body: "cross access" })).toMatchObject({ ok: false, status: 404 });
 		const zip = await exportLatestDeliverables(env.DB, env.FILES, { eventId: "cnt-event", taskIds: [priyaTask.id] });
 		expect(zip.ok && new TextDecoder().decode(zip.body)).toContain("slides.pdf");

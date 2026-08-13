@@ -67,7 +67,7 @@ npm run preview
 
 With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` once for a local organiser cookie. Keep bypass off in production.
 
-`npm run preview` builds the OpenNext Worker with local D1, R2, KV, and Durable Objects — best smoke environment. `npm run dev` is faster for UI work but does not match the full Cloudflare runtime (the cockpit falls back to polling if the WebSocket is unavailable).
+`npm run preview` builds the complete OpenNext Worker and remains the best release smoke environment. `npm run dev` starts Next plus a local EventRoom owner so stateful schedule and content mutations use the real Durable Object against the same local D1; the cockpit still falls back to polling because WebSocket upgrades remain Worker-only.
 
 ## What you get
 
@@ -83,7 +83,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 **Speaker operations.** The magic-link portal collects bio, headshot, and slides (plus salutation, pronouns, honorific). Speakers can withdraw themselves, including after a talk is placed — the slot clears and calendar invites cancel. Outstanding gaps stay on the cockpit until they land. The event contact email is used as Reply-To on all speaker and reviewer mail.
 
-**Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Auto-place fills the unscheduled rail in one pass, placing accepted talks into open slots. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Attendees can subscribe to the live schedule at `/e/[slug]/schedule.ics`.
+**Scheduling.** Drag talks onto rooms and tracks; clashes flag before you drop. Auto-place fills the unscheduled rail in one pass, placing accepted talks into open slots. Calendar invites land as real Gmail RSVP prompts (`.ics` with `METHOD:REQUEST`). Attendees can subscribe to the live published schedule at `/api/e/[eventSlug]/schedule.ics`, or export the sessions they selected from the itinerary through `POST /api/e/[eventSlug]/itinerary/ics`.
 
 **Public surfaces.** Published schedule (defaults to today or the next session day), speakers, session pages, and an iframe embed. Embeds can be paused to stop serving without touching the publish gate. Headshots and `.ics` ship for published sessions.
 
@@ -173,6 +173,12 @@ npx opennextjs-cloudflare build
 ```
 
 After a behaviour change, click through one real path in `npm run preview` (submit, open submission detail, clear a cockpit blocker, portal task, or publish).
+
+### Evaluator and release runs
+
+Use `npm run preview` for release scoring because it is the complete OpenNext Cloudflare runtime. `npm run dev` now exercises local D1, R2, KV, multipart uploads, and EventRoom mutations, so it is valid for development-runtime scoring; record it as `next dev`, since WebSocket upgrades and the outer Worker entry still differ from preview.
+
+For every scoring run, record the rubric version and the exact output of `curl -sS http://127.0.0.1:8787/api/version`. `npm run deploy` refuses a dirty worktree and bakes the clean commit SHA into that endpoint; development reports `development`, while an artifact built without a SHA reports `unknown` rather than inventing provenance.
 
 ## Accelevents
 

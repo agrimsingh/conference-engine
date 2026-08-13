@@ -83,9 +83,11 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 			</main>
 		);
 	}
+	let submittedEdit = false;
 	if (typeof draft === "string" && draft) {
 		const saved = await loadDraftForResume(db, { secret: await getAuthSecret(), token: draft });
-		if (!saved || saved.eventId !== loaded.event.id || saved.formId !== loaded.form.id || loaded.form.drafts_enabled !== 1) notFound();
+		if (!saved || saved.eventId !== loaded.event.id || saved.formId !== loaded.form.id || (saved.status !== "submitted" && loaded.form.drafts_enabled !== 1)) notFound();
+		submittedEdit = saved.status === "submitted";
 	}
 
 	return (
@@ -99,7 +101,7 @@ export default async function PublicCfpPage({ params, searchParams }: Props) {
 				welcomeCopy={loaded.form.welcome_copy ? renderFormCopy(loaded.form.welcome_copy, { eventName: loaded.event.name, submitterName: "there", title: loaded.form.title }) : null}
 				thankYouCopy={loaded.form.thank_you_copy ?? null}
 				draftToken={typeof draft === "string" ? draft : ""}
-				draftsEnabled={loaded.form.drafts_enabled === 1}
+				draftsEnabled={loaded.form.drafts_enabled === 1 || submittedEdit}
 				submissionLimit={loaded.form.submission_limit}
 				closesAt={loaded.form.closes_at}
 				timezone={loaded.event.timezone}

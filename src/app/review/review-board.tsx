@@ -263,7 +263,7 @@ export function ReviewBoard({ eventSlug, token, canDecide, reviewerId, criteria,
 								</div>
 							) : null}
 						</div>
-							{canDecide ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
+						{canDecide && reviewerId === null ? <div className="border-t border-neutral-800 pt-3"><DecisionButtons eventSlug={eventSlug} submissionId={row.id} status={row.status} previews={row.previews} /></div> : null}
 					</li>
 				);
 			})}

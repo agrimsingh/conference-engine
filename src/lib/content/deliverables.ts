@@ -23,7 +23,9 @@ export async function listDeliverableBundles(
 		? "st.event_id = ?"
 		: `(st.person_id = ? OR EXISTS (
 			SELECT 1 FROM speaker_handoffs h
-			WHERE h.speaker_person_id = st.person_id AND h.manager_person_id = ? AND h.status = 'accepted'
+			WHERE h.speaker_person_id = st.person_id
+			  AND h.submission_id = st.submission_id
+			  AND h.manager_person_id = ? AND h.status = 'accepted'
 		))`;
 	const binds = args.eventId ? [args.eventId] : args.personId ? [args.personId, args.personId] : [];
 	if (!binds.length) return new Map();
@@ -71,7 +73,7 @@ export async function addDeliverableComment(
 	const task = await db.prepare("SELECT * FROM speaker_tasks WHERE id = ?").bind(args.taskId).first<SpeakerTaskRow>();
 	if (!task) return { ok: false, status: 404, error: "Deliverable not found" };
 	if (args.eventId && task.event_id !== args.eventId) return { ok: false, status: 404, error: "Deliverable not found" };
-	if (args.personId && !(await canActAsSpeaker(db, args.personId, task.person_id))) {
+	if (args.personId && !(await canActAsSpeaker(db, args.personId, task.person_id, task.submission_id))) {
 		return { ok: false, status: 404, error: "Deliverable not found" };
 	}
 	const hasVersion = await db.prepare("SELECT id FROM deliverable_versions WHERE task_id = ? LIMIT 1").bind(task.id).first<{ id: string }>();
@@ -151,13 +153,13 @@ export async function resolveDeliverableVersion(
 	args: { versionId: string; eventId?: string; personId?: string },
 ): Promise<{ version: DeliverableVersionRow; asset: AssetRow } | null> {
 	const row = await db.prepare(
-		`SELECT dv.*, st.person_id AS task_person_id
+		`SELECT dv.*, st.person_id AS task_person_id, st.submission_id AS task_submission_id
 		 FROM deliverable_versions dv
 		 INNER JOIN speaker_tasks st ON st.id = dv.task_id AND st.event_id = dv.event_id
 		 WHERE dv.id = ?`,
-	).bind(args.versionId).first<DeliverableVersionRow & { task_person_id: string }>();
+	).bind(args.versionId).first<DeliverableVersionRow & { task_person_id: string; task_submission_id: string }>();
 	if (!row || (args.eventId && row.event_id !== args.eventId)) return null;
-	if (args.personId && !(await canActAsSpeaker(db, args.personId, row.task_person_id))) return null;
+	if (args.personId && !(await canActAsSpeaker(db, args.personId, row.task_person_id, row.task_submission_id))) return null;
 	const asset = await db.prepare("SELECT * FROM assets WHERE id = ? AND event_id = ?").bind(row.asset_id, row.event_id).first<AssetRow>();
 	return asset ? { version: row, asset } : null;
 }

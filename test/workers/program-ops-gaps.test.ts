@@ -101,7 +101,7 @@ describe("program ops gaps", () => {
 		expect((await acceptSpeakerHandoff(env.DB, requested.handoffId)).ok).toBe(true);
 		const manager = await env.DB.prepare("SELECT id FROM people WHERE email = 'manager@example.test'").first<{ id: string }>();
 		expect(manager).not.toBeNull();
-		expect(await canActAsSpeaker(env.DB, manager!.id, "pog-hand-speaker")).toBe(true);
+		expect(await canActAsSpeaker(env.DB, manager!.id, "pog-hand-speaker", "pog-hand-sub")).toBe(true);
 		expect((await listSubmissionsForPerson(env.DB, manager!.id)).map((row) => row.id)).toContain("pog-hand-sub");
 		expect((await listTasksForPerson(env.DB, manager!.id)).map((row) => row.id)).toContain("pog-hand-task");
 		const completed = await completeTextTask(env.DB, {

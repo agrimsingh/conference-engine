@@ -2,6 +2,7 @@ import { validatedAppOrigin } from "../security/origin";
 import { sendTemplatedEmail } from "./resend";
 import type { ReminderEnv, ReminderRunResult } from "./reminders";
 import { REMINDER_DELIVERY_WINDOW_MS } from "./reminders";
+import { REVIEW_BOARD_STATUS_SQL } from "@/lib/domain";
 
 type OutstandingReviewRow = {
 	reviewer_id: string;
@@ -132,7 +133,7 @@ async function loadOutstandingReviewRows(
        INNER JOIN events e ON e.id = s.event_id
        WHERE ra.plan_id = ?
          AND s.event_id = ?
-         AND s.status IN ('submitted', 'under_review')
+         AND s.status IN (${REVIEW_BOARD_STATUS_SQL})
          AND r.revoked_at IS NULL
          AND ra.recused_at IS NULL
          AND r.email IS NOT NULL
