@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { notifyDecidedSubmissions } from "@/lib/speakers/notify-decided";
+import { absoluteAppUrl } from "@/lib/email/templates";
 
 type Context = { params: Promise<{ eventSlug: string }> };
 
@@ -50,7 +51,12 @@ export async function POST(request: Request, context: Context) {
 	const result = await notifyDecidedSubmissions(db, {
 		eventId: authorization.access.event.id,
 		submissionIds: parsed.value.submissionIds,
-		email: { send: true, subject, text },
+		email: {
+			send: true,
+			subject,
+			text,
+			portalUrl: absoluteAppUrl((await getCloudflareEnv()).APP_ORIGIN, "/portal"),
+		},
 	});
 	const broadcasted =
 		result.succeeded > 0

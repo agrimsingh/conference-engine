@@ -3,13 +3,14 @@ import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { insertSubmission, isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswersWithAssets, validateSubmitterIdentity } from "@/lib/cfp/submit";
 import { isJsonObject, readBoundedCfpJson } from "@/lib/cfp/request";
 import { loadCfpForm } from "@/lib/cfp/load-form";
-import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
+import { getAuthSecret, getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { notifyOrganizersOfSubmission, notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
 import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { consumeFixedWindowRateLimit } from "@/lib/security/rate-limit";
 import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
+import { absoluteAppUrl } from "@/lib/email/templates";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; formSlug: string }>;
@@ -92,6 +93,8 @@ export async function POST(request: Request, context: RouteContext) {
 	}
 
 	const category = resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers);
+	const appOrigin = (await getCloudflareEnv()).APP_ORIGIN;
+	const portalUrl = absoluteAppUrl(appOrigin, "/portal");
 
 	let submissionId: string;
 	try {
@@ -116,14 +119,15 @@ export async function POST(request: Request, context: RouteContext) {
 		notifySubmissionLifecycle(db, {
 			submissionId,
 			templateKey: "submission_received",
-			override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal" }),
+			portalUrl,
+			override: confirmationCopyOverride(loaded.form.confirmation_copy, { eventName: loaded.event.name, submitterName, title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal", portalUrl }),
 		}),
-		notifyOrganizersOfSubmission(db, { submissionId, kind: "created" }),
+		notifyOrganizersOfSubmission(db, { submissionId, kind: "created", origin: appOrigin }),
 	]);
 
 	const coSpeakerInvites = await sendPendingInvitesForSubmission(db, {
 		submissionId,
-		origin: new URL(request.url).origin,
+		origin: appOrigin,
 	});
 
 	return NextResponse.json({

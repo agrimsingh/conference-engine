@@ -6,5 +6,5 @@ export async function POST(request: Request) {
 	await clearOrganizerSession();
 	const url = new URL(request.url);
 	const next = safeNextPath(url.searchParams.get("next"), "/login");
-	return NextResponse.redirect(new URL(next, url.origin));
+	return NextResponse.redirect(new URL(next, url.origin), 303);
 }

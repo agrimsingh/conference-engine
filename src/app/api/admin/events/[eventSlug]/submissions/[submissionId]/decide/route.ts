@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readBoundedJson } from "@/lib/cfp/request";
 import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { getSubmissionById } from "@/lib/db/queries";
 import {
 	isDecisionAction,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
 import { decideSubmission } from "@/lib/speakers/decide";
+import { absoluteAppUrl } from "@/lib/email/templates";
 
 type RouteContext = {
 	params: Promise<{ eventSlug: string; submissionId: string }>;
@@ -69,7 +70,10 @@ export async function POST(request: Request, context: RouteContext) {
 		);
 	}
 
-	const result = await decideSubmission(db, submissionId, parsed.action, parsed.email);
+	const email = parsed.email.send
+		? { ...parsed.email, portalUrl: absoluteAppUrl((await getCloudflareEnv()).APP_ORIGIN, "/portal") }
+		: parsed.email;
+	const result = await decideSubmission(db, submissionId, parsed.action, email);
 	if (!result.ok) {
 		return NextResponse.json(
 			{ ok: false, error: result.error },

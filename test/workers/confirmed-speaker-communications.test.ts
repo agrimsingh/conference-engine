@@ -4,6 +4,7 @@ import {
 	notifyCalendarCancellation,
 	notifyCalendarInvite,
 	notifyConfirmedSpeakerLifecycle,
+	formatCalendarEmailInterval,
 } from "@/lib/email/notify";
 
 const now = 1_781_900_000_000;
@@ -38,6 +39,34 @@ describe("confirmed-speaker communications", () => {
 	beforeAll(seed);
 	afterEach(() => vi.unstubAllGlobals());
 
+	it("formats the email interval in the event timezone, including DST-aware offsets", () => {
+		expect(
+			formatCalendarEmailInterval(
+				Date.parse("2026-09-17T02:00:00Z"),
+				Date.parse("2026-09-17T02:30:00Z"),
+				"Asia/Singapore",
+			),
+		).toEqual({
+			startsAt: "Thu, 17 Sept 2026, 10:00 am",
+			endsAt: "10:30 am SGT",
+		});
+		const winter = formatCalendarEmailInterval(
+			Date.parse("2026-01-15T15:00:00Z"),
+			Date.parse("2026-01-15T15:30:00Z"),
+			"America/New_York",
+		);
+		const summer = formatCalendarEmailInterval(
+			Date.parse("2026-07-15T14:00:00Z"),
+			Date.parse("2026-07-15T14:30:00Z"),
+			"America/New_York",
+		);
+		expect(winter.startsAt).toMatch(/10:00 am$/);
+		expect(summer.startsAt).toMatch(/10:00 am$/);
+		expect(winter.endsAt.slice("10:30 am ".length)).not.toBe(
+			summer.endsAt.slice("10:30 am ".length),
+		);
+	});
+
 	it("sends personalized acceptance email to every confirmed speaker only", async () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 }));
 		vi.stubGlobal("fetch", fetchMock);
@@ -46,6 +75,7 @@ describe("confirmed-speaker communications", () => {
 			submissionId: "comms-submission",
 			templateKey: "acceptance",
 			override: { subject: "You're in", text: "Hi Primary Person,\n\nYour session was accepted." },
+			portalUrl: "https://conference.example.test/portal",
 			force: true,
 			runtime,
 		});
@@ -54,6 +84,11 @@ describe("confirmed-speaker communications", () => {
 		const sent = sentMessages(fetchMock);
 		expect(sent.map((message) => message.to[0]).sort()).toEqual(["confirmed@example.test", "primary@example.test"]);
 		expect(sent.find((message) => message.to[0] === "confirmed@example.test")?.text).toContain("Hi Confirmed Co-speaker");
+		for (const message of sent) {
+			const urls = message.text.match(/https?:\/\/\S+/g) ?? [];
+			expect(urls).toHaveLength(1);
+			expect(new URL(urls[0] ?? "https://invalid.test").pathname).toBe("/portal");
+		}
 		expect(JSON.stringify(sent)).not.toContain("pending@example.test");
 		expect(JSON.stringify(sent)).not.toContain("declined@example.test");
 	});
@@ -69,20 +104,26 @@ describe("confirmed-speaker communications", () => {
 			icsUid: "shared-session@example.test",
 			sequence: 2,
 			fromEmail: "team@example.test",
+			appOrigin: "https://conference.example.test",
 			runtime,
 		};
 
+		await env.DB.prepare("UPDATE events SET timezone = 'Asia/Singapore' WHERE id = 'comms-event'").run();
 		const invite = await notifyCalendarInvite(env.DB, calendar);
 		expect(invite.emails).toHaveLength(2);
 		let sent = sentMessages(fetchMock);
 		expect(sent).toHaveLength(2);
 		expect(sent.map((message) => message.to[0]).sort()).toEqual(["confirmed@example.test", "primary@example.test"]);
 		for (const message of sent) {
+			expect(message.text).not.toContain("2030-06-01T10:00:00.000Z");
+			expect(message.text).not.toContain("2030-06-01T10:30:00.000Z");
+			expect(message.text).toContain("Sat, 1 Jun 2030, 6:00 pm → 6:30 pm SGT");
 			const ics = atob(message.attachments?.[0]?.content ?? "").replace(/\r\n /g, "");
 			expect(ics).toContain("METHOD:REQUEST");
 			expect(ics).toContain("UID:shared-session@example.test");
 			expect(ics).toContain(`ATTENDEE;CN=${message.to[0]};`);
 			expect(ics).toContain(`mailto:${message.to[0]}`);
+			expect(ics).toContain("ORGANIZER;CN=Comms Event:mailto:team@example.test");
 		}
 
 		fetchMock.mockClear();

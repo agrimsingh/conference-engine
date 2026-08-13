@@ -6,6 +6,7 @@ export type IcsEventInput = {
 	startsAtMs: number;
 	endsAtMs: number;
 	organizerEmail: string;
+	organizerName?: string;
 	/** Required for REQUEST/CANCEL invites; omitted for public METHOD:PUBLISH downloads. */
 	attendeeEmail?: string;
 	method?: "REQUEST" | "CANCEL" | "PUBLISH";
@@ -24,6 +25,14 @@ export function toIcsUtc(ms: number): string {
 		`${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
 		`T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
 	);
+}
+
+export function calendarSessionLabel(title: string, eventName: string): string {
+	const normalizedTitle = title.trim();
+	const normalizedEventName = eventName.trim();
+	return normalizedTitle.localeCompare(normalizedEventName, undefined, { sensitivity: "accent" }) === 0
+		? normalizedTitle
+		: `${normalizedTitle} — ${normalizedEventName}`;
 }
 
 function foldLine(line: string): string {
@@ -69,7 +78,7 @@ function veventLines(
 		`SUMMARY:${escapeText(input.summary)}`,
 		`LOCATION:${escapeText(input.location)}`,
 		input.description ? `DESCRIPTION:${escapeText(input.description)}` : null,
-		`ORGANIZER;CN=conference-engine:mailto:${input.organizerEmail}`,
+		`ORGANIZER;CN=${escapeText(input.organizerName?.trim() || "conference-engine")}:mailto:${input.organizerEmail}`,
 		attendee,
 		`STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
 		`SEQUENCE:${Math.max(0, Math.floor(input.sequence ?? 0))}`,
@@ -95,6 +104,7 @@ export function buildIcsInvite(input: IcsEventInput): string {
 			startsAtMs: input.startsAtMs,
 			endsAtMs: input.endsAtMs,
 			organizerEmail: input.organizerEmail,
+			organizerName: input.organizerName,
 			sequence: input.sequence,
 			method,
 			attendeeEmail: input.attendeeEmail,

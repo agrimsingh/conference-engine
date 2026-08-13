@@ -101,3 +101,13 @@ export async function setPortalSessionCookie(token: string): Promise<void> {
 		maxAge: PORTAL_TTL_SECONDS,
 	});
 }
+
+export async function clearPortalSession(): Promise<void> {
+	const jar = await cookies();
+	const token = jar.get(PORTAL_SESSION_COOKIE)?.value;
+	if (token) {
+		const kv = await getSessionsKv();
+		await kv.delete(sessionKey(token));
+	}
+	jar.delete(PORTAL_SESSION_COOKIE);
+}

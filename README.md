@@ -97,7 +97,7 @@ With `NEXTJS_ENV=development` or `ADMIN_BYPASS_ENABLED=1`, open `/admin/bypass` 
 
 **Reviewer.** Open the emailed or copied `/review?token=...` link. Score only what you were assigned.
 
-**Speaker.** Submit at `/e/[eventSlug]/submit/[formSlug]`. After acceptance, use `/portal` for the magic link, profile, and uploads. Withdraw from the portal if plans change. Co-speakers confirm at `/co-speaker/[token]`.
+**Speaker.** Submit at `/e/[eventSlug]/submit/[formSlug]`. After acceptance, use `/portal` for the magic link, profile, and uploads. The portal header signs out the current speaker without affecting an organizer session in the same browser. Withdraw from the portal if plans change. Co-speakers confirm at `/co-speaker/[token]`.
 
 **Public / embed.** Published sessions only: `/e/[eventSlug]/schedule`, `/speakers`, `/embed/[eventSlug]/schedule`.
 

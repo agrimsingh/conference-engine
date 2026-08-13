@@ -8,6 +8,7 @@ vi.mock("@/lib/db/cloudflare", () => ({
 	getAuthSecret: async () => "organizer-notify-secret",
 	getCloudflareEnv: async () => ({
 		...env,
+		APP_ORIGIN: "https://conference.example.test",
 		RESEND_API_KEY: "test-key",
 		RESEND_FROM_EMAIL: "team@example.test",
 	}),
@@ -146,6 +147,7 @@ describe("organizer submission notify", () => {
 		const createMails = await notifyOrganizersOfSubmission(env.DB, {
 			submissionId: created.submissionId,
 			kind: "created",
+			origin: "https://conference.example.test",
 			runtime,
 		});
 		expect(createMails.every((mail) => mail.ok && mail.status === "sent")).toBe(true);
@@ -165,6 +167,7 @@ describe("organizer submission notify", () => {
 		const replay = await notifyOrganizersOfSubmission(env.DB, {
 			submissionId: created.submissionId,
 			kind: "created",
+			origin: "https://conference.example.test",
 			runtime,
 		});
 		expect(replay.every((mail) => mail.ok && mail.status === "skipped")).toBe(true);
@@ -188,6 +191,7 @@ describe("organizer submission notify", () => {
 		const updateMails = await notifyOrganizersOfSubmission(env.DB, {
 			submissionId: updated.submissionId,
 			kind: "updated",
+			origin: "https://conference.example.test",
 			runtime,
 		});
 		expect(updateMails).toEqual([]);
@@ -264,6 +268,7 @@ describe("organizer submission notify", () => {
 		const updateMails = await notifyOrganizersOfSubmission(env.DB, {
 			submissionId: updated.submissionId,
 			kind: "updated",
+			origin: "https://conference.example.test",
 			runtime,
 		});
 		expect(updateMails.every((mail) => mail.ok && mail.status === "sent")).toBe(true);
@@ -273,6 +278,7 @@ describe("organizer submission notify", () => {
 		const updateReplay = await notifyOrganizersOfSubmission(env.DB, {
 			submissionId: updated.submissionId,
 			kind: "updated",
+			origin: "https://conference.example.test",
 			runtime,
 		});
 		expect(updateReplay.every((mail) => mail.ok && mail.status === "skipped")).toBe(true);
@@ -309,7 +315,7 @@ describe("organizer submission notify", () => {
 		vi.stubGlobal("fetch", fetchMock);
 
 		const response = await finalizeDraftRoute(
-			jsonRequest("https://conference.example.test/api/e/org-route/submit/cfp/draft/finalize", {
+			jsonRequest("https://evil.example/api/e/org-route/submit/cfp/draft/finalize", {
 				token,
 				submitterName: "Bea",
 				answers: { title: "Talk", speakers: [{ name: "Bea", email: "speaker@org.route" }] },
@@ -332,5 +338,20 @@ describe("organizer submission notify", () => {
 		expect(sentTo(fetchMock)).toEqual(
 			expect.arrayContaining(["admin@org.route", "owner@org.route", "speaker@org.route"]),
 		);
+		const envelopeRows = await env.DB.prepare(
+			"SELECT template_key, text_body FROM email_delivery_envelopes WHERE submission_id = ?",
+		)
+			.bind(body.submissionId)
+			.all<{ template_key: string; text_body: string }>();
+		const textByTemplate = new Map(
+			envelopeRows.results.map((row) => [row.template_key, row.text_body]),
+		);
+		expect(textByTemplate.get("submission_received")).toContain("https://conference.example.test/portal");
+		expect(textByTemplate.get("submission_received_organizer")).toContain(
+			`https://conference.example.test/admin/events/org-route/submissions/${body.submissionId}`,
+		);
+		for (const text of textByTemplate.values()) {
+			expect(text).not.toContain("https://evil.example");
+		}
 	});
 });

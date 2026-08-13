@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { authorizeWritableEventAdminApi } from "@/lib/auth/admin";
 import { isJsonObject, readBoundedJson } from "@/lib/cfp/request";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { bulkDecideSubmissions, BulkDecisionValidationError, parseBulkDecisionEmail } from "@/lib/evaluation/decisions";
 import { broadcastEventInvalidate } from "@/lib/realtime/event-room";
+import { absoluteAppUrl } from "@/lib/email/templates";
 
 type Context = { params: Promise<{ eventSlug: string }> };
 
@@ -18,7 +19,10 @@ export async function POST(request: Request, context: Context) {
 		return NextResponse.json({ ok: false, error: "Expected submissionIds and action accept or reject" }, { status: 400 });
 	}
 	try {
-		const email = parseBulkDecisionEmail(parsed.value.email);
+		const parsedEmail = parseBulkDecisionEmail(parsed.value.email);
+		const email = parsedEmail.send
+			? { ...parsedEmail, portalUrl: absoluteAppUrl((await getCloudflareEnv()).APP_ORIGIN, "/portal") }
+			: parsedEmail;
 		const result = await bulkDecideSubmissions(db, {
 			eventId: authorization.access.event.id,
 			submissionIds: parsed.value.submissionIds,

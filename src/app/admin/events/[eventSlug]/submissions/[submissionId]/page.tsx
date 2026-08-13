@@ -7,7 +7,7 @@ import { SubmissionAnswersList } from "@/components/submission-answers-list";
 import { assertCanManageEvent } from "@/lib/auth/admin";
 import { fieldLabelsForSubmission } from "@/lib/cfp/form-revisions";
 import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getSubmissionById,
@@ -23,14 +23,11 @@ import {
 import { listHandoffsForSubmissions } from "@/lib/speakers/handoff";
 import {
 	displayCategory,
-	DECISION_REGISTRY,
-	type DecisionAction,
-	type RenderedMessage,
 } from "@/lib/domain";
 import {
-	defaultMessageTemplate,
+	absoluteAppUrl,
 	listEventMessageTemplates,
-	renderStoredMessageTemplate,
+	renderDecisionMessagePreviews,
 } from "@/lib/email/templates";
 import { AssignmentControls } from "../assignment-controls";
 import { SubmissionLabels } from "../submission-labels";
@@ -104,34 +101,13 @@ export default async function AdminSubmissionDetailPage({
 	const title = typeof answers.title === "string" ? answers.title : "(untitled)";
 	const category = displayCategory(row.category);
 
-	const configuredTemplateByKey = new Map(
-		configuredTemplates.map((template) => [template.template_key, template]),
-	);
-	const decisionContext = {
+	const portalUrl = absoluteAppUrl((await getCloudflareEnv()).APP_ORIGIN, "/portal");
+	const previews = renderDecisionMessagePreviews(configuredTemplates, {
 		eventName: event.name,
 		submitterName: row.submitter_name ?? "there",
 		title,
-	};
-	const previews = Object.fromEntries(
-		Object.entries(DECISION_REGISTRY).map(([action, meta]) => {
-			const saved = configuredTemplateByKey.get(meta.templateKey);
-			return [
-				action,
-				renderStoredMessageTemplate(
-					saved
-						? { subject: saved.subject_template, text: saved.text_template }
-						: defaultMessageTemplate(meta.templateKey),
-					{
-						...decisionContext,
-						portalHint:
-							meta.templateKey === "acceptance"
-								? "Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs."
-								: undefined,
-					},
-				),
-			];
-		}),
-	) as Record<DecisionAction, RenderedMessage>;
+		portalUrl,
+	});
 
 	const answerDisplays = buildSubmissionAnswerDisplays(answers, {
 		submissionId: row.id,

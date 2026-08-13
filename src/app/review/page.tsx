@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { isAdminBypass } from "@/lib/auth/admin";
 import { buildSubmissionAnswerDisplays } from "@/lib/cfp/submission-answers";
 import { fieldLabelsForSubmissions } from "@/lib/cfp/form-revisions";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import {
 	getActiveEvaluationPlan,
 	getEventById,
@@ -12,8 +12,12 @@ import {
 	listEvaluationScoresForPlan,
 	listReviewableSubmissions,
 } from "@/lib/db/queries";
-import { renderDecisionPreviews } from "@/lib/domain";
 import { displayCategory } from "@/lib/domain";
+import {
+	absoluteAppUrl,
+	listEventMessageTemplates,
+	renderDecisionMessagePreviews,
+} from "@/lib/email/templates";
 import {
 	filterBoardSubmissions,
 	listReviewerAssignments,
@@ -104,11 +108,14 @@ export default async function ReviewPage({ searchParams }: Props) {
 		mode: identity.mode,
 		assignments: reviewerAssignments,
 	});
-	const [scores, criteria, criterionScores] = await Promise.all([
+	const [scores, criteria, criterionScores, messageTemplates, cloudflareEnv] = await Promise.all([
 		listEvaluationScoresForPlan(db, plan.id),
 		listCriteria(db, plan.id),
 		listCriterionScoresForPlan(db, plan.id),
+		listEventMessageTemplates(db, event.id),
+		getCloudflareEnv(),
 	]);
+	const portalUrl = absoluteAppUrl(cloudflareEnv.APP_ORIGIN, "/portal");
 	const scoresBySubmission = new Map<string, typeof scores>();
 	for (const score of scores) {
 		const list = scoresBySubmission.get(score.submission_id) ?? [];
@@ -168,10 +175,11 @@ export default async function ReviewPage({ searchParams }: Props) {
 				},
 				fieldLabels: fieldLabelsBySubmission.get(row.id),
 			}),
-			previews: renderDecisionPreviews({
+			previews: renderDecisionMessagePreviews(messageTemplates, {
 				eventName: event.name,
 				submitterName: row.submitter_name ?? "there",
 				title,
+				portalUrl,
 			}),
 			scores: (scoresBySubmission.get(row.id) ?? []).filter((s) => identity.mode === "committee" || s.reviewer_id === identity.reviewer.id).map((s) => ({
 				id: s.id,

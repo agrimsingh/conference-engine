@@ -6,7 +6,8 @@ import {
 } from "@/lib/db/queries";
 import type { MessageTemplateKey, RenderedMessage } from "@/lib/domain";
 import { sendTemplatedEmail, type EmailDeliveryRuntime, type OutboundSendResult } from "./resend";
-import { buildIcsInvite, type IcsEventInput } from "./ics";
+import { buildIcsInvite, calendarSessionLabel, type IcsEventInput } from "./ics";
+import { absoluteAppUrl } from "./templates";
 
 export type OrganizerSubmissionNotifyKind = "created" | "updated";
 
@@ -64,6 +65,7 @@ export async function notifySubmissionLifecycle(
 			"submission_received" | "acceptance" | "rejection" | "waitlist"
 		>;
 		portalHint?: string;
+		portalUrl?: string;
 		/** Organizer-edited subject/body for this send. */
 		override?: RenderedMessage;
 		force?: boolean;
@@ -85,6 +87,7 @@ export async function notifySubmissionLifecycle(
 			submitterName: submission.submitter_name ?? "there",
 			title: titleFromAnswersJson(submission.answers_json),
 			portalHint: args.portalHint,
+			portalUrl: args.portalUrl,
 		},
 		override: args.override,
 		force: args.force,
@@ -101,6 +104,7 @@ export async function notifyOrganizersOfSubmission(
 	args: {
 		submissionId: string;
 		kind: OrganizerSubmissionNotifyKind;
+		origin: string;
 		runtime?: EmailDeliveryRuntime;
 	},
 ): Promise<OutboundSendResult[]> {
@@ -127,6 +131,10 @@ export async function notifyOrganizersOfSubmission(
 		.join(" · ");
 	const deliveryScope =
 		args.kind === "updated" ? `submission-updated:${submission.updated_at}` : undefined;
+	const adminUrl = absoluteAppUrl(
+		args.origin,
+		`/admin/events/${encodeURIComponent(event.slug)}/submissions/${encodeURIComponent(submission.id)}`,
+	);
 	return Promise.all(
 		[...recipients.entries()].map(([toEmail, organizerName]) =>
 			sendTemplatedEmail(db, {
@@ -139,6 +147,7 @@ export async function notifyOrganizersOfSubmission(
 					submitterName: organizerName,
 					title,
 					portalHint: submitterLabel ? `Submitter: ${submitterLabel}.` : undefined,
+					adminUrl,
 				},
 				deliveryScope,
 				runtime: args.runtime,
@@ -153,6 +162,7 @@ export async function notifyConfirmedSpeakerLifecycle(
 		submissionId: string;
 		templateKey: Extract<MessageTemplateKey, "acceptance">;
 		portalHint?: string;
+		portalUrl?: string;
 		override?: RenderedMessage;
 		force?: boolean;
 		runtime?: EmailDeliveryRuntime;
@@ -173,6 +183,7 @@ export async function notifyConfirmedSpeakerLifecycle(
 			submitterName: recipient.name || "there",
 			title: titleFromAnswersJson(submission.answers_json),
 			portalHint: args.portalHint,
+			portalUrl: args.portalUrl,
 		},
 		override: personalizeOverride(args.override, submission.submitter_name, recipient.name),
 		force: args.force,
@@ -191,6 +202,7 @@ export async function notifyCalendarInvite(
 		sequence?: number;
 		rescheduled?: boolean;
 		fromEmail: string;
+		appOrigin: string;
 		runtime?: EmailDeliveryRuntime;
 	},
 ): Promise<{ email: OutboundSendResult | null; emails: OutboundSendResult[]; icsBytes: string }> {
@@ -205,14 +217,18 @@ export async function notifyCalendarInvite(
 	}
 
 	const title = titleFromAnswersJson(submission.answers_json);
+	const calendarLabel = calendarSessionLabel(title, event.name);
+	const interval = formatCalendarEmailInterval(args.startsAtMs, args.endsAtMs, event.timezone);
+	const portalUrl = absoluteAppUrl(args.appOrigin, "/portal");
 	const baseIcsInput: Omit<IcsEventInput, "attendeeEmail"> = {
 		uid: args.icsUid,
-		summary: `${title} — ${event.name}`,
+		summary: calendarLabel,
 		description: `Scheduled session for ${event.name}`,
 		location: args.roomName,
 		startsAtMs: args.startsAtMs,
 		endsAtMs: args.endsAtMs,
 		organizerEmail: args.fromEmail,
+		organizerName: event.name,
 		method: "REQUEST",
 		sequence: args.sequence ?? 0,
 	};
@@ -221,7 +237,7 @@ export async function notifyCalendarInvite(
 		const icsBytes = buildIcsInvite({ ...baseIcsInput, attendeeEmail: recipient.email });
 		const email = await sendTemplatedEmail(db, {
 			eventId: event.id, submissionId: submission.id, templateKey: args.rescheduled ? "calendar_reschedule" : "calendar_invite", toEmail: recipient.email,
-			context: { eventName: event.name, submitterName: recipient.name || "there", title, roomName: args.roomName, startsAtIso: new Date(args.startsAtMs).toISOString(), endsAtIso: new Date(args.endsAtMs).toISOString() },
+			context: { eventName: event.name, submitterName: recipient.name || "there", title, calendarLabel, portalUrl, roomName: args.roomName, startsAtIso: interval.startsAt, endsAtIso: interval.endsAt },
 			attachments: [{ filename: "invite.ics", content: icsBytes, contentType: "text/calendar; method=REQUEST; charset=utf-8" }],
 			force: true, runtime: args.runtime,
 		});
@@ -240,6 +256,7 @@ export async function notifyCalendarCancellation(
 		icsUid: string;
 		sequence: number;
 		fromEmail: string;
+		appOrigin: string;
 		runtime?: EmailDeliveryRuntime;
 	},
 	): Promise<{ email: OutboundSendResult | null; emails: OutboundSendResult[]; icsBytes: string }> {
@@ -248,14 +265,18 @@ export async function notifyCalendarCancellation(
 	const event = await getEventById(db, submission.event_id);
 	if (!event) return { email: null, emails: [], icsBytes: "" };
 	const title = titleFromAnswersJson(submission.answers_json);
+	const calendarLabel = calendarSessionLabel(title, event.name);
+	const interval = formatCalendarEmailInterval(args.startsAtMs, args.endsAtMs, event.timezone);
+	const portalUrl = absoluteAppUrl(args.appOrigin, "/portal");
 	const baseIcsInput: Omit<IcsEventInput, "attendeeEmail"> = {
 		uid: args.icsUid,
-		summary: `${title} — ${event.name}`,
+		summary: calendarLabel,
 		description: `Cancelled session for ${event.name}`,
 		location: args.roomName,
 		startsAtMs: args.startsAtMs,
 		endsAtMs: args.endsAtMs,
 		organizerEmail: args.fromEmail,
+		organizerName: event.name,
 		method: "CANCEL",
 		sequence: args.sequence,
 	};
@@ -264,8 +285,8 @@ export async function notifyCalendarCancellation(
 		const icsBytes = buildIcsInvite({ ...baseIcsInput, attendeeEmail: recipient.email });
 		const email = await sendTemplatedEmail(db, {
 			eventId: event.id, submissionId: submission.id, templateKey: "calendar_invite", toEmail: recipient.email,
-			context: { eventName: event.name, submitterName: recipient.name || "there", title, roomName: args.roomName, startsAtIso: new Date(args.startsAtMs).toISOString(), endsAtIso: new Date(args.endsAtMs).toISOString() },
-			override: { subject: `Cancelled: ${title} @ ${event.name}`, text: `Hey ${recipient.name || "there"},\n\nThe scheduled session \"${title}\" at ${event.name} has been cancelled. A calendar cancellation is attached.\n\nIf anything looks off, just reply to this email.` },
+			context: { eventName: event.name, submitterName: recipient.name || "there", title, calendarLabel, portalUrl, roomName: args.roomName, startsAtIso: interval.startsAt, endsAtIso: interval.endsAt },
+			override: { subject: `Cancelled: ${calendarLabel}`, text: `Hey ${recipient.name || "there"},\n\nThe scheduled session \"${title}\" at ${event.name} has been cancelled. A calendar cancellation is attached.\n\nIf anything looks off, just reply to this email.` },
 			attachments: [{ filename: "cancel.ics", content: icsBytes, contentType: "text/calendar; method=CANCEL; charset=utf-8" }],
 			force: true, runtime: args.runtime,
 		});
@@ -289,4 +310,29 @@ function personalizeOverride(override: RenderedMessage | undefined, originalName
 		subject: override.subject.split(originalName.trim()).join(recipientName.trim()),
 		text: override.text.split(originalName.trim()).join(recipientName.trim()),
 	};
+}
+
+export function formatCalendarEmailInterval(
+	startsAtMs: number,
+	endsAtMs: number,
+	timeZone: string,
+): { startsAt: string; endsAt: string } {
+	const startsAt = new Intl.DateTimeFormat("en-SG", {
+		timeZone,
+		weekday: "short",
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		hour12: true,
+	}).format(new Date(startsAtMs));
+	const endsAt = new Intl.DateTimeFormat("en-SG", {
+		timeZone,
+		hour: "numeric",
+		minute: "2-digit",
+		hour12: true,
+		timeZoneName: "short",
+	}).format(new Date(endsAtMs));
+	return { startsAt, endsAt };
 }

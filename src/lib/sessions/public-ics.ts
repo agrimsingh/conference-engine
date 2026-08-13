@@ -1,4 +1,4 @@
-import { buildIcsInvite } from "@/lib/email/ics";
+import { buildIcsInvite, calendarSessionLabel } from "@/lib/email/ics";
 import { titleFromAnswersJson } from "@/lib/email/notify";
 import { loadPublicSession } from "@/lib/sessions/session";
 
@@ -35,7 +35,7 @@ export async function buildPublicSessionIcs(
 	const title = titleFromAnswersJson(session.submission.answers_json);
 	const body = buildIcsInvite({
 		uid: icsUid,
-		summary: `${title} — ${session.event.name}`,
+		summary: calendarSessionLabel(title, session.event.name),
 		description: `Published session at ${session.event.name}`,
 		location: session.slot.roomName,
 		startsAtMs: session.slot.startsAt,

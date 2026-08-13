@@ -4,6 +4,12 @@ import {
 	type MessageTemplateKey,
 	type RenderedMessage,
 } from "@/lib/domain/message-templates";
+import {
+	ACCEPTANCE_PORTAL_HINT,
+	DECISION_REGISTRY,
+	type DecisionAction,
+} from "@/lib/domain/decisions";
+import { validatedAppOrigin } from "@/lib/security/origin";
 
 /** Templates organizers can change without changing transactional auth mail. */
 export const EDITABLE_MESSAGE_TEMPLATE_KEYS = [
@@ -63,7 +69,7 @@ const DEFAULTS: Record<EditableMessageTemplateKey, MessageTemplateDraft> = {
 		text: `Hey {{submitter_name}},\n\nThanks for submitting "{{title}}" to {{event_name}}.\nYour proposal is on the waitlist for now. If a slot opens up, we may reach out with next steps.\nNothing you need to do right now.\n\n${REPLY_CTA}`,
 	},
 	portal_magic_link: {
-		subject: "Sign in to your {{event_name}} speaker portal",
+		subject: "Your speaker portal link — {{event_name}}",
 		text: `Hey {{submitter_name}},\n\nHere's a one-time link to open your speaker portal:\n{{portal_url}}\n\nIf you didn't request this, you can ignore this email.\n\n${REPLY_CTA}`,
 	},
 	task_reminder: {
@@ -75,12 +81,12 @@ const DEFAULTS: Record<EditableMessageTemplateKey, MessageTemplateDraft> = {
 		text: `Hey {{submitter_name}},\n\n{{title}}\n\n${REPLY_CTA}`,
 	},
 	calendar_invite: {
-		subject: "Scheduled: {{title}} @ {{event_name}}",
+		subject: "Scheduled: {{calendar_label}}",
 		text: `Hey {{submitter_name}},\n\n"{{title}}" is on the {{event_name}} agenda.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar invite (.ics) is attached.\n\n${REPLY_CTA}`,
 	},
 	calendar_reschedule: {
-		subject: "Time changed: {{title}} @ {{event_name}}",
-		text: `Hey {{submitter_name}},\n\nThe scheduled time for "{{title}}" at {{event_name}} changed.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal: /portal\n\n${REPLY_CTA}`,
+		subject: "Time changed: {{calendar_label}}",
+		text: `Hey {{submitter_name}},\n\nThe scheduled time for "{{title}}" at {{event_name}} changed.\nRoom: {{room_name}}\nWhen: {{starts_at}} → {{ends_at}}\n\nA calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal:\n{{portal_url}}\n\n${REPLY_CTA}`,
 	},
 };
 
@@ -99,13 +105,93 @@ function tokens(context: MessageTemplateContext): Record<string, string> {
 		title: context.title,
 		portal_hint: context.portalHint ?? "",
 		portal_url: context.portalUrl ?? context.portalHint ?? "",
+		admin_url: context.adminUrl ?? "",
 		room_name: context.roomName ?? "",
 		starts_at: context.startsAtIso ?? "",
 		ends_at: context.endsAtIso ?? "",
+		calendar_label: context.calendarLabel ?? `${context.title} — ${context.eventName}`,
 		outstanding_count: String(context.outstandingCount ?? context.taskLabels?.length ?? 0),
 		task_list: (context.taskLabels ?? []).map((label) => `• ${label}`).join("\n") || "• (see portal for details)",
 		confirm_url: context.confirmUrl ?? "",
 		decline_url: context.declineUrl ?? "",
+	};
+}
+
+const PORTAL_LINK_TEMPLATE_KEYS = [
+	"submission_received",
+	"acceptance",
+	"rejection",
+	"waitlist",
+	"calendar_reschedule",
+] as const satisfies readonly MessageTemplateKey[];
+
+const ADMIN_LINK_TEMPLATE_KEYS = [
+	"submission_received_organizer",
+	"submission_updated_organizer",
+] as const satisfies readonly MessageTemplateKey[];
+
+export function absoluteAppUrl(origin: string, pathname: string): string {
+	const appOrigin = validatedAppOrigin(origin);
+	if (!appOrigin) throw new TypeError("Email links require an absolute HTTP(S) app origin");
+	const url = new URL(pathname, `${appOrigin}/`);
+	if (url.origin !== appOrigin) throw new TypeError("Email link must stay on the configured app origin");
+	return url.toString();
+}
+
+export function ensureRequiredMessageLink(
+	key: MessageTemplateKey,
+	rendered: RenderedMessage,
+	context: MessageTemplateContext,
+): RenderedMessage {
+	const portalRequired = (PORTAL_LINK_TEMPLATE_KEYS as readonly MessageTemplateKey[]).includes(key);
+	const adminRequired = (ADMIN_LINK_TEMPLATE_KEYS as readonly MessageTemplateKey[]).includes(key);
+	const requiredUrl = portalRequired ? context.portalUrl : adminRequired ? context.adminUrl : undefined;
+	if (!requiredUrl) return rendered;
+	const url = new URL(requiredUrl);
+	if (!validatedAppOrigin(url.origin) || url.protocol !== "https:" && url.protocol !== "http:") {
+		throw new TypeError("Email action URL must use an absolute HTTP(S) origin");
+	}
+	if (portalRequired && (url.pathname !== "/portal" || url.search || url.hash)) {
+		throw new TypeError("Decision and confirmation emails must use the token-free portal URL");
+	}
+	const renderedUrls = rendered.text.match(/https?:\/\/[^\s<>"']+/g) ?? [];
+	if (renderedUrls.some((candidate) => {
+		try {
+			return new URL(candidate).href === url.href;
+		} catch {
+			return false;
+		}
+	})) return rendered;
+	return { ...rendered, text: `${rendered.text}\n\n${requiredUrl}` };
+}
+
+export function renderDecisionMessagePreviews(
+	templates: readonly EventMessageTemplateRow[],
+	context: MessageTemplateContext & { portalUrl: string },
+): Record<DecisionAction, RenderedMessage> {
+	const byKey = new Map(templates.map((template) => [template.template_key, template]));
+	const render = (action: DecisionAction): RenderedMessage => {
+		const key = DECISION_REGISTRY[action].templateKey;
+		const saved = byKey.get(key);
+		const scopedContext = {
+			...context,
+			portalHint: key === "acceptance" ? ACCEPTANCE_PORTAL_HINT : context.portalHint,
+		};
+		return ensureRequiredMessageLink(
+			key,
+			renderStoredMessageTemplate(
+				saved
+					? { subject: saved.subject_template, text: saved.text_template }
+					: defaultMessageTemplate(key),
+				scopedContext,
+			),
+			scopedContext,
+		);
+	};
+	return {
+		accept: render("accept"),
+		waitlist: render("waitlist"),
+		reject: render("reject"),
 	};
 }
 
@@ -147,12 +233,12 @@ export async function renderEventMessageTemplate(
 ): Promise<RenderedMessage> {
 	if (!isEditableMessageTemplateKey(key)) return renderMessageTemplate(key, context);
 	const saved = await getEventMessageTemplate(db, eventId, key);
-	return renderStoredMessageTemplate(
+	return ensureRequiredMessageLink(key, renderStoredMessageTemplate(
 		saved
 			? { subject: saved.subject_template, text: saved.text_template }
 			: defaultMessageTemplate(key),
 		context,
-	);
+	), context);
 }
 
 export async function upsertEventMessageTemplate(

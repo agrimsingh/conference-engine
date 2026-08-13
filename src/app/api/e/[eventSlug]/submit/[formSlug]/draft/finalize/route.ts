@@ -3,7 +3,7 @@ import { finalizeDraft, loadDraftForResume, SubmissionNotEditableError } from "@
 import { isCfpOpenNow } from "@/lib/cfp/closes-at";
 import { isSubmissionLimitReachedError, validateCfpPayloadBounds, validateSubmissionAnswersWithAssets } from "@/lib/cfp/submit";
 import { loadCfpForm } from "@/lib/cfp/load-form";
-import { getAuthSecret, getDb } from "@/lib/db/cloudflare";
+import { getAuthSecret, getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { resolveSubmissionCategory, type AnswerMap } from "@/lib/domain";
 import { notifyOrganizersOfSubmission, notifySubmissionLifecycle } from "@/lib/email/notify";
 import { sendPendingInvitesForSubmission } from "@/lib/speakers/co-speakers";
@@ -11,6 +11,7 @@ import { confirmationCopyOverride } from "@/lib/cfp/form-copy";
 import { repairSubmissionDelivery } from "@/lib/cfp/delivery";
 import { readBoundedCfpJson } from "@/lib/cfp/request";
 import { DemoEventWriteError, assertEventWritable } from "@/lib/events/writability";
+import { absoluteAppUrl } from "@/lib/email/templates";
 
 type Context = { params: Promise<{ eventSlug: string; formSlug: string }> };
 export async function POST(request: Request, context: Context) {
@@ -44,6 +45,8 @@ export async function POST(request: Request, context: Context) {
 		answers,
 	});
 	if (!validated.ok) return NextResponse.json(validated, { status: 400 });
+	const appOrigin = (await getCloudflareEnv()).APP_ORIGIN;
+	const portalUrl = absoluteAppUrl(appOrigin, "/portal");
 	let result: Awaited<ReturnType<typeof finalizeDraft>>;
 	try {
 		result = await finalizeDraft(db, { secret, draftId: draft.id, token, submitterName: name, answers: validated.visibleAnswers, speakers: validated.speakers, category: resolveSubmissionCategory(loaded.categoryRoute, validated.visibleAnswers), formRevisionId: loaded.revisionId });
@@ -61,6 +64,7 @@ export async function POST(request: Request, context: Context) {
 		eventName: loaded.event.name,
 		submitterName: name,
 		title: typeof validated.visibleAnswers.title === "string" ? validated.visibleAnswers.title : "your proposal",
+		portalUrl,
 	});
 	await repairSubmissionDelivery({
 		notify: async () => {
@@ -70,12 +74,13 @@ export async function POST(request: Request, context: Context) {
 					: notifySubmissionLifecycle(db, {
 							submissionId: result.submissionId,
 							templateKey: "submission_received",
+							portalUrl,
 							override: confirmationOverride,
 						}),
-				notifyOrganizersOfSubmission(db, { submissionId: result.submissionId, kind: organizerKind }),
+				notifyOrganizersOfSubmission(db, { submissionId: result.submissionId, kind: organizerKind, origin: appOrigin }),
 			]);
 		},
-		inviteCoSpeakers: () => sendPendingInvitesForSubmission(db, { submissionId: result.submissionId, origin: new URL(request.url).origin }),
+		inviteCoSpeakers: () => sendPendingInvitesForSubmission(db, { submissionId: result.submissionId, origin: appOrigin }),
 	});
 	return NextResponse.json({ ok: true, submissionId: result.submissionId, replay: result.replay, editToken: result.editToken });
 }

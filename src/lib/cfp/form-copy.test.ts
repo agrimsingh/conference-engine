@@ -15,9 +15,16 @@ describe("renderFormCopy", () => {
 	});
 
 	it("uses confirmation copy only when an organizer provided it", () => {
-		const context = { submitterName: "Ada", title: "Talk", eventName: "Event" };
+		const context = { submitterName: "Ada", title: "Talk", eventName: "Event", portalUrl: "https://conference.example.test/portal" };
 		expect(confirmationCopyOverride(null, context)).toBeUndefined();
-		expect(confirmationCopyOverride("Hi {{submitter_name}}", context)).toEqual({ subject: "We received your proposal for Event", text: "Hi Ada" });
+		const override = confirmationCopyOverride("Hi {{submitter_name}}", context);
+		const urls = override?.text.match(/https?:\/\/\S+/g) ?? [];
+		expect(urls).toHaveLength(1);
+		expect(new URL(urls[0] ?? "https://invalid.test")).toMatchObject({
+			origin: "https://conference.example.test",
+			pathname: "/portal",
+			search: "",
+		});
 	});
 
 	it("renders thank-you copy with the final submitter context", () => {

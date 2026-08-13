@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AdminSectionShell } from "@/components/admin-section-shell";
 import { Button, buttonClasses, EmptyState, INPUT_CLASSES, noticeClasses, StatusPill, submissionStatusTone } from "@/components/ui";
-import { DECISION_REGISTRY, renderDecisionPreviews, type DecisionAction } from "@/lib/domain/decisions";
+import { DECISION_REGISTRY, type DecisionAction } from "@/lib/domain/decisions";
+import type { RenderedMessage } from "@/lib/domain/message-templates";
 import { buildScoreComparisonMatrix } from "@/lib/evaluation/score-matrix";
 import {
 	sortScoreMatrixRows,
@@ -48,10 +49,10 @@ function parseSection(value: string | null): SectionId {
 
 type Props = {
 	eventSlug: string;
-	eventName: string;
 	plans: Plan[];
 	plan: Plan | null;
 	criteria: Criterion[];
+	decisionPreviews: Record<DecisionAction, RenderedMessage>;
 	reviewers: Reviewer[];
 	submissions: Submission[];
 	aggregates: AggregateScore[];
@@ -61,10 +62,10 @@ type Props = {
 
 export function ReviewWorkspace({
 	eventSlug,
-	eventName,
 	plans,
 	plan,
 	criteria,
+	decisionPreviews,
 	reviewers,
 	submissions,
 	aggregates,
@@ -126,10 +127,6 @@ export function ReviewWorkspace({
 	);
 	const active = plan?.status === "active";
 	const liveReviewers = reviewers.filter((reviewer) => reviewer.revokedAt === null);
-	const previews = useMemo(
-		() => renderDecisionPreviews({ eventName, submitterName: "submitters", title: "selected proposals" }),
-		[eventName],
-	);
 	const matrix = useMemo(
 		() => buildScoreComparisonMatrix({
 			submissions: submissions.map((submission) => ({ id: submission.id, title: submission.title })),
@@ -238,8 +235,8 @@ export function ReviewWorkspace({
 		if (action !== "accept" && action !== "reject") return;
 		setBulkAction(action);
 		setSendEmail(true);
-		setEmailSubject(previews[action].subject);
-		setEmailText(previews[action].text);
+		setEmailSubject(decisionPreviews[action].subject);
+		setEmailText(decisionPreviews[action].text);
 	}
 
 	async function confirmBulkDecision() {

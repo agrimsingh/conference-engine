@@ -333,7 +333,16 @@ export default async function PortalPage({ searchParams }: Props) {
 				eyebrow="Speaker portal"
 				title={session.email}
 				description={description}
-			/>
+			>
+				<form action="/api/portal/logout" method="post">
+					<button
+						type="submit"
+						className="text-sm font-medium text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
+					>
+						Sign out
+					</button>
+				</form>
+			</PageHeader>
 			<Suspense
 				fallback={
 					<p className="mt-8 text-sm text-neutral-500">Loading portal…</p>

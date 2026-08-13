@@ -20,9 +20,13 @@ vi.mock("@/lib/db/cloudflare", () => ({
 	getAuthSecret: mocks.getAuthSecret,
 }));
 
-vi.mock("./templates", () => ({
-	renderEventMessageTemplate: mocks.renderEventMessageTemplate,
-}));
+vi.mock("./templates", async () => {
+	const actual = await vi.importActual<typeof import("./templates")>("./templates");
+	return {
+		...actual,
+		renderEventMessageTemplate: mocks.renderEventMessageTemplate,
+	};
+});
 
 vi.mock("./reply-to", async () => {
 	const actual = await vi.importActual<typeof import("./reply-to")>("./reply-to");

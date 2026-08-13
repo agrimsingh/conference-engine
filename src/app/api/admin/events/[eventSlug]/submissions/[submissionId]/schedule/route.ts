@@ -7,6 +7,7 @@ import { isScheduleAction, type ScheduleAction } from "@/lib/schedule/actions";
 import { validateEventScheduleBounds } from "@/lib/schedule/date-bounds";
 import { readScheduleJson } from "@/lib/schedule/request";
 import { unplaceScheduledSubmission } from "@/lib/schedule/unplace";
+import { fetchEventRoomMutation } from "@/lib/realtime/event-room-fetch";
 
 type RouteContext = { params: Promise<{ eventSlug: string; submissionId: string }> };
 
@@ -44,11 +45,11 @@ export async function POST(request: Request, context: RouteContext) {
 	if (!submission || submission.event_id !== access.event.id) return NextResponse.json({ ok: false, error: "Submission not found" }, { status: 404 });
 	const env = await getCloudflareEnv();
 	if (!env.EVENT_ROOM) return NextResponse.json({ ok: false, error: "EVENT_ROOM binding unavailable" }, { status: 503 });
-	const mutationResponse = await env.EVENT_ROOM.getByName(access.event.id).fetch("https://event-room/schedule", {
+	const mutationResponse = await fetchEventRoomMutation(env.EVENT_ROOM, access.event.id, new Request("https://event-room/schedule", {
 		method: "POST",
 		headers: { "content-type": "application/json", "x-ce-event-id": access.event.id },
 		body: JSON.stringify({ submissionId, startsAtMs, endsAtMs, roomName, ...(parsedTrack.trackId === undefined ? {} : { trackId: parsedTrack.trackId }) }),
-	});
+	}));
 	const result: unknown = await mutationResponse.json();
 	if (!result || typeof result !== "object" || Array.isArray(result)) return NextResponse.json({ ok: false, error: "Invalid room response" }, { status: 502 });
 	const value = result as Record<string, unknown>;
@@ -67,6 +68,7 @@ export async function POST(request: Request, context: RouteContext) {
 					sequence: slot.calendar_sequence,
 					rescheduled: slot.rescheduled === true,
 					fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
+					appOrigin: env.APP_ORIGIN,
 				});
 			} catch (error) {
 				console.error("calendar invite failed after schedule place", {
@@ -140,11 +142,11 @@ async function mutateAction(
 	if (!submission || submission.event_id !== access.event.id) return NextResponse.json({ ok: false, error: "Submission not found" }, { status: 404 });
 	const env = await getCloudflareEnv();
 	if (!env.EVENT_ROOM) return NextResponse.json({ ok: false, error: "EVENT_ROOM binding unavailable" }, { status: 503 });
-	const response = await env.EVENT_ROOM.getByName(access.event.id).fetch("https://event-room/schedule", {
+	const response = await fetchEventRoomMutation(env.EVENT_ROOM, access.event.id, new Request("https://event-room/schedule", {
 		method: "PATCH",
 		headers: { "content-type": "application/json", "x-ce-event-id": access.event.id },
 		body: JSON.stringify({ submissionId, action, ...(action === "publish" ? { approveContent } : {}) }),
-	});
+	}));
 	const value: unknown = await response.json();
 	if (!value || typeof value !== "object" || Array.isArray(value)) return NextResponse.json({ ok: false, error: "Invalid room response" }, { status: 502 });
 	const result = value as Record<string, unknown>;

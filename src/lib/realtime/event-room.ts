@@ -1,4 +1,5 @@
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
+import { fetchEventRoomMutation } from "@/lib/realtime/event-room-fetch";
 
 export type EventRoomConfigurationMutation =
 	| { action: "event-settings"; input: Record<string, unknown> }
@@ -11,11 +12,11 @@ export async function mutateEventRoomConfiguration(
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
 	const env = await getCloudflareEnv();
 	if (!env.EVENT_ROOM) return { ok: false, error: "EVENT_ROOM binding unavailable", status: 503 };
-	const response = await env.EVENT_ROOM.getByName(eventId).fetch("https://event-room/configuration", {
+	const response = await fetchEventRoomMutation(env.EVENT_ROOM, eventId, new Request("https://event-room/configuration", {
 		method: "POST",
 		headers: { "content-type": "application/json", "x-ce-event-id": eventId },
 		body: JSON.stringify(mutation),
-	});
+	}));
 	let value: unknown;
 	try { value = await response.json(); } catch { return { ok: false, error: "Invalid event room response", status: 502 }; }
 	if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "Invalid event room response", status: 502 };

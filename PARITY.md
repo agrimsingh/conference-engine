@@ -16,7 +16,7 @@ Replace `[eventSlug]` with your event slug, `demo-cfp-to-stage` for the public r
 
 2. Self-service speaker portal (bios, headshots, slides, supporting docs)
    - Portal: `/portal`
-   - Portal APIs: `/api/portal/session`, `/api/portal/profile/[eventId]`, `/api/portal/profile/[eventId]/headshot`, `/api/portal/tasks/[taskId]/*`, `/api/portal/action-tasks/[assignmentId]/complete`
+   - Portal APIs: `/api/portal/session`, `/api/portal/logout`, `/api/portal/profile/[eventId]`, `/api/portal/profile/[eventId]/headshot`, `/api/portal/tasks/[taskId]/*`, `/api/portal/action-tasks/[assignmentId]/complete`
    - Co-speaker confirm: `/co-speaker/[token]`
    - Post-submit thank-you stays on `/e/[eventSlug]/submit/[formSlug]` with ~10s redirect to `/portal` (countdown + CTA; no new route)
    - Speaker withdraw: `/api/portal/submissions/[submissionId]/withdraw`

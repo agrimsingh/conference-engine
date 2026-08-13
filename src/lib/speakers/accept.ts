@@ -116,6 +116,7 @@ export async function acceptSubmission(
 		? await notifyConfirmedSpeakerLifecycle(db, {
 				submissionId,
 				templateKey: "acceptance",
+				portalUrl: emailChoice.portalUrl,
 				override: { subject: emailChoice.subject, text: emailChoice.text },
 				force: true,
 			})

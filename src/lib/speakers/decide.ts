@@ -80,6 +80,7 @@ export async function decideSubmission(
 		? await notifySubmissionLifecycle(db, {
 				submissionId,
 				templateKey: meta.templateKey,
+				portalUrl: emailChoice.portalUrl,
 				override: { subject: emailChoice.subject, text: emailChoice.text },
 				force: true,
 			})

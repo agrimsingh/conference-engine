@@ -3,12 +3,17 @@ import dynamic from "next/dynamic";
 import { AdminEventNav } from "@/components/admin-event-nav";
 import { PageHeader } from "@/components/page-header";
 import { assertCanManageEvent } from "@/lib/auth/admin";
-import { getDb } from "@/lib/db/cloudflare";
+import { getCloudflareEnv, getDb } from "@/lib/db/cloudflare";
 import { getActiveEvaluationPlan, listAssignmentsForPlan, listEvaluationScoresForPlan, listReviewableSubmissions } from "@/lib/db/queries";
 import { REVIEW_BOARD_STATUS_SQL } from "@/lib/domain";
 import { listCriteria, listEvaluationPlans } from "@/lib/evaluation/plan";
 import { listPlanReviewers } from "@/lib/evaluation/reviewers";
 import { listCriterionScoresForPlan } from "@/lib/evaluation/score";
+import {
+	absoluteAppUrl,
+	listEventMessageTemplates,
+	renderDecisionMessagePreviews,
+} from "@/lib/email/templates";
 
 const ReviewWorkspace = dynamic(
 	() => import("./review-workspace").then((m) => ({ default: m.ReviewWorkspace })),
@@ -26,6 +31,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 		listEvaluationPlans(db, event.id),
 		getActiveEvaluationPlan(db, event.id),
 	]);
+	const portalUrl = absoluteAppUrl((await getCloudflareEnv()).APP_ORIGIN, "/portal");
 	const plan = plans.find((item) => item.id === selectedPlanId) ?? active ?? plans[0] ?? null;
 	if (!plan) {
 		return (
@@ -36,10 +42,15 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 					<Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-neutral-900" aria-hidden />}>
 						<ReviewWorkspace
 							eventSlug={event.slug}
-							eventName={event.name}
 							plans={[]}
 							plan={null}
 							criteria={[]}
+							decisionPreviews={renderDecisionMessagePreviews([], {
+								eventName: event.name,
+								submitterName: "submitters",
+								title: "selected proposals",
+								portalUrl,
+							})}
 							reviewers={[]}
 							submissions={[]}
 							aggregates={[]}
@@ -51,7 +62,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 			</div>
 		);
 	}
-	const [criteria, reviewers, submissions, assignments, scores, criterionScores, speakerRows] = await Promise.all([
+	const [criteria, reviewers, submissions, assignments, scores, criterionScores, speakerRows, messageTemplates] = await Promise.all([
 		listCriteria(db, plan.id),
 		listPlanReviewers(db, plan.id),
 		listReviewableSubmissions(db, event.id),
@@ -70,7 +81,14 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 				status: string;
 				position: number;
 			}>(),
+		listEventMessageTemplates(db, event.id),
 	]);
+	const decisionPreviews = renderDecisionMessagePreviews(messageTemplates, {
+		eventName: event.name,
+		submitterName: "submitters",
+		title: "selected proposals",
+		portalUrl,
+	});
 	const criteriaByPlan = new Map(await Promise.all(plans.map(async (item) => [item.id, await listCriteria(db, item.id)] as const)));
 	const assignmentsBySubmission = new Map<string, string[]>();
 	for (const assignment of assignments) {
@@ -104,7 +122,6 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 				<ReviewWorkspace
 					key={plan.id}
 					eventSlug={event.slug}
-					eventName={event.name}
 					plans={plans.map((item) => ({ id: item.id, name: item.name, status: item.status, openAt: item.open_at, closeAt: item.close_at, blindReview: item.blind_review === 1, assignmentCap: item.assignment_cap, scorecardSummary: (criteriaByPlan.get(item.id) ?? []).map((criterion) => `${criterion.label} (${criterion.criterion_type === "numeric" ? `${criterion.scale_min}–${criterion.scale_max}, weight ${criterion.weight}` : criterion.criterion_type === "dropdown" ? "dropdown" : "free text"})`) }))}
 					plan={{ id: plan.id, name: plan.name, status: plan.status, openAt: plan.open_at, closeAt: plan.close_at, blindReview: plan.blind_review === 1, assignmentCap: plan.assignment_cap }}
 					criteria={criteria.map((criterion) => ({
@@ -117,6 +134,7 @@ export default async function AdminReviewPage({ params, searchParams }: Props) {
 						type: criterion.criterion_type,
 						options: criterion.options_json ? JSON.parse(criterion.options_json) as string[] : [],
 					}))}
+					decisionPreviews={decisionPreviews}
 					reviewers={reviewers.map((reviewer) => ({
 						id: reviewer.id,
 						name: reviewer.name,

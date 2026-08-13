@@ -29,9 +29,11 @@ export type MessageTemplateContext = {
 	roomName?: string;
 	startsAtIso?: string;
 	endsAtIso?: string;
+	calendarLabel?: string;
 	taskLabels?: string[];
 	outstandingCount?: number;
 	portalUrl?: string;
+	adminUrl?: string;
 	confirmUrl?: string;
 	declineUrl?: string;
 	loginUrl?: string;
@@ -55,6 +57,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`Got your proposal "${ctx.title}" for ${ctx.eventName}.`,
 			"The program committee will take a look and follow up.",
+			...(ctx.portalUrl ? ["", `Track your proposal: ${ctx.portalUrl}`] : []),
 			"",
 			REPLY_CTA,
 		].join("\n"),
@@ -66,7 +69,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`A new proposal "${ctx.title}" was submitted to ${ctx.eventName}.`,
 			...(ctx.portalHint ? [ctx.portalHint] : []),
-			"Open the event admin to review it.",
+			ctx.adminUrl ? `Open the submission: ${ctx.adminUrl}` : "Open the event admin to review it.",
 			"",
 			"— conference-engine",
 		].join("\n"),
@@ -78,7 +81,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			"",
 			`The proposal "${ctx.title}" for ${ctx.eventName} was updated by the submitter.`,
 			...(ctx.portalHint ? [ctx.portalHint] : []),
-			"Open the event admin to review the latest version.",
+			ctx.adminUrl ? `Open the submission: ${ctx.adminUrl}` : "Open the event admin to review the latest version.",
 			"",
 			"— conference-engine",
 		].join("\n"),
@@ -89,7 +92,8 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			`Hey ${ctx.submitterName},`,
 			"",
 			`Good news: "${ctx.title}" was accepted for ${ctx.eventName}.`,
-			ctx.portalHint ?? "Complete your speaker tasks in the portal when you receive a link.",
+			ctx.portalHint ?? "Complete your speaker tasks in the portal.",
+			...(ctx.portalUrl ? [ctx.portalUrl] : []),
 			"",
 			REPLY_CTA,
 		].join("\n"),
@@ -137,7 +141,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 		].join("\n"),
 	}),
 	calendar_invite: (ctx) => ({
-		subject: `Scheduled: ${ctx.title} @ ${ctx.eventName}`,
+		subject: `Scheduled: ${ctx.calendarLabel ?? `${ctx.title} — ${ctx.eventName}`}`,
 		text: [
 			`Hey ${ctx.submitterName},`,
 			"",
@@ -155,7 +159,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 			.join("\n"),
 	}),
 	calendar_reschedule: (ctx) => ({
-		subject: `Time changed: ${ctx.title} @ ${ctx.eventName}`,
+		subject: `Time changed: ${ctx.calendarLabel ?? `${ctx.title} — ${ctx.eventName}`}`,
 		text: [
 			`Hey ${ctx.submitterName},`,
 			"",
@@ -165,7 +169,8 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 				? `When: ${ctx.startsAtIso} → ${ctx.endsAtIso}`
 				: null,
 			"",
-			"A calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal: /portal",
+			"A calendar update (.ics) is attached. Please confirm you can still make it in the speaker portal:",
+			ctx.portalUrl ?? "(link unavailable)",
 			"",
 			REPLY_CTA,
 		]
@@ -236,7 +241,7 @@ const REGISTRY: Record<MessageTemplateKey, TemplateRenderer> = {
 		].join("\n"),
 	}),
 	portal_magic_link: (ctx) => ({
-		subject: `Sign in to your ${ctx.eventName} speaker portal`,
+		subject: `Your speaker portal link — ${ctx.eventName}`,
 		text: [
 			`Hey ${ctx.submitterName},`,
 			"",

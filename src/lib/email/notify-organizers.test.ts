@@ -109,6 +109,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "created",
+			origin: "https://conference.example.test",
 		});
 
 		expect(results).toHaveLength(2);
@@ -129,6 +130,12 @@ describe("notifyOrganizersOfSubmission", () => {
 					portalHint: "Submitter: Ada · speaker@example.test.",
 				},
 			});
+			const adminUrl = new URL(payload.context.adminUrl);
+			expect(adminUrl).toMatchObject({
+				origin: "https://conference.example.test",
+				pathname: "/admin/events/evt/submissions/sub-1",
+				search: "",
+			});
 			expect(payload.deliveryScope).toBeUndefined();
 		}
 	});
@@ -137,6 +144,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "updated",
+			origin: "https://conference.example.test",
 		});
 
 		const payloads = mocks.sendTemplatedEmail.mock.calls.map((call) => call[1]);
@@ -154,6 +162,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "created",
+			origin: "https://conference.example.test",
 		});
 		expect(results).toEqual([]);
 		expect(mocks.sendTemplatedEmail).not.toHaveBeenCalled();
@@ -174,6 +183,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "updated",
+			origin: "https://conference.example.test",
 		});
 		expect(results).toEqual([]);
 		expect(mocks.listEventMembers).not.toHaveBeenCalled();
@@ -195,6 +205,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "created",
+			origin: "https://conference.example.test",
 		});
 		expect(results).toHaveLength(2);
 		expect(mocks.sendTemplatedEmail).toHaveBeenCalledTimes(2);
@@ -215,6 +226,7 @@ describe("notifyOrganizersOfSubmission", () => {
 		const results = await notifyOrganizersOfSubmission({} as D1Database, {
 			submissionId: "sub-1",
 			kind: "created",
+			origin: "https://conference.example.test",
 		});
 		expect(results).toEqual([]);
 		expect(mocks.sendTemplatedEmail).not.toHaveBeenCalled();

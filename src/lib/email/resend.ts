@@ -1,6 +1,6 @@
 import { getAuthSecret, getCloudflareEnv } from "@/lib/db/cloudflare";
 import { getEventById } from "@/lib/db/queries";
-import { renderEventMessageTemplate } from "./templates";
+import { ensureRequiredMessageLink, renderEventMessageTemplate } from "./templates";
 import { resolveEventReplyTo, templateUsesReplyTo } from "./reply-to";
 import { hmacHash } from "@/lib/security/crypto";
 import { fetchWithBoundedRetry } from "@/lib/security/fetch";
@@ -236,12 +236,12 @@ export async function sendTemplatedEmail(
 	if (event?.mode === "demo") {
 		return { ok: true, status: "skipped", providerId: null, messageId: `demo:${args.eventId}:${args.templateKey}` };
 	}
-	const rendered = args.override ?? await renderEventMessageTemplate(
+	const rendered = ensureRequiredMessageLink(args.templateKey, args.override ?? await renderEventMessageTemplate(
 		db,
 		args.eventId,
 		args.templateKey,
 		args.context,
-	);
+	), args.context);
 	// Preserve the pre-migration one-shot history. New sends use the durable
 	// reservation below; old audit rows cannot be assigned a payload hash safely.
 	if (!args.force && args.submissionId && isOneShotTemplate(args.templateKey)) {

@@ -1,5 +1,6 @@
 import { getCloudflareEnv } from "@/lib/db/cloudflare";
 import { notifyCalendarCancellation } from "@/lib/email/notify";
+import { fetchEventRoomMutation } from "@/lib/realtime/event-room-fetch";
 
 export type UnplaceSlot = {
 	room_name: string;
@@ -32,7 +33,7 @@ export async function unplaceScheduledSubmission(
 		return { ok: false, error: "EVENT_ROOM binding unavailable", status: 503 };
 	}
 
-	const response = await env.EVENT_ROOM.getByName(args.eventId).fetch(
+	const response = await fetchEventRoomMutation(env.EVENT_ROOM, args.eventId, new Request(
 		"https://event-room/schedule",
 		{
 			method: "DELETE",
@@ -42,7 +43,7 @@ export async function unplaceScheduledSubmission(
 			},
 			body: JSON.stringify({ submissionId: args.submissionId, action: "unplace" }),
 		},
-	);
+	));
 
 	let value: unknown;
 	try {
@@ -89,6 +90,7 @@ export async function unplaceScheduledSubmission(
 		icsUid: slot.ics_uid,
 		sequence: slot.calendar_sequence,
 		fromEmail: env.RESEND_FROM_EMAIL || "team@65labs.org",
+		appOrigin: env.APP_ORIGIN,
 	});
 
 	return {

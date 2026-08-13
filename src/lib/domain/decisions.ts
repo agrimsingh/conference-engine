@@ -57,10 +57,10 @@ export function isDecisionAction(value: string): value is DecisionAction {
  */
 export type DecisionEmailChoice =
 	| { send: false }
-	| { send: true; subject: string; text: string };
+	| { send: true; subject: string; text: string; portalUrl?: string };
 
 export const ACCEPTANCE_PORTAL_HINT =
-	"Sign in at /portal with your speaker email to complete bio, headshot, slides, and supporting docs.";
+	"Sign in with your speaker email to complete bio, headshot, slides, and supporting docs.";
 
 /** Prefills the confirmation step with the rendered template per action. */
 export function renderDecisionPreviews(

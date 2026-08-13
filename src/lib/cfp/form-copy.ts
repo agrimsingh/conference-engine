@@ -1,7 +1,7 @@
 /** Small, explicit token surface for organizer-authored CFP lifecycle copy. */
 export function renderFormCopy(
 	copy: string,
-	context: { eventName: string; submitterName: string; title: string; resumeUrl?: string },
+	context: { eventName: string; submitterName: string; title: string; resumeUrl?: string; portalUrl?: string },
 ): string {
 	return copy
 		.replaceAll("{{event_name}}", context.eventName)
@@ -19,5 +19,9 @@ export function composeResumeDraftEmail(copy: string | null | undefined, context
 
 export function confirmationCopyOverride(copy: string | null | undefined, context: Parameters<typeof renderFormCopy>[1]): { subject: string; text: string } | undefined {
 	if (!copy?.trim()) return undefined;
-	return { subject: `We received your proposal for ${context.eventName}`, text: renderFormCopy(copy, context) };
+	const rendered = renderFormCopy(copy, context);
+	const text = context.portalUrl && !rendered.includes(context.portalUrl)
+		? `${rendered}\n\n${context.portalUrl}`
+		: rendered;
+	return { subject: `We received your proposal for ${context.eventName}`, text };
 }
