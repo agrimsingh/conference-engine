@@ -1,6 +1,6 @@
 import { getEventBySlug, getSubmissionById, listAgendaTracks, listSpeakersForSubmission } from "@/lib/db/queries";
 import type { SubmissionRow } from "@/lib/db/types";
-import { displayCategory } from "@/lib/domain";
+import { publicSessionFormat } from "@/lib/schedule/public-format";
 import { publicScheduleTrack } from "@/lib/schedule/public-tracks";
 import {
 	mapPublicSessionSpeakers,
@@ -415,7 +415,7 @@ export type PublicSessionSpeaker = {
 export type PublicSession = {
 	event: { id: string; slug: string; name: string; timezone: string };
 	submission: SubmissionRow;
-	/** Display label for submission.category (session format). */
+	/** Display label derived from the submitted format, with category as fallback. */
 	format: string;
 	slot: { id: string; roomName: string; startsAt: number; endsAt: number; trackId: string | null; trackName: string };
 	speakers: PublicSessionSpeaker[];
@@ -458,7 +458,7 @@ export async function loadPublicSession(db: D1Database, eventSlug: string, submi
 	return {
 		event: { id: event.id, slug: event.slug, name: event.name, timezone: event.timezone },
 		submission: row,
-		format: displayCategory(row.category),
+		format: publicSessionFormat(parseAnswers(row.answers_json), row.category),
 		slot: {
 			id: row.agenda_slot_id,
 			roomName: row.agenda_room_name,

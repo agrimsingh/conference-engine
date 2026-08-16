@@ -85,6 +85,8 @@ function initialAnswers(fields: PreviewField[]): AnswerMap {
 			answers[field.key] = [];
 		} else if (field.config.kind === "file_upload") {
 			answers[field.key] = null;
+		} else if (field.config.kind === "number") {
+			answers[field.key] = field.config.defaultValue ?? "";
 		} else {
 			answers[field.key] = "";
 		}

@@ -25,7 +25,7 @@ export type FieldConfig =
 	| { kind: "url"; placeholder?: string }
 	| { kind: "video"; placeholder?: string }
 	| { kind: "email"; placeholder?: string }
-	| { kind: "number"; min?: number; max?: number; step?: number }
+	| { kind: "number"; min?: number; max?: number; step?: number; defaultValue?: number }
 	| { kind: "speaker_block"; minSpeakers?: number; maxSpeakers?: number }
 	| { kind: "file_upload"; accept?: string[]; maxBytes?: number };
 
@@ -106,10 +106,14 @@ export function isFieldConfig(value: unknown): value is FieldConfig {
 			const min = config.min;
 			const max = config.max;
 			const step = config.step;
+			const defaultValue = config.defaultValue;
 			return (min === undefined || typeof min === "number" && Number.isFinite(min))
 				&& (max === undefined || typeof max === "number" && Number.isFinite(max))
 				&& (step === undefined || typeof step === "number" && Number.isFinite(step) && step > 0)
-				&& !(typeof min === "number" && typeof max === "number" && min > max);
+				&& (defaultValue === undefined || typeof defaultValue === "number" && Number.isFinite(defaultValue))
+				&& !(typeof min === "number" && typeof max === "number" && min > max)
+				&& !(typeof defaultValue === "number" && typeof min === "number" && defaultValue < min)
+				&& !(typeof defaultValue === "number" && typeof max === "number" && defaultValue > max);
 		}
 		case "select":
 		case "multiselect":

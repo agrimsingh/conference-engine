@@ -290,6 +290,9 @@ describe("organizer session creation, lineage, and publication", () => {
 				supportingUrl: "https://resources.example.test/public",
 			},
 		});
+		await env.DB.prepare("UPDATE submissions SET answers_json = ? WHERE id = ?")
+			.bind(JSON.stringify({ title: "Public session", format: "stage" }), session.id)
+			.run();
 		const foreign = await createSession(env.DB, { eventId: other.eventId, origin: "manual", input: { title: "Foreign" } });
 		const room = env.EVENT_ROOM.getByName(created.eventId);
 		expect((await bulk(room, created.eventId, "publish", [foreign.id])).status).toBe(404);
@@ -307,7 +310,7 @@ describe("organizer session creation, lineage, and publication", () => {
 				category: "Lightning",
 				supporting_url: "https://resources.example.test/public",
 			},
-			format: "Lightning",
+			format: "Stage",
 			slot: { roomName: "Main", trackId: null, trackName: "Unassigned" },
 		});
 		const track = await env.DB.prepare("SELECT id, name FROM agenda_tracks WHERE event_id = ? AND soft_deleted = 0").bind(created.eventId).first<{ id: string; name: string }>();

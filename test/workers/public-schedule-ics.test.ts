@@ -131,6 +131,7 @@ describe("public schedule.ics feed", () => {
 		const body = await response.text();
 		expect(body.match(/BEGIN:VEVENT/g)).toHaveLength(2);
 		expect(body).toContain("METHOD:PUBLISH");
+		expect(body).toContain("ORGANIZER;CN=Schedule ICS event:mailto:team@65labs.org");
 		expect(body).toContain("UID:schedule-ics-earlier@test.invalid");
 		expect(body).toContain("SEQUENCE:2");
 		expect(body).toContain("UID:schedule-ics-later@test.invalid");

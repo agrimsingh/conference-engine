@@ -81,6 +81,9 @@ describe("product foundation migration", () => {
 			"online_platform",
 			"speakers",
 		]);
+		const loaded = await loadCfpForm(env.DB, created.slug, "cfp");
+		const durationField = loaded?.fields.find((field) => field.key === "duration_minutes");
+		expect(durationField?.config).toMatchObject({ kind: "number", defaultValue: 30 });
 	});
 
 	it("seeds the minimal CFP preset when explicitly selected", async () => {

@@ -70,8 +70,8 @@ export function createConferenceCfpPreset(): ConferenceCfpPreset {
 			required: true,
 			position: 3,
 			visibilityRule: FORMAT_IN(["stage", "workshop", "online"]),
-			config: { kind: "number", min: 15, max: 240, step: 5 },
-			helpText: "Stage default 30–45. Workshop often 90–180. Hidden for lightning.",
+			config: { kind: "number", min: 15, max: 240, step: 5, defaultValue: 30 },
+			helpText: "Starts at 30 minutes. Adjust for the format; workshops often run 90–180. Hidden for lightning.",
 		},
 		{
 			key: "lightning_hook",

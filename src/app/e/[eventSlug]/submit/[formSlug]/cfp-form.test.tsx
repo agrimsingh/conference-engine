@@ -42,6 +42,16 @@ const title: FormFieldDef = {
 	config: { kind: "text", maxLength: 10, placeholder: "Session title" },
 };
 
+const duration: FormFieldDef = {
+	key: "duration_minutes",
+	label: "Duration (minutes)",
+	fieldType: "number",
+	required: true,
+	position: 0,
+	visibilityRule: { op: "always" },
+	config: { kind: "number", min: 15, max: 240, step: 5, defaultValue: 30 },
+};
+
 describe("CfpForm deadline banner", () => {
 	it("shows the close deadline in the event timezone", async () => {
 		await act(async () => {
@@ -147,6 +157,44 @@ describe("CfpForm maxLength char count", () => {
 		});
 
 		expect(container.textContent).toContain("5/10");
+	});
+});
+
+describe("CfpForm number defaults", () => {
+	it("starts at the configured duration and lets the submitter adjust it", async () => {
+		// Given
+		await act(async () => {
+			root.render(
+				<CfpForm
+					eventSlug="test-event"
+					formSlug="cfp"
+					eventName="Test event"
+					formTitle="Test CFP"
+					formDescription={null}
+					welcomeCopy={null}
+					thankYouCopy={null}
+					draftToken=""
+					draftsEnabled={false}
+					submissionLimit={0}
+					fields={[duration]}
+					sections={[]}
+				/>,
+			);
+		});
+		const input = container.querySelector('input[type="number"]') as HTMLInputElement | null;
+		const initialValue = input?.value;
+
+		// When
+		await act(async () => {
+			if (!input) return;
+			const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			setValue?.call(input, "45");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		// Then
+		expect(initialValue).toBe("30");
+		expect(input?.value).toBe("45");
 	});
 });
 

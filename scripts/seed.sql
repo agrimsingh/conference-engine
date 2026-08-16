@@ -203,7 +203,7 @@ INSERT INTO form_fields (
 	1,
 	3,
 	'{"op":"in","fieldKey":"format","values":["stage","workshop","online"]}',
-	'{"kind":"number","min":15,"max":240,"step":5}',
+	'{"kind":"number","min":15,"max":240,"step":5,"defaultValue":30}',
 	0
 ),
 (

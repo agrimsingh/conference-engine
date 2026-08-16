@@ -36,7 +36,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ event
 	const cloneable = await listCloneableSessionsForEvents(db, accessibleIds);
 	const placed = new Set(slots.results.map((slot) => slot.submission_id));
 	const sessions = submissions
-		.filter((submission) => submission.origin && submission.origin !== "cfp")
+		.filter((submission) => submission.origin)
 		.map((submission) => ({
 			id: submission.id,
 			title: titleFromAnswers(submission.answers_json),

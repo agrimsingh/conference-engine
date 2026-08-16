@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateCfpPayloadBounds } from "./submit";
+import { validateCfpPayloadBounds, validateSubmissionAnswers } from "./submit";
 import { validateFieldWrite } from "./form-admin";
 import { validateFieldAnswer, type FormFieldDef } from "@/lib/domain/form-fields";
 
@@ -113,7 +113,7 @@ describe("CFP payload bounds", () => {
 		});
 	});
 
-	it("accepts number min/max/step config on field write", () => {
+	it("accepts a bounded number default and rejects an out-of-range default", () => {
 		const valid = validateFieldWrite({
 			key: "duration_minutes",
 			label: "Duration",
@@ -121,7 +121,7 @@ describe("CFP payload bounds", () => {
 			required: true,
 			position: 0,
 			visibilityRule: { op: "always" },
-			config: { kind: "number", min: 5, max: 90, step: 5 },
+			config: { kind: "number", min: 5, max: 90, step: 5, defaultValue: 30 },
 		});
 		expect(valid).not.toBeTypeOf("string");
 		expect(typeof valid === "string" ? null : valid.config).toEqual({
@@ -129,7 +129,61 @@ describe("CFP payload bounds", () => {
 			min: 5,
 			max: 90,
 			step: 5,
+			defaultValue: 30,
 		});
+		expect(validateFieldWrite({
+			key: "duration_minutes",
+			label: "Duration",
+			fieldType: "number",
+			required: true,
+			position: 0,
+			visibilityRule: { op: "always" },
+			config: { kind: "number", min: 15, max: 120, step: 5, defaultValue: 10 },
+		})).toBe("config is invalid for this field type");
+	});
+
+	it("omits a duration default when the selected format hides duration", () => {
+		const fields: FormFieldDef[] = [
+			{
+				key: "format",
+				label: "Format",
+				fieldType: "select",
+				required: true,
+				position: 0,
+				visibilityRule: { op: "always" },
+				config: { kind: "select", options: [{ value: "lightning", label: "Lightning" }] },
+			},
+			{
+				key: "duration_minutes",
+				label: "Duration",
+				fieldType: "number",
+				required: true,
+				position: 1,
+				visibilityRule: { op: "in", fieldKey: "format", values: ["stage", "workshop", "online"] },
+				config: { kind: "number", min: 15, max: 240, step: 5, defaultValue: 30 },
+			},
+			{
+				key: "speakers",
+				label: "Speakers",
+				fieldType: "speaker_block",
+				required: true,
+				position: 2,
+				visibilityRule: { op: "always" },
+				config: { kind: "speaker_block", minSpeakers: 1, maxSpeakers: 4 },
+			},
+		];
+
+		const result = validateSubmissionAnswers(fields, {
+			format: "lightning",
+			duration_minutes: 30,
+			speakers: [{ name: "Ada", email: "ada@example.test" }],
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			visibleAnswers: { format: "lightning" },
+		});
+		expect(result.ok && result.visibleAnswers).not.toHaveProperty("duration_minutes");
 	});
 
 	it("accepts file_upload config on field write", () => {

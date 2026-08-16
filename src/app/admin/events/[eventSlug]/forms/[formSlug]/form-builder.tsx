@@ -133,6 +133,7 @@ type ConfigDraft = {
 	placeholder: string;
 	maxLength: string;
 	rows: string;
+	numberDefault: string;
 	numberMin: string;
 	numberMax: string;
 	numberStep: string;
@@ -145,6 +146,7 @@ function emptyConfigDraft(): ConfigDraft {
 		placeholder: "",
 		maxLength: "",
 		rows: "",
+		numberDefault: "",
 		numberMin: "",
 		numberMax: "",
 		numberStep: "",
@@ -158,6 +160,7 @@ function configDraftFromField(config: Record<string, unknown>): ConfigDraft {
 		placeholder: typeof config.placeholder === "string" ? config.placeholder : "",
 		maxLength: typeof config.maxLength === "number" ? String(config.maxLength) : "",
 		rows: typeof config.rows === "number" ? String(config.rows) : "",
+		numberDefault: typeof config.defaultValue === "number" ? String(config.defaultValue) : "",
 		numberMin: typeof config.min === "number" ? String(config.min) : "",
 		numberMax: typeof config.max === "number" ? String(config.max) : "",
 		numberStep: typeof config.step === "number" ? String(config.step) : "",
@@ -605,9 +608,11 @@ export function FormBuilder({
 		}
 		if (fieldType === "number") {
 			const config: Record<string, unknown> = { kind: "number" };
+			const defaultValue = optionalFiniteNumber(configDraft.numberDefault);
 			const min = optionalFiniteNumber(configDraft.numberMin);
 			const max = optionalFiniteNumber(configDraft.numberMax);
 			const step = optionalFiniteNumber(configDraft.numberStep);
+			if (defaultValue !== undefined) config.defaultValue = defaultValue;
 			if (min !== undefined) config.min = min;
 			if (max !== undefined) config.max = max;
 			if (step !== undefined && step > 0) config.step = step;
@@ -1235,6 +1240,15 @@ function FieldConfigFields({
 			) : null}
 			{showsNumber ? (
 				<>
+					<label className="block text-xs text-neutral-400">
+						Default
+						<input
+							type="number"
+							className="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100"
+							value={draft.numberDefault}
+							onChange={(e) => onChange({ numberDefault: e.target.value })}
+						/>
+					</label>
 					<label className="block text-xs text-neutral-400">
 						Min
 						<input

@@ -71,6 +71,7 @@ export async function buildPublicScheduleIcs(
 			startsAtMs: row.starts_at,
 			endsAtMs: row.ends_at,
 			organizerEmail: args.organizerEmail,
+			organizerName: event.name,
 			sequence: row.sequence,
 		})),
 	});

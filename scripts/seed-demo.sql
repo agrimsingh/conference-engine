@@ -58,7 +58,7 @@ WITH demo_event AS (
 	('demo-field-format', 'format', 'Session format', 'select', 1, 0, '{"op":"always"}', '{"kind":"select","options":[{"value":"stage","label":"Stage talk"},{"value":"lightning","label":"Lightning talk"},{"value":"workshop","label":"Workshop"},{"value":"online","label":"Online session"}]}'),
 	('demo-field-title', 'title', 'Title', 'text', 1, 1, '{"op":"always"}', '{"kind":"text","maxLength":160,"placeholder":"Your session title"}'),
 	('demo-field-abstract', 'abstract', 'Abstract', 'textarea', 1, 2, '{"op":"always"}', '{"kind":"textarea","rows":6,"maxLength":4000,"placeholder":"What will attendees learn?"}'),
-	('demo-field-duration', 'duration_minutes', 'Duration (minutes)', 'number', 1, 3, '{"op":"in","fieldKey":"format","values":["stage","workshop","online"]}', '{"kind":"number","min":15,"max":240,"step":5}'),
+	('demo-field-duration', 'duration_minutes', 'Duration (minutes)', 'number', 1, 3, '{"op":"in","fieldKey":"format","values":["stage","workshop","online"]}', '{"kind":"number","min":15,"max":240,"step":5,"defaultValue":30}'),
 	('demo-field-hook', 'lightning_hook', 'Lightning hook', 'text', 1, 4, '{"op":"eq","fieldKey":"format","value":"lightning"}', '{"kind":"text","maxLength":200}'),
 	('demo-field-capacity', 'workshop_capacity', 'Workshop capacity', 'number', 1, 5, '{"op":"eq","fieldKey":"format","value":"workshop"}', '{"kind":"number","min":8,"max":200,"step":1}'),
 	('demo-field-prereqs', 'workshop_prereqs', 'Workshop prerequisites', 'textarea', 0, 6, '{"op":"eq","fieldKey":"format","value":"workshop"}', '{"kind":"textarea","rows":3,"maxLength":1000}'),
